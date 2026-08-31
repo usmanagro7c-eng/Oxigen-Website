@@ -20,7 +20,6 @@ import {
   Results,
   Testimonials,
   FAQ,
-  TrustBadges,
 } from "@/components/site/Sections";
 import { Reveal } from "@/components/site/Reveal";
 import { SaleTimer } from "@/components/site/SaleTimer";
@@ -166,7 +165,6 @@ function Index() {
       <Stats />
       <Categories />
       <Guarantees />
-      <TrustBadges />
       <Why />
       <Results />
       <Testimonials />
