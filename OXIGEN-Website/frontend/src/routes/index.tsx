@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  ArrowRight,
   Star,
   Truck,
   ShieldCheck,
@@ -59,28 +58,6 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-function CtaBand() {
-  return (
-    <section className="mx-auto max-w-6xl px-5 py-16">
-      <Reveal>
-        <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-r from-primary via-royal to-accent p-10 text-center text-white sm:p-16">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/20 blur-3xl" />
-          <h2 className="font-display text-3xl font-extrabold sm:text-4xl">{brand.promo}</h2>
-          <p className="mx-auto mt-3 max-w-lg text-white/90">
-            Start your wellness journey today — quality guaranteed, free shipping and 7-day returns.
-          </p>
-          <Link
-            to="/shop"
-            className="mt-7 inline-flex items-center gap-2 rounded-xl bg-white px-7 py-3.5 text-sm font-bold text-primary shadow-xl transition-transform hover:scale-105"
-          >
-            Shop Now <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </Reveal>
-    </section>
-  );
-}
-
 const stats = [
   { icon: Star, value: "4.9/5", label: "Average rating" },
   { icon: Users, value: "10,000+", label: "Happy customers" },
@@ -122,7 +99,6 @@ function Index() {
       <Results />
       <Testimonials />
       <FAQ showHeading />
-      <CtaBand />
     </SiteLayout>
   );
 }
