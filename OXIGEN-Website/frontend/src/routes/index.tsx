@@ -5,9 +5,6 @@ import {
   Truck,
   ShieldCheck,
   Users,
-  Leaf,
-  RotateCcw,
-  HeartPulse,
 } from "lucide-react";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { BannerCarousel } from "@/components/site/BannerCarousel";
@@ -111,49 +108,6 @@ function Stats() {
   );
 }
 
-const guarantees = [
-  {
-    icon: Truck,
-    title: "Free Nationwide Shipping",
-    desc: "Delivered to your doorstep anywhere in Pakistan.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "100% Authentic",
-    desc: "Genuine, sealed products you can fully trust.",
-  },
-  {
-    icon: RotateCcw,
-    title: "7-Day Easy Returns",
-    desc: "Not satisfied? Return within 7 days, hassle-free.",
-  },
-  { icon: HeartPulse, title: "Science-Informed", desc: "Transparent, quality-led formulations." },
-];
-
-function Guarantees() {
-  return (
-    <section className="mx-auto max-w-6xl px-5 py-16">
-      <Reveal>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {guarantees.map((g, i) => (
-            <div
-              key={g.title}
-              className="flex flex-col gap-3 rounded-3xl glass p-6 transition-transform duration-300 hover:-translate-y-1.5"
-              style={{ transitionDelay: `${i * 40}ms` }}
-            >
-              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white">
-                <g.icon className="h-6 w-6" />
-              </span>
-              <h3 className="font-display text-lg font-bold text-ink">{g.title}</h3>
-              <p className="text-sm text-muted-foreground">{g.desc}</p>
-            </div>
-          ))}
-        </div>
-      </Reveal>
-    </section>
-  );
-}
-
 function Index() {
   return (
     <SiteLayout>
@@ -164,7 +118,6 @@ function Index() {
       <PromoBanners />
       <Stats />
       <Categories />
-      <Guarantees />
       <Why />
       <Results />
       <Testimonials />
