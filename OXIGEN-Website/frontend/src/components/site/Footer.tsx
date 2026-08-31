@@ -1,77 +1,68 @@
-import {
-  Facebook,
-  Instagram,
-  ShieldCheck,
-  Lock,
-  Truck,
-  Wallet,
-  Mail,
-  Phone,
-  MapPin,
-} from "lucide-react";
+import { Facebook, Instagram, Mail, Phone, MapPin } from "lucide-react";
 import oxigenLogo from "@/assets/oxigen-logo.png";
 import { Link } from "@tanstack/react-router";
 import { brand, nav, categories } from "@/lib/site-data";
 
 export function Footer() {
   return (
-    <footer className="relative mt-10 overflow-hidden px-3 pb-6 sm:px-5">
-      <div className="mx-auto max-w-6xl rounded-[2.5rem] glass p-10 sm:p-14">
-        <div className="grid gap-10 md:grid-cols-4">
-          <div className="md:col-span-1">
-            <Link to="/" className="flex items-center" aria-label="OxiGen home">
+    <footer className="relative mt-8 overflow-hidden px-3 pb-5 sm:px-5">
+      <div className="mx-auto max-w-6xl rounded-3xl glass p-6 sm:p-8">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Brand & Socials */}
+          <div className="space-y-3.5">
+            <Link to="/" className="inline-block" aria-label="OxiGen home">
               <img
                 src={oxigenLogo}
                 alt="OxiGen — Pakistan's No.1 Vitamin Brand"
-                className="h-9 w-auto"
+                className="h-8 w-auto"
               />
             </Link>
-            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               {brand.tagline}. Premium health & wellness supplements for everyday wellbeing.
             </p>
-            <ul className="mt-5 space-y-2 text-sm">
-              <li>
-                <a
-                  href={`mailto:${brand.email}`}
-                  className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-primary"
-                >
-                  <Mail className="h-4 w-4 text-primary" /> {brand.email}
-                </a>
-              </li>
-              <li>
-                <a
-                  href={brand.phoneHref}
-                  className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-primary"
-                >
-                  <Phone className="h-4 w-4 text-primary" /> {brand.phone}
-                </a>
-              </li>
-              <li className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4 text-primary" /> {brand.location}
-              </li>
-            </ul>
-            <div className="mt-5 flex gap-3">
+            <div className="flex items-center gap-2 pt-1">
               <a
                 href={brand.facebook}
+                target="_blank"
+                rel="noreferrer"
                 aria-label="Facebook"
-                className="grid h-10 w-10 place-items-center rounded-xl glass transition-transform hover:scale-110"
+                className="grid h-8 w-8 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
               >
-                <Facebook className="h-4 w-4 text-primary" />
+                <Facebook className="h-3.5 w-3.5" />
               </a>
               <a
                 href={brand.instagram}
+                target="_blank"
+                rel="noreferrer"
                 aria-label="Instagram"
-                className="grid h-10 w-10 place-items-center rounded-xl glass transition-transform hover:scale-110"
+                className="grid h-8 w-8 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
               >
-                <Instagram className="h-4 w-4 text-primary" />
+                <Instagram className="h-3.5 w-3.5" />
+              </a>
+              <a
+                href={`mailto:${brand.email}`}
+                aria-label="Email"
+                className="grid h-8 w-8 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
+              >
+                <Mail className="h-3.5 w-3.5" />
+              </a>
+              <a
+                href={brand.phoneHref}
+                aria-label="Phone"
+                className="grid h-8 w-8 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
+              >
+                <Phone className="h-3.5 w-3.5" />
               </a>
             </div>
           </div>
 
+          {/* Quick Links */}
           <div>
-            <h4 className="font-display font-bold text-ink">Explore</h4>
-            <ul className="mt-4 space-y-2.5 text-sm">
-              {nav.map((n) => (
+            <h4 className="font-display text-xs font-bold uppercase tracking-wider text-ink">
+              Quick Links
+            </h4>
+            <ul className="mt-3 space-y-2 text-xs">
+              {nav.slice(0, 5).map((n) => (
                 <li key={n.to}>
                   <Link
                     to={n.to}
@@ -84,75 +75,84 @@ export function Footer() {
             </ul>
           </div>
 
+          {/* Customer Care & Policies */}
           <div>
-            <h4 className="font-display font-bold text-ink">Categories</h4>
-            <ul className="mt-4 space-y-2.5 text-sm">
-              {categories.map((c) => (
-                <li key={c.title}>
-                  <Link
-                    to="/categories"
-                    className="text-muted-foreground transition-colors hover:text-primary"
-                  >
-                    {c.title}
-                  </Link>
-                </li>
-              ))}
+            <h4 className="font-display text-xs font-bold uppercase tracking-wider text-ink">
+              Policies & Support
+            </h4>
+            <ul className="mt-3 space-y-2 text-xs">
+              <li>
+                <Link
+                  to="/shipping-policy"
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  Shipping Policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/refund-policy"
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  Refund Policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/privacy"
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/terms"
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  Terms & Conditions
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/contact"
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  Contact Support
+                </Link>
+              </li>
             </ul>
           </div>
 
+          {/* Newsletter */}
           <div>
-            <h4 className="font-display font-bold text-ink">Newsletter</h4>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Get wellness tips & exclusive offers.
+            <h4 className="font-display text-xs font-bold uppercase tracking-wider text-ink">
+              Newsletter
+            </h4>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Get wellness tips and exclusive seasonal offers.
             </p>
-            <form className="mt-4 flex gap-2" onSubmit={(e) => e.preventDefault()}>
+            <form className="mt-3 flex gap-1.5" onSubmit={(e) => e.preventDefault()}>
               <input
                 type="email"
                 required
-                placeholder="Email address"
-                className="w-full rounded-xl border border-white/60 bg-white/60 px-3 py-2.5 text-sm outline-none backdrop-blur focus:ring-2 focus:ring-primary/30"
+                placeholder="Your email"
+                className="w-full rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-xs outline-none backdrop-blur focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
               />
-              <button className="rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-sm font-semibold text-white">
+              <button
+                type="submit"
+                className="rounded-xl bg-gradient-to-r from-primary to-accent px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-transform hover:scale-105 active:scale-95"
+              >
                 Join
               </button>
             </form>
           </div>
         </div>
 
-        <div className="mt-10 grid gap-4 border-t border-white/40 pt-6 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { icon: ShieldCheck, label: "100% Authentic" },
-            { icon: Wallet, label: "Cash on Delivery" },
-            { icon: Lock, label: "Secure Checkout" },
-            { icon: Truck, label: "Free Shipping" },
-          ].map((b) => (
-            <div
-              key={b.label}
-              className="flex items-center justify-center gap-2.5 rounded-2xl bg-white/40 px-4 py-3 text-sm font-semibold text-ink"
-            >
-              <b.icon className="h-4 w-4 text-primary" />
-              {b.label}
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 flex flex-col items-center gap-4 border-t border-white/40 pt-6 text-sm text-muted-foreground">
-          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            {[
-              { to: "/privacy", label: "Privacy Policy" },
-              { to: "/terms", label: "Terms & Conditions" },
-              { to: "/refund-policy", label: "Refund Policy" },
-              { to: "/shipping-policy", label: "Shipping Policy" },
-            ].map((l) => (
-              <Link key={l.to} to={l.to} className="transition-colors hover:text-primary">
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="flex w-full flex-col items-center justify-between gap-3 sm:flex-row">
-            <p>© {new Date().getFullYear()} OxiGen. All rights reserved.</p>
-            <p>Pakistan's No.1 Vitamin Brand</p>
-          </div>
+        {/* Bottom Bar */}
+        <div className="mt-6 flex flex-col items-center justify-between gap-2 border-t border-white/30 pt-4 text-[11px] text-muted-foreground sm:flex-row">
+          <p>© {new Date().getFullYear()} OxiGen. All rights reserved.</p>
+          <p className="text-muted-foreground/80">Pakistan's No.1 Vitamin Brand</p>
         </div>
       </div>
     </footer>
