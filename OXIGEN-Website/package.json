@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "concurrently": "^10.0.4"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "test": "playwright test",
+    "test:backend": "playwright test tests/backend-api.spec.ts",
+    "test:ui": "playwright test tests/comprehensive-audit.spec.ts"
+  }
+}

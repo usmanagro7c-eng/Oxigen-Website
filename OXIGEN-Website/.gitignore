@@ -1,0 +1,107 @@
+# =========================
+# Dependencies
+# =========================
+**/node_modules/
+
+
+# =========================
+# Build output
+# =========================
+**/dist/
+**/dist-ssr/
+.output/
+.vinxi/
+.nitro/
+
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+
+# =========================
+# TanStack / Generated Files
+# =========================
+.tanstack/
+routeTree.gen.ts
+
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.*
+!.env.example
+cookies.txt
+*.cookies.txt
+
+
+# =========================
+# Backend Local Data
+# =========================
+backend/data/
+backend/uploads/
+backend/storage/
+
+
+# =========================
+# Testing
+# =========================
+playwright-report/
+test-results/
+coverage/
+.nyc_output/
+api-test-results.txt
+test-results.json
+
+
+# =========================
+# Editor Settings
+# =========================
+.vscode/
+!.vscode/extensions.json
+.idea/
+
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# =========================
+# IDE Temporary Files
+# =========================
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+
+# =========================
+# Cloudflare / Wrangler
+# =========================
+.wrangler/
+.dev.vars
+
+
+# =========================
+# AI Tools
+# =========================
+.claude/
+.superpowers/
+.gemini/
+.playwright-mcp/
+
+# Documentation
+docs/
