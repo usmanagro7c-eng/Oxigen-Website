@@ -340,8 +340,16 @@ export function Results() {
       </Reveal>
       <div className="mt-14 grid gap-6 sm:grid-cols-2">
         {[
-          { img: `${CDN}/before_2.webp?v=1780588913&width=1200`, label: "Before" },
-          { img: `${CDN}/after_oxigen.png?v=1780590184&width=1200`, label: "After" },
+          {
+            img: "/before_2.webp",
+            fallback: `${CDN}/before_2.webp?v=1780588913&width=1200`,
+            label: "Before",
+          },
+          {
+            img: "/after_oxigen.png",
+            fallback: `${CDN}/after_oxigen.png?v=1780590184&width=1200`,
+            label: "After",
+          },
         ].map((r, i) => (
           <Reveal key={r.label} delay={i * 0.12}>
             <div className="group relative overflow-hidden rounded-[2rem] glass p-3">
@@ -352,6 +360,11 @@ export function Results() {
                 src={r.img}
                 alt={`${r.label} using OxiGen supplements`}
                 loading="lazy"
+                onError={(e) => {
+                  if (r.fallback && e.currentTarget.src !== r.fallback) {
+                    e.currentTarget.src = r.fallback;
+                  }
+                }}
                 className="aspect-[4/3] w-full rounded-[1.5rem] object-cover transition-transform duration-700 group-hover:scale-105"
               />
             </div>
