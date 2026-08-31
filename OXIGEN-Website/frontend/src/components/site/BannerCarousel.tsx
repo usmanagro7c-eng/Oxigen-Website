@@ -41,7 +41,7 @@ export function BannerCarousel() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="mx-auto max-w-[1440px] px-3 sm:px-6">
+      <div className="mx-auto max-w-6xl px-5">
         {/* Banner Frame */}
         <div className="group relative overflow-hidden rounded-[2rem] border border-border/50 bg-muted shadow-2xl shadow-primary/15">
           <div
@@ -66,7 +66,7 @@ export function BannerCarousel() {
                     src={bannerSrc}
                     alt={`${b.title} — ${b.sub}`}
                     loading={idx === 0 ? "eager" : "lazy"}
-                    className="aspect-[16/7] max-h-[440px] min-h-[200px] w-full object-cover transition-transform duration-1000 ease-out group-hover:scale-[1.01]"
+                    className="aspect-[2.35/1] w-full h-auto block object-cover object-center transition-transform duration-1000 ease-out group-hover:scale-[1.01]"
                   />
                   <span className="sr-only">{`${b.title} — ${b.sub}. ${b.cta}`}</span>
                 </Link>

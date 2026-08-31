@@ -8,7 +8,7 @@ export function PromoBanners() {
   // This ensures the link always points to the API-resolved product slug,
   // while showing the packaging info for Nutri-Cept or OxiDop.
   return (
-    <section className="mx-auto max-w-[1440px] px-3 py-10 sm:px-6">
+    <section className="mx-auto max-w-6xl px-5 py-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <span className="text-xs font-bold uppercase tracking-widest text-primary">
