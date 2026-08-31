@@ -1,5 +1,5 @@
 import {
-  Home, FolderKanban,
+  Home,
   ShoppingCart, Package, Tags, Boxes, BadgePercent,
   Truck,
   Users, Star,
@@ -23,7 +23,6 @@ export const NAV: NavGroup[] = [
     title: "Overview",
     items: [
       { slug: "", label: "Dashboard", icon: Home },
-      { slug: "projects", label: "Projects", icon: FolderKanban },
       { slug: "analytics", label: "Analytics", icon: BarChart3 },
       { slug: "notifications", label: "Notifications", icon: Bell, href: "/dashboard/notifications" },
     ],

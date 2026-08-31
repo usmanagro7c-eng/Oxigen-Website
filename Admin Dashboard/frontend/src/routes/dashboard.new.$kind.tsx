@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  FolderPlus, Store, Package,
+  Store, Package,
   ArrowRight, ArrowLeft, Check, Sparkles, Rocket, Image as ImageIcon,
   Tag, DollarSign, Search as SearchIcon, Boxes, Truck, Palette, Loader2,
 } from "lucide-react";
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/dashboard/new/$kind")({
   component: NewWizard,
 });
 
-type KindKey = "project"|"store"|"product";
+type KindKey = "store"|"product";
 
 type KindDef = {
   icon: any;
@@ -25,8 +25,6 @@ type KindDef = {
 };
 
 const KINDS: Record<KindKey, KindDef> = {
-  project:    { icon: FolderPlus,     title: "New Project",   subtitle: "Blank workspace with AI scaffolding.", tint: "from-violet-500 to-fuchsia-500",
-    steps: [{key:"basics",label:"Basics"},{key:"team",label:"Team"},{key:"launch",label:"Launch"}] },
   store:      { icon: Store,          title: "New Store",     subtitle: "Full ecommerce storefront.", tint: "from-emerald-500 to-teal-500",
     steps: [{key:"basics",label:"Basics"},{key:"pricing",label:"Pricing"},{key:"shipping",label:"Shipping"},{key:"launch",label:"Launch"}] },
   product:    { icon: Package,        title: "New Product",   subtitle: "AI-generated copy, images and SEO.", tint: "from-rose-500 to-orange-500",
@@ -35,7 +33,7 @@ const KINDS: Record<KindKey, KindDef> = {
 
 function NewWizard() {
   const { kind: rawKind } = Route.useParams();
-  const kind = (Object.keys(KINDS).includes(rawKind) ? rawKind : "project") as KindKey;
+  const kind = (Object.keys(KINDS).includes(rawKind) ? rawKind : "product") as KindKey;
   const def = KINDS[kind];
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -78,11 +76,6 @@ function NewWizard() {
             description: formData.description || "",
             publish: true,
           });
-        } else if (kind === "project") {
-          await createErpDoc("Project", {
-            project_name: formData.name || "New Project",
-            status: "Open",
-          }).catch(() => {});
         }
       } catch (err) {
         console.error("Wizard creation error:", err);
@@ -186,7 +179,7 @@ function NewWizard() {
               <div className="mt-1.5 text-sm text-muted-foreground">Your {kind.replace("-"," ")} is live in your ERP database.</div>
               <div className="mt-6 flex items-center justify-center gap-2">
                 <button onClick={() => setDone(false)} className="h-10 px-4 rounded-xl glass hover:bg-white/10 text-sm">Stay here</button>
-                <button onClick={() => navigate({ to: "/dashboard/$", params: { _splat: kind === "product" ? "products" : "projects" } })}
+                <button onClick={() => navigate({ to: "/dashboard/$", params: { _splat: kind === "product" ? "products" : "orders" } })}
                   className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary-gradient text-primary-foreground text-sm font-medium shadow-glow">
                   <Sparkles className="h-4 w-4" /> View in Dashboard
                 </button>

@@ -204,20 +204,6 @@ const MODULE_META: Record<string, PageMeta> = {
     emptyDesc: "Invite users and system members directly into ERPNext.",
   },
 
-  projects: {
-    subtitle: "Projects and initiatives tracked in ERPNext.",
-    primaryAction: "New project",
-    filters: ["All", "Open", "Completed"],
-    columns: [
-      { key: "project_name", label: "Project Name" },
-      { key: "customer", label: "Customer" },
-      { key: "status", label: "Status" },
-      { key: "percent_complete", label: "% Done", className: "text-right" },
-    ],
-    emptyTitle: "No projects created",
-    emptyDesc: "Create your first project in ERPNext to track progress.",
-  },
-
   shipping: {
     subtitle: "Shipping rules and distribution warehouses.",
     primaryAction: "Add shipping rule",
@@ -987,16 +973,6 @@ function LiveTablePage({
           email: u.email,
           user_type: u.user_type || "System User",
           status: u.enabled ? "Enabled" : "Disabled",
-        }));
-        setRows(mapped);
-      } else if (slug === "projects") {
-        const res = await getErpResource("Project");
-        const mapped = (res.data || []).map((p: any) => ({
-          rawKey: p.name,
-          project_name: p.project_name || p.name,
-          customer: p.customer || "Internal",
-          status: p.status || "Open",
-          percent_complete: `${p.percent_complete || 0}%`,
         }));
         setRows(mapped);
       } else if (slug === "shipping") {

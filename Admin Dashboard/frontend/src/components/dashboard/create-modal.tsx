@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  X, FolderPlus, Store, Package, ArrowRight, Sparkles,
+  X, Store, Package, ArrowRight, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,7 @@ export function useCreate() {
 }
 
 type Item = {
-  key: "project" | "store" | "product";
+  key: "store" | "product";
   icon: any;
   title: string;
   desc: string;
@@ -24,7 +24,6 @@ type Item = {
 };
 
 const ITEMS: Item[] = [
-  { key: "project",    icon: FolderPlus,     title: "New Project",   desc: "Start from a blank workspace with AI scaffolding.", tint: "from-violet-500/30 to-fuchsia-500/10" },
   { key: "store",      icon: Store,          title: "Store",         desc: "Launch a full ecommerce storefront in minutes.",    tint: "from-emerald-500/30 to-teal-500/10" },
   { key: "product",    icon: Package,        title: "Product",       desc: "Add a product with AI-generated copy & images.",    tint: "from-rose-500/30 to-orange-500/10" },
 ];
