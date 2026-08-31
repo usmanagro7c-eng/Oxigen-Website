@@ -1,0 +1,208 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { ArrowUpRight, ShoppingCart, Heart } from "lucide-react";
+import { SiteLayout, PageHeader } from "@/components/site/SiteLayout";
+import { Reveal } from "@/components/site/Reveal";
+import { slugify, formatPKR } from "@/lib/site-data";
+import { useStore } from "@/lib/store";
+import { API_BASE, getProductImage } from "@/lib/api";
+
+interface ProductItem {
+  item_code: string;
+  item_name: string;
+  route: string;
+  standard_rate: number;
+  custom_stock_qty: number;
+  image: string;
+  item_group: string;
+  short_description: string;
+}
+
+export const Route = createFileRoute("/category/$slug")({
+  head: ({ params }) => ({
+    meta: [
+      {
+        title: `${params.slug.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())} Supplements — OxiGen Pakistan`,
+      },
+      {
+        name: "description",
+        content: `Browse ${params.slug.replace(/-/g, " ")} supplements from OxiGen. Premium quality, free shipping across Pakistan.`,
+      },
+    ],
+  }),
+  component: CategoryPage,
+});
+
+function CategoryPage() {
+  const { slug } = Route.useParams();
+  const { addToCart, toggleWishlist, inWishlist } = useStore();
+
+  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [categoryTitle, setCategoryTitle] = useState("");
+
+  const fallbackCategoryName = slug
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (l) => l.toUpperCase());
+
+  useEffect(() => {
+    setLoading(true);
+    setError(false);
+
+    // Step 1: Fetch categories to find the correct ERP item group name for this slug
+    fetch(`${API_BASE}/items/groups`)
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then((json) => {
+        const categories = json.data || [];
+        const matched = categories.find((c: any) => c.slug === slug);
+        const groupName = matched ? matched.name : fallbackCategoryName;
+        setCategoryTitle(groupName);
+
+        // Step 2: Fetch products belonging to this group
+        return fetch(
+          `${API_BASE}/items?item_group=${encodeURIComponent(groupName)}`
+        );
+      })
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then((json) => {
+        setProducts(json.data || []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError(true);
+        setLoading(false);
+        setCategoryTitle(fallbackCategoryName);
+      });
+  }, [slug]);
+
+  const displayTitle = categoryTitle || fallbackCategoryName;
+
+  return (
+    <SiteLayout>
+      {/* Decorative right-side panel in logo colors */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-y-0 right-0 -z-10 w-24 bg-gradient-to-b from-primary via-accent to-primary opacity-15 blur-2xl sm:w-40 lg:w-56"
+      />
+      <PageHeader
+        eyebrow="Category"
+        title={`${displayTitle} Supplements`}
+        sub={`Explore our range of premium ${displayTitle.toLowerCase()} supplements.`}
+      />
+      <section className="mx-auto max-w-6xl px-5 pb-24">
+        {loading ? (
+          <div className="grid gap-7 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-96 w-full animate-pulse rounded-3xl bg-secondary glass p-6" />
+            ))}
+          </div>
+        ) : error || products.length === 0 ? (
+          <Reveal>
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                No products found in this category.{" "}
+                <Link
+                  to="/shop"
+                  className="font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  Browse all products
+                </Link>
+              </p>
+            </div>
+          </Reveal>
+        ) : (
+          <div className="grid gap-7 md:grid-cols-3">
+            {products.map((p, i) => {
+              const productSlug = p.route?.split("/").pop() || slugify(p.item_name);
+              const price = p.standard_rate || 0;
+              const stockQty = typeof p.custom_stock_qty === "number" ? p.custom_stock_qty : 0;
+              const available = stockQty > 0;
+              const saved = inWishlist(productSlug);
+              const img = getProductImage(p.image);
+
+              return (
+                <Reveal key={p.item_code} delay={i * 0.1}>
+                  <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl glass p-6 transition-all duration-500 hover:-translate-y-2">
+                    <span className="absolute left-6 top-6 z-10 rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-semibold text-white shadow">
+                      {p.item_group}
+                    </span>
+                    <button
+                      aria-label="Toggle wishlist"
+                      onClick={() => toggleWishlist(productSlug)}
+                      className={`absolute right-6 top-6 z-10 grid h-9 w-9 place-items-center rounded-full glass transition-colors ${saved ? "text-primary" : "text-ink hover:text-primary"}`}
+                    >
+                      <Heart className={`h-4 w-4 ${saved ? "fill-primary" : ""}`} />
+                    </button>
+                    <Link
+                      to="/product/$slug"
+                      params={{ slug: productSlug }}
+                      className="relative mb-6 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary"
+                    >
+                      <img
+                        src={img}
+                        alt={`${p.item_name}`}
+                        loading="lazy"
+                        className="h-full w-full object-contain p-6 transition-transform duration-700 group-hover:scale-110"
+                      />
+                    </Link>
+                    <Link
+                      to="/product/$slug"
+                      params={{ slug: productSlug }}
+                      className="font-display text-lg font-bold text-ink hover:text-primary"
+                    >
+                      {p.item_name}
+                    </Link>
+                    <div className="mt-1 flex items-center justify-between">
+                      <p className="text-sm font-medium text-primary">Wellness</p>
+                      {available ? (
+                        <span className="text-[11px] font-bold text-emerald-600">
+                          ● {stockQty} in stock
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-rose-500">
+                          ● Out of stock
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">
+                      {p.short_description || "Premium quality supplement."}
+                    </p>
+                    <div className="mt-5 flex items-center justify-between">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-extrabold text-ink">
+                          {formatPKR(price)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => addToCart(productSlug)}
+                        disabled={!available}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {available ? (
+                          <>
+                            Add <ShoppingCart className="h-4 w-4" />
+                          </>
+                        ) : (
+                          <>
+                            Out of Stock
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </SiteLayout>
+  );
+}
