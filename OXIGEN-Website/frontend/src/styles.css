@@ -170,6 +170,13 @@
   }
 }
 
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @utility glass-dark {
   background: color-mix(in oklab, oklch(0.21 0.05 265) 55%, transparent);
   backdrop-filter: blur(22px) saturate(160%);
