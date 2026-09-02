@@ -2,25 +2,63 @@ import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
-  Search, Bell, Mail, Moon, Sun, Globe, Bot, Plus, UserCircle,
-  Menu, Command, LogOut, Settings, Sparkles, Briefcase, KeyRound, Shield,
+  Search, Bell, Moon, Sun, Plus, UserCircle,
+  Menu, Command, LogOut, Settings, KeyRound, Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCreate } from "./create-modal";
+
 import { useAuthStore } from "@/lib/auth-store";
+import { API_BASE } from "@/lib/api";
 
 
 export function TopNav({ onMobileOpen }: { onMobileOpen: () => void }) {
   const [dark, setDark] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  const create = useCreate();
+  
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const email = user?.email ?? "";
   const fullName = user?.full_name ?? email.split("@")[0] ?? "OxiGen Admin";
   const initials = fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/admin/notifications`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setNotificationCount(data.unread ?? 0);
+      } catch {
+        // ignore, SSE stream will update once the backend is reachable
+      }
+    };
+
+    fetchNotifications();
+
+    const source = new EventSource(`${API_BASE}/admin/notifications/stream`);
+    source.addEventListener("init", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data || "{}");
+      setNotificationCount(payload.unread ?? 0);
+    });
+    source.addEventListener("notification", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data || "{}");
+      setNotificationCount(payload.unread ?? 0);
+    });
+    source.addEventListener("change", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data || "{}");
+      setNotificationCount(payload.unread ?? 0);
+    });
+
+    return () => {
+      cancelled = true;
+      source.close();
+    };
+  }, []);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -65,24 +103,10 @@ export function TopNav({ onMobileOpen }: { onMobileOpen: () => void }) {
       </div>
 
       <div className="flex items-center gap-1 md:gap-1.5 ml-auto">
-        <IconBtn icon={Sparkles} label="AI Assistant" glow to="/dashboard/ai" />
-        <IconBtn icon={Bot} label="Workspace" hideMobile to="/dashboard/workspace" />
-        <IconBtn icon={Globe} label="Language" hideMobile to="/dashboard/language" />
         <IconBtn icon={dark ? Moon : Sun} label="Theme" onClick={() => setDark(d => !d)} altTo="/dashboard/appearance" />
-        <IconBtn icon={Mail} label="Messages" badge={3} hideMobile to="/dashboard/inbox" />
-        <IconBtn icon={Bell} label="Notifications" badge={7} to="/dashboard/notifications" />
+        <IconBtn icon={Bell} label="Notifications" badge={notificationCount} to="/dashboard/notifications" />
 
-        <button
-          onClick={() => create.open()}
-          className="hidden md:inline-flex items-center gap-1.5 h-10 px-4 ml-1 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-sm font-semibold shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200">
-          <Plus className="h-4 w-4" /> Create
-        </button>
-        <button
-          onClick={() => create.open()}
-          aria-label="Create"
-          className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-primary to-accent text-white shadow-md shadow-primary/25">
-          <Plus className="h-4 w-4" />
-        </button>
+
 
         {/* Profile */}
         <div ref={profileRef} className="relative ml-1">
@@ -111,7 +135,6 @@ export function TopNav({ onMobileOpen }: { onMobileOpen: () => void }) {
                 {([
                   { icon: UserCircle, label: "Profile", to: "/dashboard/profile" as const },
                   { icon: Settings, label: "Settings", to: "/dashboard/settings" as const },
-                  { icon: Briefcase, label: "Workspace", to: "/dashboard/workspace" as const },
                   { icon: KeyRound, label: "API Keys", to: "/dashboard/api-keys" as const },
                   { icon: Shield, label: "Security", to: "/dashboard/security" as const },
                   { icon: Bell, label: "Notifications", to: "/dashboard/notifications" as const },
