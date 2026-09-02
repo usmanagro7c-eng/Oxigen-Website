@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Palette, Moon, Sun, Monitor, Sparkles, Check } from "lucide-react";
 import { Breadcrumb, Header, GlassCard, SaveButton } from "@/components/dashboard/glass-form";
@@ -8,6 +8,35 @@ export const Route = createFileRoute("/dashboard/appearance")({
   head: () => ({ meta: [{ title: "Appearance — OxiGen Admin" }] }),
   component: AppearancePage,
 });
+
+const APPEARANCE_KEY = "oxigen-admin-appearance";
+
+type AppearancePrefs = {
+  theme: string;
+  accent: string;
+  glass: boolean;
+  motion: boolean;
+  density: "comfortable" | "compact";
+};
+
+const DEFAULT_PREFS: AppearancePrefs = {
+  theme: "light",
+  accent: "royal",
+  glass: true,
+  motion: true,
+  density: "comfortable",
+};
+
+const loadPrefs = (): AppearancePrefs => {
+  if (typeof window === "undefined") return DEFAULT_PREFS;
+  try {
+    const raw = window.localStorage.getItem(APPEARANCE_KEY);
+    if (!raw) return DEFAULT_PREFS;
+    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_PREFS;
+  }
+};
 
 const THEMES = [
   { key: "light", label: "Light (Brand)", icon: Sun, preview: "from-purple-50 via-white to-cyan-50" },
@@ -25,16 +54,32 @@ const ACCENTS = [
 ];
 
 function AppearancePage() {
-  const [theme, setTheme] = useState("light");
-  const [accent, setAccent] = useState("royal");
-  const [glass, setGlass] = useState(true);
-  const [motionOn, setMotionOn] = useState(true);
-  const [density, setDensity] = useState<"comfortable"|"compact">("comfortable");
+  const [prefs, setPrefs] = useState<AppearancePrefs>(DEFAULT_PREFS);
   const [status, setStatus] = useState<"idle"|"loading"|"saved">("idle");
 
+  const { theme, accent, glass, motion: motionOn, density } = prefs;
+  const setPref = <K extends keyof AppearancePrefs>(key: K, value: AppearancePrefs[K]) =>
+    setPrefs((p) => ({ ...p, [key]: value }));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setPrefs(loadPrefs());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(APPEARANCE_KEY, JSON.stringify(prefs));
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [prefs, theme]);
+
   const save = (e: React.FormEvent) => {
-    e.preventDefault(); setStatus("loading");
-    setTimeout(() => { setStatus("saved"); setTimeout(() => setStatus("idle"), 1400); }, 700);
+    e.preventDefault();
+    setStatus("loading");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(APPEARANCE_KEY, JSON.stringify(prefs));
+      document.documentElement.classList.toggle("dark", theme === "dark");
+    }
+    setTimeout(() => { setStatus("saved"); setTimeout(() => setStatus("idle"), 1400); }, 300);
   };
 
   return (
@@ -51,7 +96,7 @@ function AppearancePage() {
                 initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
                 transition={{ delay: i * 0.05 }}
                 whileHover={{ y: -3 }}
-                onClick={() => setTheme(t.key)}
+                onClick={() => setPref("theme", t.key)}
                 className={`relative overflow-hidden rounded-2xl border p-3 transition ${
                   theme === t.key ? "border-primary/50 shadow-glow" : "border-white/10 hover:border-white/20"
                 }`}
@@ -75,7 +120,7 @@ function AppearancePage() {
                 initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
                 transition={{ delay: i * 0.04, type: "spring", stiffness: 260, damping: 20 }}
                 whileHover={{ y: -3 }}
-                onClick={() => setAccent(a.key)}
+                onClick={() => setPref("accent", a.key)}
                 className={`relative rounded-2xl border p-3 transition ${
                   accent === a.key ? "border-primary/50 shadow-glow" : "border-white/10 hover:border-white/20"
                 }`}
@@ -94,14 +139,14 @@ function AppearancePage() {
 
         <GlassCard title="Effects" desc="Glass, blur & motion">
           <div className="space-y-3">
-            <ToggleRow label="Glass effects" desc="Backdrop blur, translucent panels" value={glass} onChange={setGlass} />
-            <ToggleRow label="Animations" desc="Framer-quality transitions" value={motionOn} onChange={setMotionOn} />
+            <ToggleRow label="Glass effects" desc="Backdrop blur, translucent panels" value={glass} onChange={(v) => setPref("glass", v)} />
+            <ToggleRow label="Animations" desc="Framer-quality transitions" value={motionOn} onChange={(v) => setPref("motion", v)} />
             <div className="rounded-xl glass border border-white/10 p-3.5">
               <div className="text-sm font-medium">Density</div>
               <div className="text-[11.5px] text-muted-foreground mb-3">Spacing between elements</div>
               <div className="grid grid-cols-2 gap-2">
                 {(["comfortable","compact"] as const).map(d => (
-                  <button key={d} type="button" onClick={() => setDensity(d)}
+                  <button key={d} type="button" onClick={() => setPref("density", d)}
                     className={`h-9 rounded-lg text-xs font-medium transition capitalize ${
                       density === d ? "bg-primary-gradient text-primary-foreground shadow-glow" : "glass hover:bg-white/10"
                     }`}>{d}</button>
