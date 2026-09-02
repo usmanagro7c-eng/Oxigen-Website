@@ -5,6 +5,7 @@ import { getErpUrl, getErpHeaders, parseErpError, erpFetch, findCustomerByEmail 
 import { requireAuth, assertOwner } from "../middlewares/requireAuth.js";
 import { enqueueOrder, getJobStatus, QueueFullError } from "../lib/order-queue.js";
 import { ErpAdapter } from "../services/erp-adapter.js";
+import { notificationService } from "../services/notification.service.js";
 import { createRateLimiter } from "../middlewares/rate-limit.js";
 import { validate, changePasswordSchema } from "../lib/validation.js";
 
@@ -359,6 +360,18 @@ router.post("/user/orders", async (req, res) => {
   // ── Try direct placement first — ERPNext is healthy in the normal case ─────
   try {
     const orderName = await ErpAdapter.createErpOrder(payload);
+    const customerName = (req.body as { customerName?: string }).customerName || sessionEmail?.split("@")[0] || email.split("@")[0] || "Customer";
+    const itemCount = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+    notificationService.addOrderNotification({
+      orderId: orderName,
+      customerName,
+      email,
+      city: shippingAddress?.city || "",
+      total: 0,
+      itemCount,
+      paymentMethod: "COD",
+      items,
+    });
     res.status(201).json({
       queued: false,
       orderName,
