@@ -164,10 +164,10 @@ export function Products() {
             sub="Quality ingredients, transparent formulations, science-informed nutrition."
           />
         </Reveal>
-        <div className="mt-14 grid gap-7 md:grid-cols-3">
+        <div className="mt-8 grid grid-cols-2 gap-4 sm:gap-7 sm:mt-14 xl:grid-cols-3">
           {loading
-            ? Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-96 w-full animate-pulse rounded-3xl bg-secondary glass p-6" />
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="aspect-[3/4] w-full animate-pulse rounded-3xl bg-secondary glass" />
               ))
             : displayProducts.map((p, i) => {
                 const isApi = Boolean(p.item_code);
@@ -185,57 +185,61 @@ export function Products() {
 
                 return (
                   <Reveal key={p.item_code || p.name} delay={i * 0.1}>
-                    <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl glass p-6 transition-all duration-500 hover:-translate-y-2">
-                      <span className="absolute left-6 top-6 z-10 rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-semibold text-white shadow">
+                    <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl glass p-4 sm:p-6 transition-all duration-500 hover:-translate-y-2">
+                      <span className="absolute left-4 top-4 z-10 hidden rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-semibold text-white shadow sm:left-6 sm:top-6 sm:inline-block">
                         {badge}
                       </span>
                       <button
                         aria-label="Toggle wishlist"
                         onClick={() => toggleWishlist(slug)}
-                        className={`absolute right-6 top-6 z-10 grid h-9 w-9 place-items-center rounded-full glass transition-colors ${saved ? "text-primary" : "text-ink hover:text-primary"}`}
+                        className={`absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full glass transition-colors sm:right-6 sm:top-6 ${saved ? "text-primary" : "text-ink hover:text-primary"}`}
                       >
                         <Heart className={`h-4 w-4 ${saved ? "fill-primary" : ""}`} />
                       </button>
                       <Link
                         to="/product/$slug"
                         params={{ slug }}
-                        className="relative mb-6 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary"
+                        className="relative mb-4 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary sm:mb-6"
                       >
                         <img
                           src={img}
                           alt={`${name} — ${badge}`}
                           loading="lazy"
-                          className="h-full w-full object-contain p-6 transition-transform duration-700 group-hover:scale-110"
+                          className="h-full w-full object-contain p-4 transition-transform duration-700 group-hover:scale-110 sm:p-6"
                         />
                       </Link>
                       <Link
                         to="/product/$slug"
                         params={{ slug }}
-                        className="font-display text-lg font-bold text-ink hover:text-primary"
+                        className="line-clamp-2 font-display text-base font-bold text-ink hover:text-primary sm:line-clamp-none sm:text-lg"
                       >
                         {name}
                       </Link>
-                      <p className="mt-1 text-sm font-medium text-primary">{badge}</p>
-                      <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">
+                      <p className="mt-1 line-clamp-1 text-sm font-medium text-primary sm:line-clamp-none">{badge}</p>
+                      <p className="mt-2 hidden flex-1 text-sm leading-relaxed text-muted-foreground sm:block">
                         {desc}
                       </p>
-                      <div className="mt-5 flex items-center justify-between">
+                      <div className="mt-4 flex items-center justify-between gap-2 sm:mt-5">
                         <div className="flex items-baseline gap-2">
-                          <span className="text-xl font-extrabold text-ink">
+                          <span className="text-base font-extrabold text-ink sm:text-xl">
                             {available ? formatPKR(price) : "Coming Soon"}
                           </span>
                           {was && (
-                            <span className="text-sm text-muted-foreground line-through">{was}</span>
+                            <span className="hidden text-sm text-muted-foreground line-through sm:inline">
+                              {was}
+                            </span>
                           )}
                         </div>
                         <button
                           onClick={() => addToCart(slug)}
                           disabled={!available}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Add ${name} to cart`}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105 sm:px-4 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {available ? (
                             <>
-                              Add <ShoppingCart className="h-4 w-4" />
+                              <span className="hidden sm:inline">Add </span>
+                              <ShoppingCart className="h-4 w-4" />
                             </>
                           ) : (
                             <>
@@ -301,13 +305,13 @@ const perkIcons = [Truck, ShieldCheck, RotateCcw];
 
 export function Why() {
   return (
-    <section id="why" className="relative overflow-hidden py-24">
+    <section id="why" className="relative overflow-hidden py-14 sm:py-24">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-secondary/60 to-transparent" />
       <div className="mx-auto max-w-6xl px-5">
         <Reveal>
           <Heading eyebrow="Why Choose Us" title="A wellness experience you can trust" />
         </Reveal>
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 md:grid-cols-3 sm:mt-14">
           {perks.map((p, i) => {
             const Icon = perkIcons[i];
             return (
@@ -330,7 +334,7 @@ export function Why() {
 
 export function Results() {
   return (
-    <section id="results" className="mx-auto max-w-6xl px-5 py-24">
+    <section id="results" className="mx-auto max-w-6xl px-5 py-14 sm:py-24">
       <Reveal>
         <Heading
           eyebrow="Real Results"
@@ -338,7 +342,7 @@ export function Results() {
           sub="See the difference consistent, quality nutrition can make."
         />
       </Reveal>
-      <div className="mt-14 grid gap-6 sm:grid-cols-2">
+      <div className="mt-8 grid gap-6 sm:mt-14 sm:grid-cols-2">
         {[
           {
             img: "/before_2.webp",
