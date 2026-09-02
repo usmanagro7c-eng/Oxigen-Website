@@ -5,6 +5,8 @@ import {
   parseErpError,
   erpFetch,
   findCustomerByEmail,
+  getCustomerByEmail,
+  updateCustomerName,
   ensureAddressLinkedToCustomer,
   createCustomerForEmail,
 } from "../lib/erpnext-client.js";
@@ -192,7 +194,9 @@ export class ErpAdapter {
     ]);
 
     // Only published Website Items
-    const filters: Array<[string, string, string | number]> = [];
+    const filters: Array<[string, string, string | number]> = [
+      ["published", "=", 1],
+    ];
 
     if (search) {
       filters.push(["item_name", "like", `%${search}%`]);
@@ -811,19 +815,26 @@ export class ErpAdapter {
     } = payload;
 
     let customerName = await findCustomerByEmail(email);
+    const typedName = shippingAddress?.address_title?.trim();
 
     if (!customerName) {
       logger.warn(
         { email },
         "createErpOrder: Customer not found, attempting auto-create"
       );
-      const displayName = email.split("@")[0];
+      const displayName = typedName || email.split("@")[0];
       customerName = await createCustomerForEmail(email, displayName);
 
       if (!customerName) {
         throw new Error(
           `Customer not found for email: ${email} and auto-creation failed.`
         );
+      }
+    } else if (typedName) {
+      // Keep the ERP customer's display name in sync with the checkout name.
+      const existing = await getCustomerByEmail(email);
+      if (existing?.customer_name && existing.customer_name.trim() !== typedName) {
+        await updateCustomerName(customerName, typedName);
       }
     }
 
@@ -847,7 +858,7 @@ export class ErpAdapter {
     } else if (shippingAddress) {
       try {
         const newAddressBody = {
-          address_title: `${customerName.replace(/\s+/g, "-")}-${Date.now()}`,
+          address_title: shippingAddress.address_title || `${customerName.replace(/\s+/g, "-")}-${Date.now()}`,
           address_type: "Shipping",
           address_line1: shippingAddress.address_line1,
           ...(shippingAddress.address_line2
