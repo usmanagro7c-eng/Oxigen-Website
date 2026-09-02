@@ -48,46 +48,48 @@ function WishlistPage() {
             </div>
           </Reveal>
         ) : (
-          <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 sm:gap-7 lg:grid-cols-3">
             {wishlistItems.map((p, i) => (
               <Reveal key={p.slug} delay={i * 0.06}>
-                <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl glass p-6 transition-all duration-500 hover:-translate-y-2">
+                <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl glass p-4 sm:p-6 transition-all duration-500 hover:-translate-y-2">
                   <button
                     aria-label="Remove from wishlist"
                     onClick={() => toggleWishlist(p.slug)}
-                    className="absolute right-5 top-5 z-10 grid h-8 w-8 place-items-center rounded-full glass text-ink hover:text-destructive"
+                    className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full glass text-ink hover:text-destructive sm:right-5 sm:top-5"
                   >
                     <X className="h-4 w-4" />
                   </button>
                   <Link
                     to="/product/$slug"
                     params={{ slug: p.slug }}
-                    className="relative mb-5 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary"
+                    className="relative mb-4 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary sm:mb-5"
                   >
                     <img
                       src={p.img}
                       alt={p.name}
                       loading="lazy"
-                      className="h-full w-full object-contain p-6 transition-transform duration-700 group-hover:scale-110"
+                      className="h-full w-full object-contain p-4 transition-transform duration-700 group-hover:scale-110 sm:p-6"
                     />
                   </Link>
                   <Link
                     to="/product/$slug"
                     params={{ slug: p.slug }}
-                    className="font-display text-lg font-bold text-ink hover:text-primary"
+                    className="line-clamp-2 font-display text-base font-bold text-ink hover:text-primary sm:line-clamp-none sm:text-lg"
                   >
                     {p.name}
                   </Link>
-                  <p className="mt-1 text-sm font-medium text-primary">{p.subtitle}</p>
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-lg font-extrabold text-ink">
+                  <p className="mt-1 line-clamp-1 text-sm font-medium text-primary">{p.subtitle}</p>
+                  <div className="mt-4 flex items-center justify-between gap-2 sm:mt-5">
+                    <span className="text-lg font-extrabold text-ink sm:text-lg">
                       {p.available ? formatPKR(p.price) : "Coming Soon"}
                     </span>
                     <button
                       onClick={() => addToCart(p.slug)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-sm font-semibold text-white"
+                      aria-label={`Add ${p.name} to cart`}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white sm:px-4"
                     >
-                      <ShoppingCart className="h-4 w-4" /> Add
+                      <span className="hidden sm:inline">Add </span>
+                      <ShoppingCart className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
