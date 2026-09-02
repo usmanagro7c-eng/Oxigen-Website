@@ -10,6 +10,13 @@ router.get("/items/version", (_req, res) => {
   res.json({ version: itemCache.getVersion() });
 });
 
+// ─── POST /api/items/cache/clear ──────────────────────────────────────────────
+router.post("/items/cache/clear", (_req, res) => {
+  itemCache.clear();
+  logger.info("[items] Cache cleared via admin webhook/event");
+  res.json({ success: true, version: itemCache.getVersion() });
+});
+
 // ─── GET /api/items ───────────────────────────────────────────────────────────
 router.get("/items", async (req, res) => {
   try {
@@ -27,7 +34,7 @@ router.get("/items", async (req, res) => {
     if (cached) {
       res.setHeader("X-Cache", "HIT");
       res.setHeader("X-Cache-Version", String(itemCache.getVersion()));
-      res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.json({ data: cached, version: itemCache.getVersion() });
       return;
     }
@@ -38,7 +45,7 @@ router.get("/items", async (req, res) => {
 
     res.setHeader("X-Cache", "MISS");
     res.setHeader("X-Cache-Version", String(itemCache.getVersion()));
-    res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.json({ data: normalized, version: itemCache.getVersion() });
   } catch (err) {
     logger.error({ err }, "[items]");
