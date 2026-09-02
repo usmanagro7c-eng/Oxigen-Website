@@ -373,6 +373,35 @@ export class ErpAdapter {
     return normalized;
   }
 
+  static async getOrCreateSupplier(defaultCompany: string): Promise<string> {
+    try {
+      const res = await erpFetch(getErpUrl("/api/resource/Supplier?limit_page_length=1"), {
+        headers: getErpHeaders(),
+      });
+      if (res.ok) {
+        const json: any = await res.json();
+        if (json.data?.[0]?.name) return json.data[0].name;
+      }
+      const createRes = await erpFetch(getErpUrl("/api/resource/Supplier"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({
+          doctype: "Supplier",
+          supplier_name: "External",
+          supplier_group: "All Supplier Groups",
+          supplier_type: "Company",
+        }),
+      });
+      if (createRes.ok) {
+        const createJson: any = await createRes.json();
+        if (createJson.data?.name) return createJson.data.name;
+      }
+    } catch {
+      // fallback
+    }
+    return "External";
+  }
+
   /**
    * Creates a new Item and an associated Website Item in ERPNext.
    */
@@ -384,23 +413,35 @@ export class ErpAdapter {
     standard_rate?: number;
     stock_qty?: number;
     image?: string;
+    imageUrl?: string;
+    sku?: string;
+    item_code?: string;
     publish?: boolean;
     website_warehouse?: string;
     short_description?: string;
   }): Promise<{ name: string; item_code: string } | null> {
     const defaultCompany = process.env.DEFAULT_COMPANY ?? "Oxigen";
-    const defaultWarehouse = process.env.ONLINE_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || "Oxigen Warehouse - O";
+    const mainWarehouse = (process.env.MAIN_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || process.env.ONLINE_WAREHOUSE || "Oxigen Warehouse - O").trim();
+    const onlineWarehouse = (process.env.ONLINE_WAREHOUSE || mainWarehouse).trim();
+    const defaultWarehouse = mainWarehouse;
+
+    const itemCode = (payload.sku || payload.item_code || ErpAdapter.slugify(payload.item_name))
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, "-")
+      .replace(/^-+|-+$/g, "");
 
     // 1. Create the Item
     const itemPayload = {
       doctype: "Item",
       item_name: payload.item_name,
-      item_code: ErpAdapter.slugify(payload.item_name).toUpperCase(), // Auto-generate item_code
+      item_code: itemCode,
       item_group: payload.item_group,
       stock_uom: payload.stock_uom || "Nos",
       description: payload.description,
       standard_rate: payload.standard_rate,
       is_stock_item: 1,
+      default_warehouse: defaultWarehouse,
       item_defaults: [
         {
           company: defaultCompany,
@@ -433,7 +474,7 @@ export class ErpAdapter {
         item_code: newItemCode,
         web_item_name: payload.item_name,
         published: 1,
-        website_warehouse: defaultWarehouse,
+        website_warehouse: onlineWarehouse,
         short_description: payload.short_description,
         description: payload.description,
       };
@@ -450,53 +491,91 @@ export class ErpAdapter {
       }
     }
 
-    // 3. Create & Submit Purchase Invoice with update_stock: 1 if stock_qty > 0
-    if (typeof payload.stock_qty === 'number' && payload.stock_qty > 0) {
+    // 3. Create Item Price for standard selling
+    if (typeof payload.standard_rate === "number" && payload.standard_rate > 0) {
       try {
-        const today = new Date().toISOString().split('T')[0];
-        const piPayload = {
-          doctype: "Purchase Invoice",
-          company: defaultCompany,
-          supplier: "External",
-          posting_date: today,
-          due_date: today,
-          update_stock: 1,
-          set_warehouse: defaultWarehouse,
-          items: [
-            {
-              item_code: newItemCode,
-              qty: payload.stock_qty,
-              rate: payload.standard_rate || 0,
-              warehouse: defaultWarehouse,
-              expense_account: "Stock In Hand - O",
-              cost_center: "Main - O",
-            },
-          ],
-        };
+        await erpFetch(getErpUrl("/api/resource/Item Price"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Item Price",
+            item_code: newItemCode,
+            price_list: "Standard Selling",
+            price_list_rate: payload.standard_rate,
+            selling: 1,
+          }),
+        });
+      } catch {
+        // non-fatal
+      }
+    }
 
-        const piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
+    // 4. Create & Submit Purchase Invoice with update_stock: 1 in Main Warehouse
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const supplier = await ErpAdapter.getOrCreateSupplier(defaultCompany);
+      const invoiceQty = (typeof payload.stock_qty === 'number' && payload.stock_qty > 0)
+        ? payload.stock_qty
+        : (Number(payload.stock_qty) > 0 ? Number(payload.stock_qty) : 1);
+      const rate = typeof payload.standard_rate === 'number' && payload.standard_rate > 0
+        ? payload.standard_rate
+        : 0;
+
+      const piPayload: any = {
+        doctype: "Purchase Invoice",
+        company: defaultCompany,
+        supplier,
+        posting_date: today,
+        due_date: today,
+        update_stock: 1,
+        set_warehouse: mainWarehouse,
+        items: [
+          {
+            item_code: newItemCode,
+            qty: invoiceQty,
+            rate,
+            warehouse: mainWarehouse,
+            expense_account: "Stock In Hand - O",
+            cost_center: "Main - O",
+          },
+        ],
+      };
+
+      let piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(piPayload),
+      });
+
+      // If initial creation fails, retry without hardcoded expense account/cost center
+      if (!piRes.ok) {
+        delete piPayload.items[0].expense_account;
+        delete piPayload.items[0].cost_center;
+        piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
           method: "POST",
           headers: getErpHeaders(),
           body: JSON.stringify(piPayload),
         });
-
-        if (piRes.ok) {
-          const piData: any = await piRes.json();
-          if (piData.data) {
-            await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
-              method: "POST",
-              headers: getErpHeaders(),
-              body: JSON.stringify({ doc: piData.data }),
-            });
-            logger.info({ newItemCode, piName: piData.data.name, qty: payload.stock_qty }, "[ErpAdapter] Purchase Invoice submitted for initial stock");
-          }
-        } else {
-          const err = await piRes.json().catch(() => ({}));
-          logger.warn({ err, newItemCode }, "[ErpAdapter] Failed to create Purchase Invoice for new Item");
-        }
-      } catch (stockErr) {
-        logger.warn({ stockErr, newItemCode }, "[ErpAdapter] Error creating Purchase Invoice for initial stock");
       }
+
+      if (piRes.ok) {
+        const piData: any = await piRes.json();
+        if (piData.data?.name) {
+          await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ doc: piData.data }),
+          }).catch((subErr) => {
+            logger.warn({ subErr, piName: piData.data.name }, "[ErpAdapter] Purchase Invoice submit error");
+          });
+          logger.info({ newItemCode, piName: piData.data.name, qty: invoiceQty, warehouse: mainWarehouse }, "[ErpAdapter] Purchase Invoice submitted with update_stock: 1 in Main Warehouse");
+        }
+      } else {
+        const err = await piRes.json().catch(() => ({}));
+        logger.warn({ err, newItemCode }, "[ErpAdapter] Failed to create Purchase Invoice for new Item");
+      }
+    } catch (stockErr) {
+      logger.warn({ stockErr, newItemCode }, "[ErpAdapter] Error creating Purchase Invoice for initial stock");
     }
 
     itemCache.clear();
