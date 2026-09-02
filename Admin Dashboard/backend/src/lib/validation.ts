@@ -4,6 +4,8 @@
  */
 
 import { z } from "zod";
+import type { Request, Response, NextFunction } from "express";
+import type { ZodSchema } from "zod";
 
 export const emailSchema = z.string().email("Invalid email address.").max(255);
 
@@ -121,13 +123,38 @@ export const createItemSchema = z.object({
   short_description: z.string().max(1000).optional(),
 });
 
+// ── Admin: Settings Update ───────────────────────────────────────────────────
+export const settingsUpdateSchema = z.object({
+  organization: z
+    .object({
+      company_name: z.string().max(255).optional(),
+      website_url: z.string().max(500).optional(),
+      support_email: z.string().email().max(255).optional(),
+    })
+    .optional(),
+  preferences: z
+    .object({
+      language: z.string().max(10).optional(),
+      time_zone: z.string().max(50).optional(),
+      date_format: z.string().max(20).optional(),
+      currency: z.string().max(10).optional(),
+      country: z.string().max(100).optional(),
+      number_format: z.string().max(20).optional(),
+    })
+    .optional(),
+  notifications: z
+    .object({
+      email: z.boolean().optional(),
+      push: z.boolean().optional(),
+      marketing: z.boolean().optional(),
+    })
+    .optional(),
+});
+
 /**
  * Wraps Zod validation as Express middleware.
  * Returns 400 with structured errors on failure.
  */
-import type { Request, Response, NextFunction } from "express";
-import type { ZodSchema } from "zod";
-
 export function validate<T>(schema: ZodSchema<T>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.body);
