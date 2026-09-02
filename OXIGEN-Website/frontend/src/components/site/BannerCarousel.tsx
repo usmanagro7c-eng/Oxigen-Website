@@ -19,6 +19,7 @@ export function BannerCarousel() {
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    setIsPaused(true);
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -30,6 +31,7 @@ export function BannerCarousel() {
       else go(-1);
     }
     touchStartX.current = null;
+    setIsPaused(false);
   };
 
   return (
@@ -66,7 +68,7 @@ export function BannerCarousel() {
                     src={bannerSrc}
                     alt={`${b.title} — ${b.sub}`}
                     loading={idx === 0 ? "eager" : "lazy"}
-                    className="aspect-[2.35/1] w-full h-auto block object-cover object-center transition-transform duration-1000 ease-out group-hover:scale-[1.01]"
+                    className="aspect-[4/3] w-full h-auto block object-cover object-center transition-transform duration-1000 ease-out group-hover:scale-[1.01] sm:aspect-[2.35/1]"
                   />
                   <span className="sr-only">{`${b.title} — ${b.sub}. ${b.cta}`}</span>
                 </Link>
