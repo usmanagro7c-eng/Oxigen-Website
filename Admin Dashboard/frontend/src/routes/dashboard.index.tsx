@@ -9,7 +9,6 @@ import {
 import { cn } from "@/lib/utils";
 import { getDashboardStats, type DashboardStats } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { useCreate } from "@/components/dashboard/create-modal";
 
 export const Route = createFileRoute("/dashboard/")({
   component: DashboardHome,
@@ -100,7 +99,7 @@ function StatCard({ s, i }: { s: Stat; i: number }) {
           {positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
           {positive ? "+" : ""}{s.change}%
         </span>
-        <span className="text-xs text-muted-foreground font-medium">ERP sync</span>
+        <span className="text-xs text-muted-foreground font-medium">Sync</span>
       </div>
       <div className="relative mt-3"><Sparkline data={s.spark} positive={positive} /></div>
     </motion.div>
@@ -127,7 +126,7 @@ function SalesChart({ monthlyRevenue }: { monthlyRevenue?: number[] }) {
       <div className="flex items-start justify-between mb-5">
         <div>
           <div className="text-base font-bold text-foreground">Sales Performance</div>
-          <div className="text-xs text-muted-foreground mt-0.5">Live ERP Sales Orders across 12 months</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Live Sales Orders across 12 months</div>
         </div>
         <div className="flex items-center gap-1 text-xs">
           {["12M"].map((t) => (
@@ -175,8 +174,8 @@ function AIInsights({ stats }: { stats: DashboardStats | null }) {
   const lowStock = stats?.inventory.lowStock ?? 0;
 
   const insights = [
-    { icon: Zap, text: `ERP is connected live. ${count} Sales Orders recorded across your catalog.`, accent: "text-amber-500", bg: "bg-amber-500/10" },
-    { icon: TrendingUp, text: `${products} published product items active in ERPNext catalog.`, accent: "text-emerald-500", bg: "bg-emerald-500/10" },
+    { icon: Zap, text: `System is connected live. ${count} Sales Orders recorded across your catalog.`, accent: "text-amber-500", bg: "bg-amber-500/10" },
+    { icon: TrendingUp, text: `${products} published product items active in the catalog.`, accent: "text-emerald-500", bg: "bg-emerald-500/10" },
     { icon: AlertCircle, text: lowStock > 0 ? `${lowStock} items currently low in stock.` : "All catalog warehouse inventory levels are healthy.", accent: lowStock > 0 ? "text-destructive" : "text-cyan-500", bg: lowStock > 0 ? "bg-destructive/10" : "bg-cyan-500/10" },
   ];
 
@@ -190,7 +189,7 @@ function AIInsights({ stats }: { stats: DashboardStats | null }) {
             <Bot className="h-4.5 w-4.5 text-white" />
           </span>
           <div>
-            <div className="text-base font-bold text-foreground">ERP Insights</div>
+            <div className="text-base font-bold text-foreground">Insights</div>
             <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Live synchronization</div>
           </div>
         </div>
@@ -239,7 +238,7 @@ function RecentOrders({ orders }: { orders: DashboardStats["recentOrders"] }) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-base font-bold text-foreground">Recent Orders</div>
-          <div className="text-xs text-muted-foreground mt-0.5">Live transactions from ERPNext</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Live transactions</div>
         </div>
         <Link to="/dashboard/$" params={{ _splat: "orders" }} className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 transition-colors">
           View all <ArrowUpRight className="h-3 w-3" />
@@ -247,7 +246,7 @@ function RecentOrders({ orders }: { orders: DashboardStats["recentOrders"] }) {
       </div>
       {orders.length === 0 ? (
         <div className="py-8 text-center text-xs text-muted-foreground font-medium">
-          No orders found in ERPNext. Create your first order to see it here!
+          No orders found yet. Create your first order to see it here!
         </div>
       ) : (
         <div className="divide-y divide-border">
@@ -292,7 +291,7 @@ function TopProducts({ products }: { products: DashboardStats["topProducts"] }) 
       </div>
       {products.length === 0 ? (
         <div className="py-8 text-center text-xs text-muted-foreground font-medium">
-          No products found in ERP catalog.
+          No products found in the catalog.
         </div>
       ) : (
         <ul className="space-y-3.5">
@@ -357,13 +356,11 @@ function InventoryStatus({ inventory }: { inventory: DashboardStats["inventory"]
 /* ---------- Quick actions ---------- */
 function QuickActions() {
   const navigate = useNavigate();
-  const create = useCreate();
 
   const actions = [
     { icon: Plus, label: "Add product", action: () => navigate({ to: "/dashboard/$", params: { _splat: "products" } }) },
     { icon: ShoppingCart, label: "New order", action: () => navigate({ to: "/dashboard/$", params: { _splat: "orders" } }) },
     { icon: Users, label: "Add customer", action: () => navigate({ to: "/dashboard/$", params: { _splat: "customers" } }) },
-    { icon: Sparkles, label: "Create wizard", action: () => create.open() },
   ];
 
   return (
@@ -452,7 +449,6 @@ function ActivityFeed({ activity }: { activity: DashboardStats["activity"] }) {
 /* ---------- Main Dashboard Home ---------- */
 function DashboardHome() {
   const user = useAuthStore((s) => s.user);
-  const create = useCreate();
   const [statsData, setStatsData] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -520,16 +516,12 @@ function DashboardHome() {
           <h1 className="mt-1 font-display text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">
             Welcome back, <span className="text-gradient">{firstName}</span>
           </h1>
-          <p className="text-xs text-muted-foreground mt-1 font-medium">Live data from OxiGen ERPNext connected server.</p>
+          <p className="text-xs text-muted-foreground mt-1 font-medium">Live data from the OxiGen connected server.</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={loadData}
             className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition-colors shadow-sm">
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin text-primary")} /> Refresh
-          </button>
-          <button onClick={() => create.open()}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25 hover:-translate-y-0.5 transition-all">
-            <Plus className="h-3.5 w-3.5" /> Create
           </button>
         </div>
       </motion.div>
