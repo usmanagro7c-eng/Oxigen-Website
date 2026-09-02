@@ -3,7 +3,7 @@
  * Connects to the Oxigen backend (Express + ERPNext/Frappe)
  */
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+export const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -549,6 +549,7 @@ export async function adjustAdminInventory(payload: {
   qty: number;
   warehouse?: string;
   entry_type?: string;
+  mode?: "set" | "add" | "deduct" | "adjust";
 }): Promise<{ success: boolean; data: any }> {
   const csrfToken = await getCsrfToken();
   return fetchApi("/admin/inventory/adjust", {
@@ -569,6 +570,17 @@ export interface AdminOrder {
   delivery_date?: string;
   modified: string;
   owner: string;
+  shipping?: {
+    title?: string;
+    line1?: string;
+    line2?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    country?: string;
+    phone?: string;
+    email?: string;
+  } | null;
 }
 
 export async function getAdminOrders(): Promise<{ data: AdminOrder[] }> {
@@ -704,6 +716,39 @@ export async function deleteAdminUser(name: string): Promise<{ success: boolean;
 
 export async function getAdminFiles(): Promise<{ data: any[] }> {
   return fetchApi("/admin/files");
+}
+
+export async function deleteAdminFile(name: string): Promise<{ success: boolean; message: string }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/files/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export async function markNotificationRead(id?: string): Promise<{ success: boolean; unread: number }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi("/admin/notifications/mark-read", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(id ? { id } : {}),
+  });
+}
+
+export async function clearNotifications(): Promise<{ success: boolean; unread: number }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi("/admin/notifications/clear", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export async function deleteNotification(id: string): Promise<{ success: boolean; unread: number }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/notifications/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
 }
 
 export async function uploadAdminFile(file: File): Promise<{ data: any }> {
