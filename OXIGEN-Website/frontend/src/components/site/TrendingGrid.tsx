@@ -21,7 +21,7 @@ export function TrendingGrid() {
   if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (error || !data || !data.data) return null;
 
-  const catalog = data.data;
+  const catalog = (data.data || []).slice(0, 6);
 
   return (
     <section className="mx-auto max-w-[1400px] px-3 py-12 sm:px-5" aria-labelledby="trending">
@@ -66,7 +66,7 @@ export function TrendingGrid() {
                     src={img}
                     alt={p.item_name}
                     loading="lazy"
-                    className="aspect-square w-full bg-white object-contain p-6 transition-transform duration-500 group-hover:scale-105"
+                    className="aspect-square w-full bg-white object-contain p-4 transition-transform duration-500 group-hover:scale-105 sm:p-6"
                   />
                 </Link>
 
