@@ -23,7 +23,7 @@ const THREADS: Record<Tab, { id: string; from: string; subject: string; snippet:
     { id: "i2", from: "Marketing Team", subject: "Winter Health Campaign launch", snippet: "Pushed the banner assets and discount vouchers.", when: "2h" },
   ],
   announcements: [
-    { id: "a1", from: "OxiGen Team", subject: "Live ERP synchronization updated", snippet: "Real-time Frappe inventory and customer tracking is active.", when: "1d" },
+    { id: "a1", from: "OxiGen Team", subject: "Live synchronization updated", snippet: "Real-time inventory and customer tracking is active.", when: "1d" },
     { id: "a2", from: "Store Operations", subject: "Same-day dispatch enabled", snippet: "Orders before 3PM dispatched same day.", when: "3d" },
   ],
 };
