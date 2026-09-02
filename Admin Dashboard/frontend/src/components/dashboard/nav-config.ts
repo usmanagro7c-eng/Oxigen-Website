@@ -2,7 +2,7 @@ import {
   Home,
   ShoppingCart, Package, Tags, Boxes, BadgePercent,
   Truck,
-  Users, Star,
+  Users,
   BarChart3, Bell, Image as ImageIcon,
   Settings,
 } from "lucide-react";
@@ -31,7 +31,7 @@ export const NAV: NavGroup[] = [
     title: "Commerce",
     items: [
       { slug: "orders", label: "Orders", icon: ShoppingCart },
-      { slug: "products", label: "Products", icon: Package },
+      { slug: "products", label: "Website Products", icon: Package },
       { slug: "categories", label: "Categories", icon: Tags },
       { slug: "inventory", label: "Inventory", icon: Boxes },
       { slug: "discounts", label: "Discounts", icon: BadgePercent },
@@ -42,7 +42,6 @@ export const NAV: NavGroup[] = [
     title: "Audience",
     items: [
       { slug: "customers", label: "Customers", icon: Users },
-      { slug: "reviews", label: "Reviews", icon: Star },
     ],
   },
   {
