@@ -9,15 +9,15 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3002",
         changeOrigin: true,
       },
       "/files": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3002",
         changeOrigin: true,
       },
       "/private/files": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3002",
         changeOrigin: true,
       },
     },
