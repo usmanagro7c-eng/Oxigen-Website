@@ -39,9 +39,9 @@ export function SaleTimer() {
   ];
 
   return (
-    <section className="mx-auto max-w-6xl px-5 py-8">
+    <section className="mx-auto max-w-6xl px-5 py-6 sm:py-8">
       <Reveal>
-        <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-r from-primary via-royal to-accent p-8 text-white sm:p-12">
+        <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-r from-primary via-royal to-accent p-6 text-white sm:p-12">
           <div className="pointer-events-none absolute -left-16 -top-16 h-64 w-64 rounded-full bg-white/20 blur-3xl" />
           <div className="relative flex flex-col items-center gap-6 text-center lg:flex-row lg:justify-between lg:text-left">
             <div>
@@ -54,14 +54,14 @@ export function SaleTimer() {
               <p className="mt-2 text-white/90">Hurry! This deal ends when the timer hits zero.</p>
             </div>
 
-            <div className="flex flex-col items-center gap-5">
-              <div className="flex gap-3">
+              <div className="flex flex-col items-center gap-4">
+              <div className="flex gap-2 sm:gap-3">
                 {units.map((u) => (
                   <div
                     key={u.label}
-                    className="flex min-w-[70px] flex-col items-center rounded-2xl bg-white/15 px-4 py-3 backdrop-blur"
+                    className="flex min-w-[58px] flex-col items-center rounded-2xl bg-white/15 px-3 py-2.5 backdrop-blur sm:min-w-[70px] sm:px-4 sm:py-3"
                   >
-                    <span className="font-display text-3xl font-extrabold tabular-nums sm:text-4xl">
+                    <span className="font-display text-2xl font-extrabold tabular-nums sm:text-3xl md:text-4xl">
                       {!mounted || ms === null ? "00" : u.value}
                     </span>
                     <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/80">
