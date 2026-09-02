@@ -4,9 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRight, Search, SlidersHorizontal, Download, Plus, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, ChevronLeft, Sparkles, RefreshCw,
-  Eye, Pencil, Copy, Trash2, X, Check, AlertCircle, Upload,
+  Eye, Pencil, Copy, Trash2, X, Check, AlertCircle, Upload, ImagePlus,
   type LucideIcon,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { findItem, NAV } from "@/components/dashboard/nav-config";
 import { cn } from "@/lib/utils";
 import {
@@ -17,9 +23,9 @@ import {
   getAdminInventory, adjustAdminInventory,
   getAdminDiscounts, createAdminDiscount, deleteAdminDiscount,
   getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser,
-  getAdminFiles, uploadAdminFile,
+  getAdminFiles, uploadAdminFile, deleteAdminFile,
   getErpResource, createErpDoc, updateErpDoc, deleteErpDoc,
-  getDashboardStats, type DashboardStats, type ItemGroup,
+  getDashboardStats, getItemImageUrl, type DashboardStats, type ItemGroup,
 } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -47,6 +53,19 @@ function ToastHost() {
     toastListeners.add(l);
     return () => { toastListeners.delete(l); };
   }, []);
+
+  useEffect(() => {
+    const handleCustom = (event: Event) => {
+      const custom = event as CustomEvent<{ title?: string; body?: string; category?: string }>; 
+      const detail = custom.detail ?? {};
+      const text = detail.title ? `${detail.title}: ${detail.body ?? ""}`.trim() : detail.body ?? "New update";
+      pushToast("info", text);
+    };
+
+    window.addEventListener("oxigen:new-notification", handleCustom);
+    return () => window.removeEventListener("oxigen:new-notification", handleCustom);
+  }, []);
+
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none">
       <AnimatePresence>
@@ -69,7 +88,7 @@ function ToastHost() {
  * Page Configuration Types
  * ============================================================ */
 type Stat = { label: string; value: string; delta?: string; trend?: "up" | "down" };
-type Column = { key: string; label: string; className?: string; type?: "text" | "number" | "select" | "textarea" };
+type Column = { key: string; label: string; className?: string; type?: "text" | "number" | "select" | "textarea"; hidden?: boolean };
 type Row = Record<string, any>;
 type PageMeta = {
   subtitle: string;
@@ -82,24 +101,27 @@ type PageMeta = {
 
 const MODULE_META: Record<string, PageMeta> = {
   products: {
-    subtitle: "Real-time product catalog and available stock in Oxigen Warehouse.",
+    subtitle: "Real-time product catalog and online publishing status.",
     primaryAction: "Add product",
-    filters: ["All", "Active", "Out of stock"],
+    filters: ["All", "Enable", "Disable"],
     columns: [
       { key: "name", label: "Product Name" },
       { key: "sku", label: "Item Code / SKU" },
       { key: "item_group", label: "Category" },
       { key: "price", label: "Price" },
-      { key: "stock", label: "Available Stock" },
+      { key: "stock", label: "Website Stock" },
       { key: "status", label: "Status", className: "text-right" },
+      { key: "image", label: "Image", hidden: true },
+      // { key: "imageUrl", label: "Image URL", hidden: true },
+      { key: "description", label: "Description", type: "textarea", hidden: true },
     ],
-    emptyTitle: "No products in ERPNext",
-    emptyDesc: "Add your first product to sync it directly to the ERP catalog.",
+    emptyTitle: "No products found",
+    emptyDesc: "Add your first product to sync it directly to the catalog.",
   },
 
   orders: {
-    subtitle: "Manage, fulfill and create Sales Orders in ERPNext.",
-    primaryAction: "Create order",
+    subtitle: "Manage and fulfill sales orders.",
+    primaryAction: "",
     filters: ["All", "To Deliver and Bill", "Draft", "Completed", "Cancelled"],
     columns: [
       { key: "id", label: "Order ID" },
@@ -108,12 +130,12 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "status", label: "Status" },
       { key: "date", label: "Date", className: "text-right" },
     ],
-    emptyTitle: "No orders in ERPNext",
-    emptyDesc: "Create a new Sales Order to see it appear in real-time.",
+    emptyTitle: "No orders found",
+    emptyDesc: "No sales order records are available right now.",
   },
 
   categories: {
-    subtitle: "Item Groups & product categories synced with ERPNext.",
+    subtitle: "Item Groups & product categories synced live.",
     primaryAction: "New category",
     filters: ["All", "Parent Group", "Subcategory"],
     columns: [
@@ -123,12 +145,12 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "is_group_label", label: "Type" },
       { key: "description", label: "Description" },
     ],
-    emptyTitle: "No categories in ERPNext",
-    emptyDesc: "Create an Item Group in ERPNext to organize your products.",
+    emptyTitle: "No categories found",
+    emptyDesc: "Create an Item Group to organize your products.",
   },
 
   collections: {
-    subtitle: "Product collections & item groups synced with ERPNext.",
+    subtitle: "Product collections & item groups synced live.",
     primaryAction: "New collection",
     filters: ["All", "Parent Group", "Subcategory"],
     columns: [
@@ -138,12 +160,12 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "is_group_label", label: "Type" },
       { key: "description", label: "Description" },
     ],
-    emptyTitle: "No collections in ERPNext",
-    emptyDesc: "Create an Item Group in ERPNext to organize your products.",
+    emptyTitle: "No collections found",
+    emptyDesc: "Create an Item Group to organize your products.",
   },
 
   customers: {
-    subtitle: "Customer accounts and contacts stored in ERPNext.",
+    subtitle: "Customer accounts and contacts stored securely.",
     primaryAction: "Add customer",
     filters: ["All", "Individual", "Commercial"],
     columns: [
@@ -153,13 +175,13 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "customer_group", label: "Group" },
       { key: "territory", label: "Territory", className: "text-right" },
     ],
-    emptyTitle: "No customers in ERPNext",
+    emptyTitle: "No customers found",
     emptyDesc: "Add your first customer to start tracking orders and history.",
   },
 
   inventory: {
-    subtitle: "Live Oxigen Warehouse inventory levels, reserved stock, and available units in ERPNext.",
-    primaryAction: "Adjust stock",
+    subtitle: "Main Stores & Oxigen Warehouse inventory levels, reserved stock, and available units.",
+    primaryAction: "Add product",
     filters: ["All", "In stock", "Out of stock"],
     columns: [
       { key: "sku", label: "Item Code" },
@@ -168,7 +190,7 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "warehouse", label: "Warehouse" },
       { key: "actual_qty", label: "Actual Stock" },
       { key: "reserved_qty", label: "Reserved (Orders)" },
-      { key: "available_qty", label: "Available Stock" },
+      { key: "available_qty", label: "Website Stock" },
       { key: "stock_uom", label: "UOM" },
       { key: "status", label: "Status", className: "text-right" },
     ],
@@ -177,7 +199,7 @@ const MODULE_META: Record<string, PageMeta> = {
   },
 
   discounts: {
-    subtitle: "Item Price rules and discount lists in ERPNext.",
+    subtitle: "Item price rules and discount lists.",
     primaryAction: "Add price rule",
     filters: ["All", "Standard Selling"],
     columns: [
@@ -191,7 +213,7 @@ const MODULE_META: Record<string, PageMeta> = {
   },
 
   team: {
-    subtitle: "ERPNext users and team access control.",
+    subtitle: "Users and team access control.",
     primaryAction: "Invite user",
     filters: ["All", "Enabled", "Disabled"],
     columns: [
@@ -201,7 +223,7 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "status", label: "Status", className: "text-right" },
     ],
     emptyTitle: "No team members found",
-    emptyDesc: "Invite users and system members directly into ERPNext.",
+    emptyDesc: "Invite users and system members directly.",
   },
 
   shipping: {
@@ -214,9 +236,18 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "status", label: "Status", className: "text-right" },
     ],
     emptyTitle: "No shipping rules found",
-    emptyDesc: "Define shipping carriers and warehouse zones in ERPNext.",
+    emptyDesc: "Define shipping carriers and warehouse zones.",
   },
 };
+
+function orderDisplayName(o: { customer_name?: string; customer?: string; owner?: string; shipping?: { title?: string } | null }): string {
+  const fallback = o.customer_name || o.customer || o.owner || "Customer";
+  const title = o.shipping?.title?.trim();
+  if (!title) return fallback;
+  const autoMatch = title.match(/^(.*)-\d{10,}$/);
+  const isAutoGenerated = !!(autoMatch && o.customer_name && (autoMatch[1].replace(/-/g, " ") === o.customer_name.replace(/\s+/g, " ").trim()));
+  return isAutoGenerated ? fallback : title;
+}
 
 /* ============================================================
  * Route component: dispatch by slug
@@ -230,7 +261,7 @@ function DashboardCatchAll() {
   if (slug === "media")     return <MediaLibraryPage />;
 
   const meta = MODULE_META[slug] ?? {
-    subtitle: `Manage ${slug} in ERPNext.`,
+    subtitle: `Manage ${slug}.`,
     primaryAction: `Create ${slug.replace(/s$/, "")}`,
     filters: ["All"],
     columns: [
@@ -239,7 +270,7 @@ function DashboardCatchAll() {
       { key: "modified", label: "Modified", className: "text-right" },
     ],
     emptyTitle: `No ${slug} found`,
-    emptyDesc: `Create an entry to sync directly with ERPNext.`,
+    emptyDesc: `Create an entry to sync directly.`,
   };
 
   return <LiveTablePage slug={slug} icon={item?.icon ?? Sparkles} title={item?.label ?? slug} meta={meta} />;
@@ -291,10 +322,12 @@ function PageHeader({
           className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition shadow-sm">
           <Download className="h-3.5 w-3.5" /> Export CSV
         </button>
-        <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={onPrimary}
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
-          <Plus className="h-3.5 w-3.5" /> {primaryAction}
-        </motion.button>
+        {primaryAction && onPrimary && (
+          <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={onPrimary}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
+            <Plus className="h-3.5 w-3.5" /> {primaryAction}
+          </motion.button>
+        )}
       </div>
     </motion.div>
   );
@@ -376,13 +409,14 @@ function DataTable({
   onAction?: (a: RowAction, r: Row, index: number) => void;
 }) {
   if (!rows.length) return null;
+  const visibleColumns = columns.filter(c => !c.hidden);
   return (
-    <div className="rounded-2xl glass-strong border border-border overflow-hidden shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="rounded-2xl glass-strong border border-border overflow-visible shadow-sm">
+      <div className="overflow-x-auto overflow-y-visible">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-secondary/50">
-              {columns.map((c) => (
+              {visibleColumns.map((c) => (
                 <th key={c.key}
                   className={cn("px-4 py-3 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-bold", c.className)}>
                   {c.label}
@@ -397,7 +431,7 @@ function DataTable({
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
                 onClick={() => onRowClick?.(r, i)}
                 className="border-b border-border/60 hover:bg-secondary/40 transition-colors cursor-pointer">
-                {columns.map((c) => (
+                {visibleColumns.map((c) => (
                   <td key={c.key} className={cn("px-4 py-3 text-[13px] font-medium text-foreground", c.className)}>
                     {c.key === "status" || c.key === "visible" || c.key === "is_group_label" ? (
                       <StatusPill label={String(r[c.key] ?? "Active")} />
@@ -419,59 +453,70 @@ function DataTable({
 }
 
 function RowMenu({ onAction }: { onAction: (a: RowAction) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
   const items: { key: RowAction; label: string; icon: LucideIcon; danger?: boolean }[] = [
     { key: "view", label: "View details", icon: Eye },
-    { key: "edit", label: "Edit in ERP", icon: Pencil },
+    { key: "edit", label: "Edit", icon: Pencil },
     { key: "duplicate", label: "Duplicate", icon: Copy },
     { key: "delete", label: "Delete", icon: Trash2, danger: true },
   ];
+
   return (
-    <div ref={ref} className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition">
-        <MoreHorizontal className="h-4 w-4" />
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.96 }}
-            transition={{ duration: 0.15 }}
-            className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl glass-strong border border-border p-1 shadow-elegant text-left">
-            {items.map((it) => (
-              <button key={it.key}
-                onClick={() => { setOpen(false); onAction(it.key); }}
-                className={cn(
-                  "flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-xs font-medium transition",
-                  it.danger ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:text-foreground hover:bg-secondary",
-                )}>
-                <it.icon className="h-3.5 w-3.5" />
-                {it.label}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition focus:outline-none focus:ring-1 focus:ring-primary/40"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          sideOffset={6}
+          className="w-44 rounded-xl glass-strong border border-border p-1 shadow-elegant text-left z-50 bg-card text-foreground"
+        >
+          {items.map((it) => (
+            <DropdownMenuItem
+              key={it.key}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAction(it.key);
+              }}
+              className={cn(
+                "flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition",
+                it.danger
+                  ? "text-destructive focus:text-destructive focus:bg-destructive/10"
+                  : "text-muted-foreground focus:text-foreground focus:bg-secondary"
+              )}
+            >
+              <it.icon className="h-3.5 w-3.5" />
+              {it.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
 
+const PRODUCT_STATUS_OPTIONS = [
+  { label: "Enable", value: "Enable" },
+  { label: "Disable", value: "Disable" },
+];
+
+const INVENTORY_STATUS_OPTIONS = [
+  { label: "In stock", value: "In stock" },
+  { label: "Out of stock", value: "Out of stock" },
+];
+
 function StatusPill({ label }: { label: string }) {
   const l = label.toLowerCase();
   const tone =
-    /paid|active|completed|success|in stock|enabled|parent group/.test(l) ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
+    /paid|active|completed|success|in stock|enabled|enable|parent group/.test(l) ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
     /to deliver|draft|pending|processing|subcategory/.test(l)            ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20" :
     /refund|low/.test(l)                                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" :
-    /fail|cancel|out|disabled|closed/.test(l)                             ? "bg-destructive/10 text-destructive border-destructive/20" :
+    /fail|cancel|out|disabled|disable|closed/.test(l)                     ? "bg-destructive/10 text-destructive border-destructive/20" :
                                                                             "bg-secondary text-muted-foreground border-border";
   return <span className={cn("inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold uppercase tracking-wider border", tone)}>{label}</span>;
 }
@@ -512,10 +557,12 @@ function EmptyState({ title, desc, action, onAction }: { title: string; desc: st
       </div>
       <div className="font-display text-lg font-bold text-foreground">{title}</div>
       <p className="mt-1 text-sm text-muted-foreground max-w-sm mx-auto font-medium">{desc}</p>
-      <button onClick={onAction}
-        className="mt-4 inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
-        <Plus className="h-3.5 w-3.5" /> {action}
-      </button>
+      {action && onAction && (
+        <button onClick={onAction}
+          className="mt-4 inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
+          <Plus className="h-3.5 w-3.5" /> {action}
+        </button>
+      )}
     </motion.div>
   );
 }
@@ -524,9 +571,9 @@ function EmptyState({ title, desc, action, onAction }: { title: string; desc: st
  * Drawer & Dynamic Modal
  * ============================================================ */
 function DetailDrawer({
-  open, onClose, row, columns, title, onEdit, onDuplicate, onDelete,
+  open, onClose, row, columns, title, slug, onEdit, onDuplicate, onDelete,
 }: {
-  open: boolean; onClose: () => void; row: Row | null; columns: Column[]; title: string;
+  open: boolean; onClose: () => void; row: Row | null; columns: Column[]; title: string; slug?: string;
   onEdit: () => void; onDuplicate: () => void; onDelete: () => void;
 }) {
   return (
@@ -561,16 +608,49 @@ function DetailDrawer({
                   </div>
                 </div>
               ))}
+              {slug === "orders" && (
+                <div className="rounded-xl bg-card border border-border p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Shipping Details</div>
+                  <ul className="mt-2 space-y-2 text-xs text-muted-foreground font-medium">
+                    <li className="flex items-start justify-between gap-3">
+                      <span>Recipient</span>
+                      <span className="text-right font-semibold text-foreground">{row.customer || "—"}</span>
+                    </li>
+                    <li className="flex items-start justify-between gap-3">
+                      <span>Phone</span>
+                      <span className="text-right font-semibold text-foreground">
+                        {row.shipping?.phone
+                          ? <a className="text-primary hover:underline" href={`tel:${row.shipping.phone}`}>{row.shipping.phone}</a>
+                          : "—"}
+                      </span>
+                    </li>
+                    <li className="flex items-start justify-between gap-3">
+                      <span>Email</span>
+                      <span className="text-right font-semibold text-foreground">
+                        {row.shipping?.email
+                          ? <a className="text-primary hover:underline" href={`mailto:${row.shipping.email}`}>{row.shipping.email}</a>
+                          : "—"}
+                      </span>
+                    </li>
+                    <li className="flex items-start justify-between gap-3">
+                      <span>Address</span>
+                      <span className="text-right font-semibold text-foreground">
+                        {[row.shipping?.line1, row.shipping?.line2, [row.shipping?.city, row.shipping?.state].filter(Boolean).join(", "), row.shipping?.pincode, row.shipping?.country].filter(Boolean).join(", ") || "—"}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              )}
               <div className="rounded-xl bg-card border border-border p-3">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">ERP Metadata</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Record Details</div>
                 <ul className="mt-2 space-y-2 text-xs text-muted-foreground font-medium">
                   <li className="flex items-center justify-between">
                     <span>Record ID:</span>
                     <span className="font-mono text-[11px] text-foreground font-semibold">{row.name || row.rawKey || row.rawId || row.id || "—"}</span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span>ERP Status:</span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">Synced with Frappe</span>
+                    <span>Status:</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">Synced</span>
                   </li>
                 </ul>
               </div>
@@ -678,23 +758,112 @@ const SELECT_OPTIONS_MAP: Record<string, { label: string; value: string }[]> = {
 };
 
 function RecordModal({
-  open, onClose, mode, title, columns, initial, onSave, itemGroups,
+  open, onClose, mode, title, columns: rawColumns, initial, onSave, itemGroups, slug,
 }: {
   open: boolean; onClose: () => void; mode: "create" | "edit"; title: string;
   columns: Column[]; initial?: Row | null; onSave: (r: Row) => void;
   itemGroups?: ItemGroup[];
+  slug?: string;
 }) {
   const [form, setForm] = useState<Row>({});
   const [saving, setSaving] = useState(false);
+  const [manualSku, setManualSku] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [mediaFiles, setMediaFiles] = useState<any[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+
+  const columns = useMemo(() => {
+    if (slug === "inventory") {
+      if (mode === "create") {
+        return [
+          { key: "name", label: "Product Name" },
+          { key: "sku", label: "Item Code / SKU" },
+          { key: "item_group", label: "Category" },
+          { key: "price", label: "Price" },
+          { key: "stock", label: "Website Stock" },
+          { key: "status", label: "Status" },
+          { key: "image", label: "Image", hidden: true },
+          { key: "description", label: "Description", type: "textarea", hidden: true },
+        ];
+      } else {
+        return [
+          { key: "sku", label: "Item Code" },
+          { key: "name", label: "Item Name" },
+          { key: "item_group", label: "Category" },
+          { key: "warehouse", label: "Warehouse" },
+          { key: "actual_qty", label: "Actual Stock" },
+          { key: "status", label: "Status" },
+        ];
+      }
+    }
+    return rawColumns;
+  }, [slug, mode, rawColumns]);
 
   useEffect(() => {
     if (open) {
       const seed: Row = {};
       columns.forEach((c) => { seed[c.key] = initial?.[c.key] ?? ""; });
+      if (slug === "products" && mode === "create" && !seed.status) {
+        seed.status = "Enable";
+      } else if (slug === "inventory") {
+        if (mode === "create" && !seed.status) seed.status = "In stock";
+        seed.warehouse = "Stores - O";
+      }
       setForm(seed);
       setSaving(false);
+      setManualSku(Boolean(initial?.sku));
     }
-  }, [open, initial, columns]);
+  }, [open, initial, columns, slug, mode]);
+
+  const handleNameChange = (val: string) => {
+    setForm((prev) => {
+      const next: Row = { ...prev, name: val };
+      if ((slug === "products" || slug === "inventory") && mode === "create" && !manualSku) {
+        next.sku = val
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      }
+      return next;
+    });
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const res = await uploadAdminFile(file);
+      setForm(f => ({ ...f, image: res.data.file_url }));
+    } catch (err) {
+      console.error("Upload failed", err);
+    }
+  };
+
+  const handleImageDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    try {
+      const res = await uploadAdminFile(file);
+      setForm(f => ({ ...f, image: res.data.file_url }));
+    } catch (err) {
+      console.error("Upload failed", err);
+    }
+  };
+
+  const openMedia = async () => {
+    setMediaOpen(true);
+    setMediaLoading(true);
+    try {
+      const res = await getAdminFiles();
+      setMediaFiles((res.data || []).filter((f) => f.file_url));
+    } catch {
+      setMediaFiles([]);
+    } finally {
+      setMediaLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -717,7 +886,7 @@ function RecordModal({
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                    {mode === "create" ? "Create new in ERPNext" : "Edit in ERPNext"}
+                    {mode === "create" ? "Create new" : "Edit"}
                   </div>
                   <div className="font-display text-lg font-bold mt-0.5 text-foreground">{title}</div>
                 </div>
@@ -727,8 +896,56 @@ function RecordModal({
               </div>
               <form onSubmit={handleSubmit} className="p-5 space-y-3.5 max-h-[70vh] overflow-y-auto">
                 {columns.map((c) => {
+                  // Skip columns not meant for form
                   if (c.key === "item_count" || c.key === "is_group_label") return null;
 
+                  // Image upload for products / inventory
+                  if ((slug === "products" || slug === "inventory") && c.key === "image") {
+                    return (
+                      <label key={c.key} className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
+                        {form.image ? (
+                          <div className="relative overflow-hidden rounded-xl border border-border bg-secondary/30">
+                            <img src={getItemImageUrl(form.image)} alt="Preview" className="h-44 w-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setForm(f => ({ ...f, image: "" }))}
+                              className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
+                              aria-label="Remove image"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            <label className="absolute bottom-2 right-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-black/60 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/80">
+                              <RefreshCw className="h-3.5 w-3.5" /> Replace
+                              <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                            </label>
+                          </div>
+                        ) : (
+                          <label
+                            className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-secondary/20 px-4 py-8 text-center transition hover:border-primary/60 hover:bg-secondary/40"
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={handleImageDrop}
+                          >
+                            <span className="grid h-12 w-12 place-items-center rounded-full bg-primary/10 text-primary transition group-hover:scale-110">
+                              <Upload className="h-5 w-5" />
+                            </span>
+                            <span className="text-sm font-semibold text-foreground">Click to choose an image</span>
+                            <span className="text-xs text-muted-foreground">or drag &amp; drop here · PNG, JPG, WebP</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                          </label>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={openMedia}
+                          className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white/[0.03] px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+                        >
+                          <ImagePlus className="h-4 w-4" /> Pick from Media Library
+                        </button>
+                      </label>
+                    );
+                  }
+                  
                   if (mode === "edit" && (c.key === "id" || c.key === "rawKey" || c.key === "sku")) {
                     return (
                       <label key={c.key} className="block opacity-70">
@@ -737,6 +954,29 @@ function RecordModal({
                           disabled
                           value={String(form[c.key] ?? "")}
                           className="w-full h-10 px-3.5 rounded-xl bg-secondary/50 border border-border text-sm text-muted-foreground outline-none"
+                        />
+                      </label>
+                    );
+                  }
+
+                  // Auto-generating SKU / Item Code input for products & inventory
+                  if ((slug === "products" || slug === "inventory") && c.key === "sku") {
+                    return (
+                      <label key={c.key} className="block">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{c.label}</span>
+                          <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                            {manualSku ? "Custom SKU" : "Auto-generated"}
+                          </span>
+                        </div>
+                        <input
+                          value={String(form.sku ?? "")}
+                          onChange={(e) => {
+                            setManualSku(true);
+                            setForm((f) => ({ ...f, sku: e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "-") }));
+                          }}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm font-mono text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          placeholder="Auto-generated from Product Name"
                         />
                       </label>
                     );
@@ -783,6 +1023,65 @@ function RecordModal({
                     );
                   }
 
+                  // Product status dropdown with 2 exact options (Enable / Disable)
+                  if (slug === "products" && c.key === "status") {
+                    return (
+                      <label key={c.key} className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
+                        <select
+                          value={String(form.status || "Enable")}
+                          onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                        >
+                          {PRODUCT_STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value} className="bg-card text-foreground py-1.5">
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  }
+
+                  // Inventory status dropdown with 2 exact options (In stock / Out of stock)
+                  if (slug === "inventory" && c.key === "status") {
+                    return (
+                      <label key={c.key} className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
+                        <select
+                          value={String(form.status || "In stock")}
+                          onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                        >
+                          {INVENTORY_STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value} className="bg-card text-foreground py-1.5">
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  }
+
+                  // Inventory warehouse input locked strictly to Stores - O
+                  if (slug === "inventory" && c.key === "warehouse") {
+                    return (
+                      <label key={c.key} className="block opacity-80">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{c.label}</span>
+                          <span className="text-[10px] font-semibold text-muted-foreground px-2 py-0.5 rounded-full bg-secondary border border-border">
+                            Locked (Main Warehouse)
+                          </span>
+                        </div>
+                        <input
+                          disabled
+                          value="Stores - O"
+                          className="w-full h-10 px-3.5 rounded-xl bg-secondary/50 border border-border text-sm font-semibold text-foreground outline-none cursor-not-allowed"
+                        />
+                      </label>
+                    );
+                  }
+
                   // Predefined Select Dropdowns
                   const fieldKey = c.key.toLowerCase();
                   const predefined = SELECT_OPTIONS_MAP[fieldKey] || SELECT_OPTIONS_MAP[c.key];
@@ -805,12 +1104,33 @@ function RecordModal({
                     );
                   }
 
+                  if (c.type === "textarea") {
+                    return (
+                      <label key={c.key} className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
+                        <textarea
+                          value={String(form[c.key] ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
+                          rows={4}
+                          placeholder={`Enter ${c.label.toLowerCase()}`}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm resize-y"
+                        />
+                      </label>
+                    );
+                  }
+
                   return (
                     <label key={c.key} className="block">
                       <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
                       <input
                         value={String(form[c.key] ?? "")}
-                        onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
+                        onChange={(e) => {
+                          if (c.key === "name") {
+                            handleNameChange(e.target.value);
+                          } else {
+                            setForm((f) => ({ ...f, [c.key]: e.target.value }));
+                          }
+                        }}
                         className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         placeholder={`Enter ${c.label.toLowerCase()}`}
                       />
@@ -828,6 +1148,66 @@ function RecordModal({
               </div>
             </div>
           </motion.div>
+
+          {mediaOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => setMediaOpen(false)}
+                className="fixed inset-0 z-[60] bg-ink/40 backdrop-blur-md" />
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+                <div className="pointer-events-auto w-full max-w-lg glass-strong border border-border rounded-2xl shadow-elegant overflow-hidden bg-card text-foreground">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Media Library</div>
+                      <div className="font-display text-lg font-bold mt-0.5 text-foreground">Pick an image</div>
+                    </div>
+                    <button onClick={() => setMediaOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="p-5 max-h-[60vh] overflow-y-auto">
+                    {mediaLoading ? (
+                      <div className="py-16 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+                        <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+                        <span>Loading media...</span>
+                      </div>
+                    ) : mediaFiles.length === 0 ? (
+                      <div className="py-16 text-center text-xs text-muted-foreground">No media available. Upload images first.</div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2.5">
+                        {mediaFiles.map((f) => {
+                          const isImage = /\.(jpg|jpeg|png|webp)$/i.test(f.file_url);
+                          return (
+                            <button
+                              key={f.name || f.file_url}
+                              type="button"
+                              onClick={() => { setForm((s) => ({ ...s, image: f.file_url })); setMediaOpen(false); }}
+                              className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-secondary/20 transition hover:border-primary/60"
+                              title={f.file_name || f.name}
+                            >
+                              {isImage ? (
+                                <img src={getItemImageUrl(f.file_url)} alt={f.file_name} className="h-full w-full object-cover transition group-hover:scale-105" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-2xl">📄</div>
+                              )}
+                              {form.image === f.file_url && (
+                                <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
+                                  <Check className="h-3 w-3" />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
         </>
       )}
     </AnimatePresence>
@@ -846,7 +1226,7 @@ function downloadCSV(name: string, columns: Column[], rows: Row[]) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `${name}-erp.csv`; a.click();
+  a.href = url; a.download = `${name}-export.csv`; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -880,17 +1260,26 @@ function LiveTablePage({
 
       if (slug === "products") {
         const res = await getItems({ limit: 200, _t: String(Date.now()) });
-        const mapped = (res.data || []).map((it) => ({
-          rawKey: it.item_code || it.name,
-          name: it.item_name || it.item_code,
-          sku: it.item_code || it.name,
-          item_group: it.item_group || "General",
-          price: `PKR ${(it.standard_rate || it.valuation_rate || 0).toLocaleString()}`,
-          rawPrice: it.standard_rate || it.valuation_rate || 0,
-          stock: it.custom_stock_qty ?? it.stock_qty ?? 0,
-          status: (it.custom_stock_qty ?? it.stock_qty ?? 0) > 0 ? "Active" : "Out of stock",
-          description: it.description || "",
-        }));
+        const mapped = (res.data || []).map((it) => {
+          const rawPublished = it.is_published ?? (it as any).published ?? 1;
+          const rawDisabled = (it as any).disabled ?? 0;
+          const qty = it.custom_stock_qty ?? it.stock_qty ?? 0;
+
+          const statusVal = rawPublished === 0 || rawDisabled === 1 ? "Disable" : "Enable";
+
+          return {
+            rawKey: it.item_code || it.name,
+            name: it.item_name || it.item_code,
+            sku: it.item_code || it.name,
+            item_group: it.item_group || "General",
+            price: `PKR ${(it.standard_rate || it.valuation_rate || 0).toLocaleString()}`,
+            rawPrice: it.standard_rate || it.valuation_rate || 0,
+            stock: qty,
+            status: statusVal,
+            description: it.description || "",
+            image: it.image || it.website_image || "",
+          };
+        });
         setRows(mapped);
       } else if (slug === "orders") {
         const res = await getAdminOrders();
@@ -898,11 +1287,12 @@ function LiveTablePage({
           rawKey: o.name,
           id: `#${o.name}`,
           rawId: o.name,
-          customer: o.customer_name || o.customer || o.owner || "Customer",
+          customer: orderDisplayName(o),
           total: `PKR ${(Number(o.grand_total) || 0).toLocaleString()}`,
           rawTotal: Number(o.grand_total) || 0,
           status: o.status || "Draft",
           date: o.transaction_date || "—",
+          shipping: o.shipping || null,
         }));
         setRows(mapped);
       } else if (slug === "categories" || slug === "collections") {
@@ -992,7 +1382,7 @@ function LiveTablePage({
       }
     } catch (err) {
       console.error(`Failed to load ${slug}:`, err);
-      pushToast("error", `Failed to load ${title} from ERPNext`);
+      pushToast("error", `Failed to load ${title}`);
     } finally {
       setLoading(false);
     }
@@ -1012,9 +1402,9 @@ function LiveTablePage({
 
     return [
       { label: `Total ${title}`, value: String(total) },
-      { label: "Active in ERP", value: String(activeCount || total) },
+      { label: "Active", value: String(activeCount || total) },
       { label: "Sync status", value: "Real-time", delta: "Live", trend: "up" },
-      { label: "Source", value: "ERPNext API" },
+      { label: "Source", value: "Live system" },
     ];
   }, [rows, title]);
 
@@ -1074,12 +1464,12 @@ function LiveTablePage({
             email_id: `copy-${Date.now()}@example.com`,
           });
         } else if (slug === "inventory") {
-          pushToast("info", "Inventory records are synced from ERPNext Bin doctype");
+          pushToast("info", "Inventory records are synced live");
           return;
         } else {
           await createErpDoc(singular, copyPayload);
         }
-        pushToast("success", `${singular} duplicated in ERPNext`);
+        pushToast("success", `${singular} duplicated`);
         loadData();
       } catch (err: any) {
         pushToast("error", err.message || `Failed to duplicate ${singular}`);
@@ -1091,6 +1481,10 @@ function LiveTablePage({
       try {
         if (slug === "products") {
           await deleteItem(recordName);
+          setRows((prev) => prev.filter((row) => {
+            const candidate = row.rawKey || row.name || row.id || row.rawId;
+            return candidate !== recordName;
+          }));
         } else if (slug === "orders") {
           await deleteAdminOrder(r.rawId || recordName.replace(/^#/, ""));
         } else if (slug === "categories" || slug === "collections") {
@@ -1102,12 +1496,16 @@ function LiveTablePage({
         } else if (slug === "team") {
           await deleteAdminUser(recordName);
         } else if (slug === "inventory") {
-          pushToast("info", "Adjust stock quantity via Material Issue/Receipt instead of deletion");
-          return;
+          const itemCode = r.sku || r.item_code || r.name || recordName;
+          await deleteItem(itemCode);
+          setRows((prev) => prev.filter((row) => {
+            const candidate = row.sku || row.item_code || row.name || row.rawKey;
+            return candidate !== itemCode && row.rawKey !== r.rawKey;
+          }));
         } else {
           await deleteErpDoc(singular, recordName);
         }
-        pushToast("success", `${singular} deleted from ERPNext`);
+        pushToast("success", `${singular} deleted`);
         loadData();
       } catch (err: any) {
         pushToast("error", err.message || `Failed to delete ${singular}`);
@@ -1119,27 +1517,55 @@ function LiveTablePage({
     try {
       if (modal.mode === "create") {
         if (slug === "products") {
+          const autoSku = (formData.sku || formData.name || "")
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+
+          const chosenStatus = formData.status || "Enable";
           await createItem({
-            item_name: formData.name || formData.sku,
+            item_name: formData.name || autoSku,
+            item_code: autoSku || undefined,
+            sku: autoSku || undefined,
             item_group: formData.item_group || "General",
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")) || 0,
             stock_qty: Number(formData.stock) || 0,
             stock_uom: "Nos",
             description: formData.description || "",
+            image: formData.image || undefined,
+            imageUrl: formData.imageUrl || undefined,
+            status: chosenStatus,
+            publish: chosenStatus === "Enable",
+          });
+        } else if (slug === "inventory") {
+          const autoSku = (formData.sku || formData.name || "")
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+
+          const chosenStatus = formData.status || "In stock";
+          const stockQty = chosenStatus === "Out of stock" ? 0 : (Number(formData.stock ?? formData.actual_qty) || 0);
+
+          await createItem({
+            item_name: formData.name || autoSku,
+            item_code: autoSku || undefined,
+            sku: autoSku || undefined,
+            item_group: formData.item_group || "General",
+            standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")) || 0,
+            stock_qty: stockQty,
+            stock_uom: "Nos",
+            description: formData.description || "",
+            image: formData.image || undefined,
+            imageUrl: formData.imageUrl || undefined,
+            status: chosenStatus,
             publish: true,
           });
         } else if (slug === "orders") {
-          await createAdminOrder({
-            customer: formData.customer,
-            delivery_date: formData.date || new Date().toISOString().split("T")[0],
-            items: [
-              {
-                item_code: formData.sku || formData.name || "Nutri-Cept — Women's Wellness",
-                qty: Number(formData.qty) || 1,
-                rate: Number(String(formData.total || "").replace(/[^0-9.]/g, "")) || 1000,
-              },
-            ],
-          });
+          pushToast("info", "Order creation is disabled in this dashboard.");
+          setModal({ open: false, mode: "create", row: null, index: -1 });
+          return;
         } else if (slug === "categories" || slug === "collections") {
           await createItemGroup({
             item_group_name: formData.name,
@@ -1154,14 +1580,6 @@ function LiveTablePage({
             mobile_no: formData.mobile_no || "",
             customer_group: formData.customer_group || "Individual",
             territory: formData.territory || "Pakistan",
-          });
-        } else if (slug === "inventory") {
-          await adjustAdminInventory({
-            item_code: formData.sku || formData.name,
-            warehouse: formData.warehouse || "Oxigen Warehouse - O",
-            qty: Number(formData.actual_qty ?? formData.qty ?? formData.stock) || 0,
-            entry_type: "Stock Reconciliation",
-            mode: "set",
           });
         } else if (slug === "discounts") {
           await createAdminDiscount({
@@ -1178,7 +1596,7 @@ function LiveTablePage({
         } else {
           await createErpDoc(singular, formData);
         }
-        pushToast("success", `${singular} created in ERPNext`);
+        pushToast("success", `${singular} created`);
       } else {
         // Edit mode
         const recordName = modal.row?.rawKey || modal.row?.name || modal.row?.id || modal.row?.rawId;
@@ -1188,6 +1606,10 @@ function LiveTablePage({
             item_group: formData.item_group,
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")),
             description: formData.description,
+            image: formData.image || undefined,
+            imageUrl: formData.imageUrl || undefined,
+            status: formData.status || "Enable",
+            stock_uom: "Nos",
           });
           if (formData.stock !== undefined && formData.stock !== null && formData.stock !== "") {
             await adjustAdminInventory({
@@ -1217,10 +1639,12 @@ function LiveTablePage({
             territory: formData.territory,
           });
         } else if (slug === "inventory") {
+          const chosenStatus = formData.status || "In stock";
+          const newQty = chosenStatus === "Out of stock" ? 0 : (Number(formData.actual_qty ?? formData.qty ?? formData.stock) || 0);
           await adjustAdminInventory({
             item_code: modal.row?.sku || modal.row?.name || formData.sku || formData.name,
-            warehouse: formData.warehouse || modal.row?.warehouse || "Oxigen Warehouse - O",
-            qty: Number(formData.actual_qty ?? formData.qty ?? formData.stock) || 0,
+            warehouse: formData.warehouse || modal.row?.warehouse || "Stores - O",
+            qty: newQty,
             entry_type: "Stock Reconciliation",
             mode: "set",
           });
@@ -1232,7 +1656,7 @@ function LiveTablePage({
         } else {
           await updateErpDoc(singular, recordName, formData);
         }
-        pushToast("success", `${singular} updated in ERPNext`);
+        pushToast("success", `${singular} updated`);
       }
       setModal({ open: false, mode: "create", row: null, index: -1 });
       loadData();
@@ -1246,8 +1670,8 @@ function LiveTablePage({
       <ToastHost />
       <Breadcrumb label={title} />
       <PageHeader
-        icon={icon} title={title} subtitle={meta.subtitle} primaryAction={meta.primaryAction}
-        onPrimary={() => setModal({ open: true, mode: "create", row: null, index: -1 })}
+        icon={icon} title={title} subtitle={meta.subtitle} primaryAction={slug === "orders" || slug === "products" ? "" : meta.primaryAction}
+        onPrimary={slug === "orders" || slug === "products" ? undefined : () => setModal({ open: true, mode: "create", row: null, index: -1 })}
         onRefresh={loadData} loading={loading}
         onExport={() => { downloadCSV(slug, meta.columns, filtered); pushToast("info", `Exported ${filtered.length} rows`); }}
       />
@@ -1261,7 +1685,7 @@ function LiveTablePage({
       {loading ? (
         <div className="py-16 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
           <RefreshCw className="h-5 w-5 animate-spin text-primary" />
-          <span>Fetching live data from ERPNext...</span>
+          <span>Fetching live data...</span>
         </div>
       ) : paged.length ? (
         <>
@@ -1276,14 +1700,14 @@ function LiveTablePage({
         <EmptyState
           title={meta.emptyTitle}
           desc={meta.emptyDesc}
-          action={meta.primaryAction}
-          onAction={() => setModal({ open: true, mode: "create", row: null, index: -1 })}
+          action={slug === "orders" || slug === "products" ? "" : meta.primaryAction}
+          onAction={slug === "orders" || slug === "products" ? undefined : () => setModal({ open: true, mode: "create", row: null, index: -1 })}
         />
       )}
 
       <DetailDrawer
         open={drawer.open} onClose={() => setDrawer({ open: false, row: null, index: -1 })}
-        row={drawer.row} columns={meta.columns} title={singular}
+        row={drawer.row} columns={meta.columns} title={singular} slug={slug}
         onEdit={() => {
           const r = drawer.row; const i = drawer.index;
           setDrawer({ open: false, row: null, index: -1 });
@@ -1299,6 +1723,7 @@ function LiveTablePage({
         title={singular} columns={meta.columns} initial={modal.row}
         onSave={handleSave}
         itemGroups={itemGroups}
+        slug={slug}
       />
     </div>
   );
@@ -1323,7 +1748,7 @@ function AnalyticsPage() {
   const max = Math.max(...spark, 1);
 
   const channels = [
-    { name: "Direct ERP Sales", pct: 54, color: "bg-primary" },
+    { name: "Direct Sales", pct: 54, color: "bg-primary" },
     { name: "Website Orders", pct: 32, color: "bg-emerald-400" },
     { name: "Customer Portal", pct: 14, color: "bg-cyan-400" },
   ];
@@ -1331,8 +1756,8 @@ function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <Breadcrumb label="Analytics" />
-      <PageHeader icon={item.icon} title="Analytics" subtitle="Real-time revenue and sales order metrics from ERPNext." primaryAction="Export report"
-        onPrimary={() => pushToast("info", "Generating ERP analytics report…")}
+      <PageHeader icon={item.icon} title="Analytics" subtitle="Real-time revenue and sales order metrics." primaryAction="Export report"
+        onPrimary={() => pushToast("info", "Generating analytics report…")}
         onExport={() => pushToast("success", "Analytics snapshot exported")} />
       
       <StatsRow stats={[
@@ -1353,7 +1778,7 @@ function AnalyticsPage() {
                 PKR {(stats?.revenue || 0).toLocaleString()}
               </div>
             </div>
-            <span className="text-xs text-muted-foreground bg-white/5 px-2.5 py-1 rounded-lg">ERP Sales Order Sync</span>
+            <span className="text-xs text-muted-foreground bg-white/5 px-2.5 py-1 rounded-lg">Sales Order Sync</span>
           </div>
           <div className="mt-5 h-48 flex items-end gap-1.5">
             {spark.map((v, i) => (
@@ -1395,7 +1820,7 @@ function AnalyticsPage() {
       </div>
 
       <div className="rounded-2xl glass-strong border border-white/[0.08] p-5">
-        <div className="text-sm font-medium mb-3">Top selling catalog items in ERP</div>
+        <div className="text-sm font-medium mb-3">Top selling catalog items</div>
         <div className="divide-y divide-white/[0.05]">
           {(stats?.topProducts || []).map((p) => (
             <div key={p.code} className="flex items-center justify-between py-2.5 text-xs">
@@ -1423,7 +1848,7 @@ function MediaLibraryPage() {
     setLoading(true);
     getAdminFiles()
       .then((res) => setFiles(res.data || []))
-      .catch(() => pushToast("error", "Failed to load files from ERPNext"))
+      .catch(() => pushToast("error", "Failed to load files"))
       .finally(() => setLoading(false));
   };
 
@@ -1439,7 +1864,7 @@ function MediaLibraryPage() {
     for (let i = 0; i < fileList.length; i++) {
       try {
         await uploadAdminFile(fileList[i]);
-        pushToast("success", `${fileList[i].name} uploaded to ERPNext`);
+        pushToast("success", `${fileList[i].name} uploaded`);
       } catch (err: any) {
         pushToast("error", err.message || "Failed to upload file");
       }
@@ -1448,30 +1873,73 @@ function MediaLibraryPage() {
     e.target.value = "";
   };
 
+  const downloadFile = async (f: any) => {
+    try {
+      const res = await fetch(f.file_url?.startsWith("http") ? f.file_url : getItemImageUrl(f.file_url || f.file_name));
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = f.file_name || f.name || "file";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      pushToast("success", `${f.file_name || f.name} downloaded`);
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to download file");
+    }
+  };
+
+  const openFile = (f: any) => {
+    if (f.file_url && f.file_url.startsWith("http")) {
+      window.open(f.file_url, "_blank");
+    } else if (f.file_url || f.file_name) {
+      window.open(getItemImageUrl(f.file_url || f.file_name), "_blank");
+    } else {
+      pushToast("info", `File: ${f.file_name || f.name}`);
+    }
+  };
+
+  const handleDeleteFile = async (f: any) => {
+    if (!f.name || f.is_folder) return;
+    if (!window.confirm(`Delete "${f.file_name || f.name}" permanently?`)) return;
+    setLoading(true);
+    try {
+      await deleteAdminFile(f.name);
+      pushToast("success", `${f.file_name || f.name} deleted`);
+      loadFiles();
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to delete file");
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <ToastHost />
       <Breadcrumb label="Media Library" />
-      <PageHeader icon={item.icon} title="Media Library" subtitle="Files, images and attachments stored in ERPNext." primaryAction="Upload file"
+      <PageHeader icon={item.icon} title="Media Library" subtitle="Files, images and attachments stored in the platform." primaryAction="Upload file"
         onPrimary={triggerUpload}
         onRefresh={loadFiles} loading={loading}
         onExport={() => pushToast("info", "Media manifest exported")} />
       <input ref={fileRef} type="file" multiple className="hidden" onChange={onFiles} />
 
       <StatsRow stats={[
-        { label: "ERP Assets", value: String(files.length) },
-        { label: "Storage", value: "ERPNext Attachments" },
+        { label: "Assets", value: String(files.length) },
+        { label: "Storage", value: "Attachments" },
         { label: "Status", value: "Synced", delta: "Active", trend: "up" },
-        { label: "Upload Mode", value: "Direct Frappe API" },
+        { label: "Upload Mode", value: "Direct" },
       ]} />
 
       {loading ? (
         <div className="py-16 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
           <RefreshCw className="h-5 w-5 animate-spin text-primary" />
-          <span>Loading files from ERPNext...</span>
+          <span>Loading files...</span>
         </div>
       ) : files.length === 0 ? (
-        <EmptyState title="No files uploaded yet" desc="Upload images and documents directly to ERPNext file storage." action="Upload first file" onAction={triggerUpload} />
+        <EmptyState title="No files uploaded yet" desc="Upload images and documents directly to file storage." action="Upload first file" onAction={triggerUpload} />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {files.map((f, i) => (
@@ -1479,21 +1947,30 @@ function MediaLibraryPage() {
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.02 }}
               whileHover={{ y: -3 }}
-              onClick={() => {
-                if (f.file_url) window.open(f.file_url, "_blank");
-                else pushToast("info", `File: ${f.file_name || f.name}`);
-              }}
+              onClick={() => openFile(f)}
               className="group relative aspect-square rounded-2xl overflow-hidden border border-white/10 glass cursor-pointer p-3 flex flex-col justify-between"
             >
-              <div className="h-full w-full flex items-center justify-center rounded-xl bg-white/[0.04] overflow-hidden">
+              <div onClick={() => openFile(f)} className="h-full w-full flex items-center justify-center rounded-xl bg-white/[0.04] overflow-hidden">
                 {f.file_url && (f.file_url.endsWith(".jpg") || f.file_url.endsWith(".jpeg") || f.file_url.endsWith(".png") || f.file_url.endsWith(".webp")) ? (
                   <img src={f.file_url} alt={f.file_name} className="h-full w-full object-cover" />
                 ) : (
                   <span className="text-2xl font-mono text-muted-foreground">📄</span>
                 )}
               </div>
-              <div className="mt-2 text-[11px] text-white/90 truncate font-medium">
+              <div onClick={() => openFile(f)} className="mt-2 text-[11px] text-white/90 truncate font-medium">
                 {f.file_name || f.name}
+              </div>
+              <div className="absolute right-2 top-2 flex flex-col gap-1.5 opacity-0 transition group-hover:opacity-100">
+                <button type="button" onClick={(e) => { e.stopPropagation(); downloadFile(f); }}
+                  className="grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/85"
+                  aria-label="Download" title="Download">
+                  <Download className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteFile(f); }}
+                  className="grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-red-600/90"
+                  aria-label="Delete" title="Delete">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             </motion.div>
           ))}
