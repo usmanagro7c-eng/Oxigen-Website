@@ -144,22 +144,24 @@ export const Route = createFileRoute("/product/$slug")({
           );
           if (itemRes.ok) {
             const itemJson = await itemRes.json();
-            const availableQty = typeof d.custom_stock_qty === "number" ? d.custom_stock_qty : null;
+            const detail = itemJson.data;
+            const availableQty =
+              typeof detail?.custom_stock_qty === "number" ? detail.custom_stock_qty : null;
             // Normalize API product to CatalogItem shape
             const normalized = {
-              slug: (d.route as string)?.split("/").pop() ?? slugify(d.item_name || ""),
-              name: d.web_item_name || d.item_name,
-              subtitle: (d.short_description as string) || "",
-              desc: (d.description as string) || "",
-              price: d.standard_rate || 0,
+              slug: (detail?.route as string)?.split("/").pop() ?? slugify(detail?.item_name || ""),
+              name: detail?.web_item_name || detail?.item_name,
+              subtitle: (detail?.short_description as string) || "",
+              desc: (detail?.description as string) || "",
+              price: detail?.standard_rate || 0,
               was: 0,
-              tag: (d.item_group as string) || "",
-              img: getProductImage(d.image),
-              gallery: (d.slideshow_images as string[])?.map(
-                (i: string) => getProductImage(i),
-              ) || [],
+              tag: (detail?.item_group as string) || "",
+              img: getProductImage(detail?.image),
+              gallery: ((detail?.slideshow_images as string[]) || []).map((i: string) =>
+                getProductImage(i),
+              ),
               highlights: [],
-              ingredients: (d.web_long_description as string) || "",
+              ingredients: (detail?.web_long_description as string) || "",
               stockQty: availableQty,
               available: availableQty === null ? true : availableQty > 0,
             };
@@ -541,37 +543,38 @@ function ProductPage() {
 
         <section className="mt-16">
           <h2 className="font-display text-2xl font-extrabold text-ink">You may also like</h2>
-          <div className="mt-6 grid gap-7 md:grid-cols-3">
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-7 lg:grid-cols-3">
             {related.map((p, i) => (
               <Reveal key={p.slug} delay={i * 0.08}>
-                <div className="group flex h-full flex-col overflow-hidden rounded-3xl glass p-6 transition-all duration-500 hover:-translate-y-2">
+                <div className="group flex h-full flex-col overflow-hidden rounded-3xl glass p-4 transition-all duration-500 hover:-translate-y-2 sm:p-6">
                   <Link
                     to="/product/$slug"
                     params={{ slug: p.slug }}
-                    className="relative mb-5 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary"
+                    className="relative mb-4 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary sm:mb-5"
                   >
                     <img
                       src={p.img}
                       alt={p.name}
                       loading="lazy"
-                      className="h-full w-full object-contain p-6 transition-transform duration-700 group-hover:scale-110"
+                      className="h-full w-full object-contain p-4 transition-transform duration-700 group-hover:scale-110 sm:p-6"
                     />
                   </Link>
                   <Link
                     to="/product/$slug"
                     params={{ slug: p.slug }}
-                    className="font-display text-lg font-bold text-ink hover:text-primary"
+                    className="line-clamp-2 font-display text-base font-bold text-ink hover:text-primary sm:line-clamp-none sm:text-lg"
                   >
                     {p.name}
                   </Link>
-                  <p className="mt-1 text-sm font-medium text-primary">{p.subtitle}</p>
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-lg font-extrabold text-ink">
+                  <p className="mt-1 line-clamp-1 text-sm font-medium text-primary sm:line-clamp-none">{p.subtitle}</p>
+                  <div className="mt-4 flex items-center justify-between gap-2 sm:mt-4">
+                    <span className="text-base font-extrabold text-ink sm:text-lg">
                       {p.available ? formatPKR(p.price) : "Coming Soon"}
                     </span>
                     <button
                       onClick={() => addToCart(p.slug)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-white"
+                      aria-label={`Add ${p.name} to cart`}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white sm:px-4"
                     >
                       <ShoppingCart className="h-4 w-4" />
                     </button>
