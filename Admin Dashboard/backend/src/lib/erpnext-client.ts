@@ -38,6 +38,49 @@ export function getErpUrl(path: string): string {
   return `${base}${path}`;
 }
 
+export interface MultipartPart {
+  name: string;
+  value: Buffer | string;
+  filename?: string;
+  contentType?: string;
+}
+
+/**
+ * Builds a raw multipart/form-data body as a Buffer with a unique boundary.
+ * The standalone `undici` fetch used by `erpFetch` cannot serialize a Node
+ * `FormData` body (it sends `text/plain` and drops the file parts), so
+ * multipart uploads are constructed manually instead.
+ */
+export function buildMultipartBody(parts: MultipartPart[]): { body: Buffer; contentType: string } {
+  const boundary = `----OxigenBoundary${Date.now()}${Math.random().toString(16).slice(2)}`;
+  const chunks: Buffer[] = [];
+
+  for (const part of parts) {
+    let header = `--${boundary}\r\nContent-Disposition: form-data; name="${part.name}"`;
+    if (part.filename) {
+      const safeName = part.filename.replace(/["\r\n]/g, "");
+      header += `; filename="${safeName}"`;
+    }
+    header += `\r\n`;
+    const partType = part.contentType ?? (part.filename ? "application/octet-stream" : undefined);
+    if (partType) {
+      header += `Content-Type: ${partType}\r\n`;
+    }
+    header += `\r\n`;
+
+    chunks.push(Buffer.from(header));
+    chunks.push(typeof part.value === "string" ? Buffer.from(part.value) : part.value);
+    chunks.push(Buffer.from(`\r\n`));
+  }
+
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+
+  return {
+    body: Buffer.concat(chunks),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  };
+}
+
 export function getErpHeaders(): Record<string, string> {
   const apiKey = process.env["ERPNEXT_API_KEY"] ?? "";
   const apiSecret = process.env["ERPNEXT_API_SECRET"] ?? "";
