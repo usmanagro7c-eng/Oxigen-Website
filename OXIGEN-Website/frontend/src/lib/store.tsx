@@ -711,6 +711,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         email: o.customer.email,
         items: o.items.map((i) => ({ item_code: i.slug, qty: i.qty })),
         shippingAddress: {
+          address_title: o.customer.name,
           address_line1: o.customer.address,
           city: o.customer.city,
           country: "Pakistan",
