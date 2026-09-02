@@ -7,7 +7,7 @@ import {
   Tag, DollarSign, Search as SearchIcon, Boxes, Truck, Palette, Loader2,
 } from "lucide-react";
 import { Breadcrumb, Header, GlassCard, FieldGroup, Input, Select } from "@/components/dashboard/glass-form";
-import { createItem, createItemGroup, createErpDoc, getItemGroups, type ItemGroup } from "@/lib/api";
+import { createItem, createItemGroup, createErpDoc, getItemGroups, uploadAdminFile, getItemImageUrl, type ItemGroup } from "@/lib/api";
 
 export const Route = createFileRoute("/dashboard/new/$kind")({
   head: ({ params }) => ({ meta: [{ title: `Create ${params.kind.replace("-"," ")} — OxiGen Admin` }] }),
@@ -46,6 +46,8 @@ function NewWizard() {
     category: "",
     price: "1000",
     description: "",
+    image: "",
+    imageUrl: "",
   });
 
   useEffect(() => {
@@ -68,14 +70,18 @@ function NewWizard() {
       setSubmitting(true);
       try {
         if (kind === "product") {
-          await createItem({
-            item_name: formData.name || "New Product",
-            item_group: formData.category || (itemGroups[0]?.name ?? "General"),
-            standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")) || 1000,
+          const { image, imageUrl, ...restForm } = formData;
+          const payload: any = {
+            item_name: restForm.name || "New Product",
+            item_group: restForm.category || (itemGroups[0]?.item_group_name ?? itemGroups[0]?.name ?? "General"),
+            standard_rate: Number(String(restForm.price || "").replace(/[^0-9.]/g, "")) || 1000,
             stock_uom: "Nos",
-            description: formData.description || "",
+            description: restForm.description || "",
+            image: image || undefined,
             publish: true,
-          });
+          };
+          if (imageUrl) payload.imageUrl = imageUrl;
+          await createItem(payload);
         }
       } catch (err) {
         console.error("Wizard creation error:", err);
@@ -148,9 +154,9 @@ function NewWizard() {
           <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={next} disabled={submitting}
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary-gradient text-primary-foreground text-sm font-medium shadow-glow disabled:opacity-50">
             {submitting ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Saving in ERPNext…</>
+              <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
             ) : step === def.steps.length - 1 ? (
-              <><Rocket className="h-4 w-4" /> Create in ERPNext</>
+              <><Rocket className="h-4 w-4" /> Create</>
             ) : (
               <>Continue <ArrowRight className="h-4 w-4" /></>
             )}
@@ -175,8 +181,8 @@ function NewWizard() {
               >
                 <Check className="h-7 w-7 text-white" />
               </motion.div>
-              <div className="mt-4 font-display text-2xl font-semibold">{def.title.replace(/^New /, "")} synced with ERPNext</div>
-              <div className="mt-1.5 text-sm text-muted-foreground">Your {kind.replace("-"," ")} is live in your ERP database.</div>
+              <div className="mt-4 font-display text-2xl font-semibold">{def.title.replace(/^New /, "")} synced</div>
+              <div className="mt-1.5 text-sm text-muted-foreground">Your {kind.replace("-"," ")} is live.</div>
               <div className="mt-6 flex items-center justify-center gap-2">
                 <button onClick={() => setDone(false)} className="h-10 px-4 rounded-xl glass hover:bg-white/10 text-sm">Stay here</button>
                 <button onClick={() => navigate({ to: "/dashboard/$", params: { _splat: kind === "product" ? "products" : "orders" } })}
@@ -204,7 +210,7 @@ function StepContent({
 }) {
   if (step === "basics" || step === "brief" || step === "details") {
     return (
-      <GlassCard title="The essentials" desc="Enter details to be saved directly in ERPNext.">
+      <GlassCard title="The essentials" desc="Enter details to be saved directly.">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <FieldGroup label="Name">
             <Input
@@ -264,7 +270,7 @@ function StepContent({
 
   if (step === "pricing") {
     return (
-      <GlassCard title="Pricing & Inventory" desc="Set pricing and stock warehouse in ERPNext.">
+      <GlassCard title="Pricing & Inventory" desc="Set pricing and stock warehouse.">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <FieldGroup label="Selling Price (PKR)">
             <Input
@@ -306,7 +312,7 @@ function StepContent({
       { name: "Glass", tint: "from-violet-500 to-cyan-400" },
     ];
     return (
-      <GlassCard title={kind === "template" ? "Pick a template" : "Choose a design language"} desc="Adaptive styling for your catalog.">
+      <GlassCard title="Choose a design language" desc="Adaptive styling for your catalog.">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {looks.map((l, i) => (
             <motion.button key={l.name}
@@ -324,25 +330,44 @@ function StepContent({
     );
   }
 
-  if (step === "media") {
-    return (
-      <GlassCard title="Media & Image" desc="Add image URL or upload to ERP attachments.">
-        <div className="space-y-3">
-          <FieldGroup label="Image URL">
-            <Input
-              value={form.image || ""}
-              onChange={(e) => setForm(f => ({ ...f, image: e.target.value }))}
-              placeholder="/files/product-image.jpeg"
-            />
-          </FieldGroup>
-        </div>
-      </GlassCard>
-    );
-  }
+if (step === "media") {
+      return (
+        <GlassCard title="Media & Image" desc="Add image URL or upload attachments.">
+          <div className="space-y-3">
+            <FieldGroup label="Upload Image">
+              <input type="file" accept="image/*" onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const res = await uploadAdminFile(file);
+                  // res.data is the ERPNext file doc, use file_url (strip leading slash)
+                  const fileUrl = res.data.file_url?.startsWith('/') ? res.data.file_url.slice(1) : res.data.file_url;
+                  setForm(f => ({ ...f, image: fileUrl }));
+                } catch (err) {
+                  console.error("Upload failed", err);
+                }
+              }} />
+            </FieldGroup>
+            {form.image && (
+              <div className="mt-2">
+                <img src={getItemImageUrl(form.image)} alt="Preview" className="max-h-48" />
+              </div>
+            )}
+            <FieldGroup label="Image URL (optional)">
+              <Input
+                value={form.imageUrl || ""}
+                onChange={(e) => setForm(f => ({ ...f, imageUrl: e.target.value }))}
+                placeholder="/files/product-image.jpeg"
+              />
+            </FieldGroup>
+          </div>
+        </GlassCard>
+      );
+    }
 
   if (step === "seo") {
     return (
-      <GlassCard title="SEO & Web Details" desc="Website metadata in ERPNext.">
+      <GlassCard title="SEO & Web Details" desc="Website metadata.">
         <FieldGroup label="Web Title"><Input defaultValue={form.name || "OxiGen Catalog Item"} /></FieldGroup>
         <div className="h-3" />
         <FieldGroup label="Short Description">
@@ -355,13 +380,13 @@ function StepContent({
 
   if (step === "launch" || step === "publish" || step === "import") {
     return (
-      <GlassCard title="Ready to sync" desc="Review details before publishing to ERPNext.">
+      <GlassCard title="Ready to sync" desc="Review details before publishing.">
         <ul className="space-y-2">
           {[
             `Entity Name: ${form.name || "Item"}`,
             `Category / Group: ${form.category || "General"}`,
             `Price: PKR ${form.price || "1,000"}`,
-            "Live connection to ERPNext server verified",
+            "Live connection to server verified",
           ].map(item => (
             <li key={item} className="flex items-center gap-2.5 rounded-xl glass border border-white/10 p-3">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
