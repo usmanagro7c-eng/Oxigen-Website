@@ -111,7 +111,10 @@ export const createItemSchema = z.object({
   description: z.string().max(5000).optional(),
   standard_rate: z.number().min(0).optional(),
   stock_qty: z.number().int().min(0).optional(),
-  image: z.string().url().optional().or(z.literal("")),
+  image: z.string().optional(),
+  imageUrl: z.string().optional(),
+  sku: z.string().max(255).optional(),
+  item_code: z.string().max(255).optional(),
   // Website Item fields
   publish: z.boolean().optional(),
   website_warehouse: z.string().max(255).optional(),
