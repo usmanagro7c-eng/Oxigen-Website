@@ -53,7 +53,7 @@ function AIAssistant() {
     setMsgs(m => [...m, { role: "user", text: t }]);
     setInput(""); setTyping(true);
     setTimeout(() => {
-      setMsgs(m => [...m, { role: "ai", text: "Here's a draft — I've optimized for tone, brand voice, and conversion. Want me to refine, translate, or publish to ERPNext?" }]);
+      setMsgs(m => [...m, { role: "ai", text: "Here's a draft — I've optimized for tone, brand voice, and conversion. Want me to refine, translate, or publish?" }]);
       setTyping(false);
     }, 900);
   };
