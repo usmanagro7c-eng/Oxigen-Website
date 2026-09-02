@@ -5,6 +5,7 @@ import { ErpAdapter } from "./erp-adapter.js";
 import { authService } from "./auth.service.js";
 import { authTokenService } from "./auth-token.service.js";
 import emailService from "./email.service.js";
+import { notifyAdminOfOrder } from "../lib/admin-notify.js";
 
 /**
  * Interface representing the queue storage and management.
@@ -130,6 +131,7 @@ export class QueueProcessor<T extends ProcessorJob> {
   private async processJob(job: T): Promise<string> {
     if (job.kind === "order") {
       const orderName = await ErpAdapter.createErpOrder(job.payload);
+      notifyAdminOfOrder({ orderName, payload: job.payload });
       void sendMail({
         to: job.payload.email,
         subject: `Order Confirmed — OXIGEN (${orderName})`,
