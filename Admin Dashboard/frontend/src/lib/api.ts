@@ -559,6 +559,41 @@ export async function adjustAdminInventory(payload: {
   });
 }
 
+// ─── Settings ────────────────────────────────────────────────────────────────
+export interface SettingsData {
+  organization: {
+    company_name: string;
+    website_url: string;
+    support_email: string;
+  };
+  preferences: {
+    language: string;
+    time_zone: string;
+    date_format: string;
+    currency: string;
+    country: string;
+    number_format: string;
+  };
+  notifications: {
+    email: boolean;
+    push: boolean;
+    marketing: boolean;
+  };
+}
+
+export async function getSettings(): Promise<{ data: SettingsData }> {
+  return fetchApi("/admin/settings");
+}
+
+export async function updateSettings(payload: Partial<SettingsData>): Promise<{ data: SettingsData }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi("/admin/settings", {
+    method: "PUT",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(payload),
+  });
+}
+
 export interface AdminOrder {
   name: string;
   customer: string;
