@@ -1,4 +1,4 @@
-import { erpFetch, getErpUrl, getErpHeaders, parseErpError } from "../lib/erpnext-client.js";
+import { erpFetch, getErpUrl, getErpHeaders, parseErpError, buildMultipartBody } from "../lib/erpnext-client.js";
 import { logger } from "../lib/logger.js";
 
 /**
@@ -63,7 +63,38 @@ export const frappeService = {
     return customerName;
   },
 
-  // ── Customer & Contact creation ─────────────────────────────────────────────
+  /** Lookup a Customer by email, returning its name and display name (or null). */
+  async getCustomerByEmail(email: string): Promise<{ name: string; customer_name?: string } | null> {
+    const params = new URLSearchParams({
+      fields: JSON.stringify(["name", "customer_name", "email_id"]),
+      filters: JSON.stringify([["email_id", "=", email]]),
+      limit_page_length: "1",
+    });
+
+    const res = await erpFetch(
+      getErpUrl(`/api/resource/Customer?${params.toString()}`),
+      { headers: getErpHeaders() },
+    );
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as { data: { name: string; customer_name?: string }[] };
+    return data.data?.[0] ?? null;
+  },
+
+  /** Update a Customer's display name (used to keep ERP name in sync with checkout). */
+  async updateCustomerName(name: string, fullName: string): Promise<boolean> {
+    try {
+      const res = await erpFetch(getErpUrl(`/api/resource/Customer/${encodeURIComponent(name)}`), {
+        method: "PUT",
+        headers: getErpHeaders(),
+        body: JSON.stringify({ customer_name: fullName }),
+      });
+      return res.ok;
+    } catch (err) {
+      logger.warn({ err }, "[frappeService.updateCustomerName] failed");
+      return false;
+    }
+  },
 
   async createCustomerForEmail(email: string, fullName: string): Promise<string> {
     const customerPayload = {
@@ -385,21 +416,18 @@ export const frappeService = {
     const customerName = await this.findCustomerByEmail(email);
     if (!customerName) return { error: "Customer not found.", status: 404 };
 
-    const formData = new FormData();
-    const fileBlob = new Blob([new Uint8Array(fileBuffer)]);
-    formData.append("file", fileBlob, filename);
-    formData.append("doctype", "Customer");
-    formData.append("docname", customerName);
-    formData.append("is_private", "0");
-    formData.append("folder", "Home/Attachments");
-
-    const headers = getErpHeaders();
-    delete headers["Content-Type"];
+    const { body, contentType } = buildMultipartBody([
+      { name: "file", value: fileBuffer, filename },
+      { name: "doctype", value: "Customer" },
+      { name: "docname", value: customerName },
+      { name: "is_private", value: "0" },
+      { name: "folder", value: "Home/Attachments" },
+    ]);
 
     const res = await erpFetch(getErpUrl("/api/method/upload_file"), {
       method: "POST",
-      headers,
-      body: formData as any,
+      headers: { ...getErpHeaders(), "Content-Type": contentType },
+      body,
     });
 
     if (!res.ok) {
