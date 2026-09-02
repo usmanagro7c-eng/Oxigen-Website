@@ -16,6 +16,7 @@ export default defineConfig({
     nitro(),
   ],
   server: {
+    port: 5174,
     proxy: {
       // Proxy API + health to the Express backend during development.
       // This keeps cookies same-origin (no CORS) and CSRF working out of the box.
