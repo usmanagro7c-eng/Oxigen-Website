@@ -1,4 +1,4 @@
-import { erpFetch, getErpUrl, getErpHeaders, parseErpError } from "../lib/erpnext-client.js";
+import { erpFetch, getErpUrl, getErpHeaders, parseErpError, buildMultipartBody } from "../lib/erpnext-client.js";
 import { logger } from "../lib/logger.js";
 
 /**
@@ -385,21 +385,18 @@ export const frappeService = {
     const customerName = await this.findCustomerByEmail(email);
     if (!customerName) return { error: "Customer not found.", status: 404 };
 
-    const formData = new FormData();
-    const fileBlob = new Blob([new Uint8Array(fileBuffer)]);
-    formData.append("file", fileBlob, filename);
-    formData.append("doctype", "Customer");
-    formData.append("docname", customerName);
-    formData.append("is_private", "0");
-    formData.append("folder", "Home/Attachments");
-
-    const headers = getErpHeaders();
-    delete headers["Content-Type"];
+    const { body, contentType } = buildMultipartBody([
+      { name: "file", value: fileBuffer, filename },
+      { name: "doctype", value: "Customer" },
+      { name: "docname", value: customerName },
+      { name: "is_private", value: "0" },
+      { name: "folder", value: "Home/Attachments" },
+    ]);
 
     const res = await erpFetch(getErpUrl("/api/method/upload_file"), {
       method: "POST",
-      headers,
-      body: formData as any,
+      headers: { ...getErpHeaders(), "Content-Type": contentType },
+      body,
     });
 
     if (!res.ok) {
