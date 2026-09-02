@@ -25,7 +25,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Admin Portal Login — OxiGen Dashboard" },
-      { name: "description", content: "Secure admin login for OxiGen ERPNext Dashboard." },
+      { name: "description", content: "Secure admin login for the OxiGen Dashboard." },
     ],
   }),
   component: AdminLoginPage,
@@ -64,7 +64,7 @@ function AdminLoginPage() {
     e.preventDefault();
     const usernameOrEmail = email.trim();
     if (!usernameOrEmail || !password) {
-      setErrorMsg("Please enter both ERP username/email and password.");
+      setErrorMsg("Please enter both username/email and password.");
       return;
     }
 
@@ -77,7 +77,7 @@ function AdminLoginPage() {
       
       if (res && res.success) {
         const displayName = res.user?.name || usernameOrEmail.split("@")[0] || usernameOrEmail;
-        const userEmail = res.user?.email || (usernameOrEmail.includes("@") ? usernameOrEmail : `${usernameOrEmail}@erp.local`);
+        const userEmail = res.user?.email || (usernameOrEmail.includes("@") ? usernameOrEmail : `${usernameOrEmail}@oxigen.local`);
         
         setUser({ email: userEmail, full_name: displayName });
         setSuccessMsg(`Welcome, ${displayName}! Opening dashboard...`);
@@ -87,7 +87,7 @@ function AdminLoginPage() {
         }, 600);
         return;
       } else {
-        setErrorMsg(res?.message || "Invalid credentials for ERP user.");
+        setErrorMsg(res?.message || "Invalid credentials. Please try again.");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -95,14 +95,14 @@ function AdminLoginPage() {
 
       // If backend explicitly rejected credentials (401 Unauthorized / Invalid Password)
       if (message.includes("401") || message.toLowerCase().includes("invalid") || message.toLowerCase().includes("incorrect")) {
-        setErrorMsg("Invalid ERP user credentials. Please check your username and password.");
+        setErrorMsg("Invalid credentials. Please check your username and password.");
         setIsSubmitting(false);
         return;
       }
 
       // Fallback for local/offline dev mode: allow login for any ERP user to test dashboard
       const displayName = usernameOrEmail.includes("@") ? usernameOrEmail.split("@")[0] : usernameOrEmail;
-      const userEmail = usernameOrEmail.includes("@") ? usernameOrEmail : `${usernameOrEmail}@erp.local`;
+      const userEmail = usernameOrEmail.includes("@") ? usernameOrEmail : `${usernameOrEmail}@oxigen.local`;
 
       setUser({ email: userEmail, full_name: displayName });
       setSuccessMsg(`Authenticated as ${displayName}. Redirecting to dashboard...`);
@@ -119,7 +119,7 @@ function AdminLoginPage() {
     setErrorMsg(null);
     setIsSubmitting(true);
     const demoUser = role === "administrator" ? "Administrator" : "Manager";
-    const demoEmail = role === "administrator" ? "admin@erp.local" : "manager@erp.local";
+    const demoEmail = role === "administrator" ? "admin@oxigen.local" : "manager@oxigen.local";
 
     setEmail(demoUser);
     setPassword("••••••••");
@@ -136,7 +136,7 @@ function AdminLoginPage() {
   const handleForgotPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setErrorMsg("Please enter your ERP username or email address.");
+      setErrorMsg("Please enter your username or email address.");
       return;
     }
     setErrorMsg(null);
@@ -179,7 +179,7 @@ function AdminLoginPage() {
 
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-card border border-border px-3 py-1.5 rounded-full shadow-sm">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>ERP System Connected</span>
+          <span>System Connected</span>
         </div>
       </header>
 
@@ -245,7 +245,7 @@ function AdminLoginPage() {
                     htmlFor={emailId}
                     className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5"
                   >
-                    ERP Username or Email
+                    Username or Email
                   </label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
@@ -322,7 +322,7 @@ function AdminLoginPage() {
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="rounded border-border text-primary focus:ring-primary/20 h-4 w-4 accent-primary"
                     />
-                    <span>Remember ERP session</span>
+                    <span>Keep me signed in</span>
                   </label>
                 </div>
 
@@ -335,7 +335,7 @@ function AdminLoginPage() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Authenticating with ERP...</span>
+                      <span>Authenticating...</span>
                     </>
                   ) : (
                     <>
@@ -349,7 +349,7 @@ function AdminLoginPage() {
               {/* Demo / Preset ERP Users Divider & Buttons */}
               <div className="mt-8 pt-6 border-t border-border">
                 <p className="text-xs text-center text-muted-foreground mb-3 font-semibold uppercase tracking-wider">
-                  Quick Select Preset ERP User
+                  Quick Select Preset User
                 </p>
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
@@ -394,10 +394,10 @@ function AdminLoginPage() {
                   <KeyRound className="h-6 w-6" />
                 </div>
                 <h2 className="text-xl font-bold font-display text-foreground">
-                  ERP Password Recovery
+                  Password Recovery
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Enter your ERP username or email address to request a reset link.
+                  Enter your username or email address to request a reset link.
                 </p>
               </div>
 
@@ -437,7 +437,7 @@ function AdminLoginPage() {
                       htmlFor={resetEmailId}
                       className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5"
                     >
-                      ERP User / Email
+                      User / Email
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted-foreground">
@@ -480,7 +480,7 @@ function AdminLoginPage() {
       <footer className="relative z-10 py-4 px-6 text-center text-xs text-muted-foreground max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-          <span>OxiGen Healthcare • ERPNext Connected Session</span>
+          <span>OxiGen Healthcare • Connected Session</span>
         </div>
         <div>&copy; {new Date().getFullYear()} OxiGen. All Rights Reserved.</div>
       </footer>
