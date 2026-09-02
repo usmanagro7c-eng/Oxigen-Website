@@ -1,3 +1,4 @@
+import { timingSafeEqual, createHash } from "crypto";
 import { logger } from "../lib/logger.js";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
@@ -12,9 +13,16 @@ import {
   clearDlq,
   clearCompleted,
 } from "../lib/order-queue.js";
-import { pingErpNext, getErpUrl, getErpHeaders, erpFetch, parseErpError } from "../lib/erpnext-client.js";
+import { pingErpNext, getErpUrl, getErpHeaders, erpFetch, parseErpError, buildMultipartBody } from "../lib/erpnext-client.js";
 import { itemCache } from "../lib/item-cache.js";
 import { ErpAdapter } from "../services/erp-adapter.js";
+import { notificationService } from "../services/notification.service.js";
+
+function secureEqual(a: string, b: string): boolean {
+  const hashA = createHash("sha256").update(a, "utf8").digest();
+  const hashB = createHash("sha256").update(b, "utf8").digest();
+  return timingSafeEqual(hashA, hashB);
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -53,6 +61,14 @@ function isActiveProcessingSalesOrder(status?: string): boolean {
   const s = normalizeStatus(status);
   if (!s) return false;
   return s !== "completed" && s !== "cancelled" && s !== "closed" && s !== "draft";
+}
+
+function getMainWarehouse(): string {
+  return (process.env.MAIN_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || process.env.ONLINE_WAREHOUSE || "Oxigen Warehouse - O").trim();
+}
+
+function getOnlineWarehouse(): string {
+  return (process.env.ONLINE_WAREHOUSE || getMainWarehouse()).trim();
 }
 
 async function fetchRecentSalesOrders(): Promise<SalesOrderSummary[]> {
@@ -231,7 +247,8 @@ router.get(
       };
 
       const items = itemJson.data || [];
-      const defaultWarehouse = process.env["ONLINE_WAREHOUSE"] || process.env["DEFAULT_WAREHOUSE"] || "Oxigen Warehouse - O";
+      const mainWarehouse = getMainWarehouse();
+      const onlineWarehouse = getOnlineWarehouse();
 
       const binItemCodes = [...new Set(items.map((i) => i.item_code || i.name))].filter(Boolean);
       const binMap: Record<string, { actual_qty: number; reserved_qty: number; ordered_qty: number; projected_qty: number }> = {};
@@ -265,19 +282,20 @@ router.get(
 
       const inventory = items.map((item) => {
         const itemCode = item.item_code || item.name;
-        const warehouse = defaultWarehouse;
-        const bin = binMap[`${itemCode}::${warehouse}`] ?? null;
-        const actual_qty = bin?.actual_qty ?? 0;
-        const reserved_qty = bin?.reserved_qty ?? 0;
-        const ordered_qty = bin?.ordered_qty ?? 0;
-        const available_qty = Math.max(0, actual_qty - reserved_qty);
-        const projected_qty = bin?.projected_qty ?? (actual_qty - reserved_qty + ordered_qty);
+        const mainBin = binMap[`${itemCode}::${mainWarehouse}`] ?? null;
+        const onlineBin = binMap[`${itemCode}::${onlineWarehouse}`] ?? null;
+
+        const actual_qty = mainBin?.actual_qty ?? 0;
+        const reserved_qty = onlineBin?.reserved_qty ?? 0;
+        const ordered_qty = onlineBin?.ordered_qty ?? 0;
+        const available_qty = Math.max(0, (onlineBin?.actual_qty ?? 0) - reserved_qty);
+        const projected_qty = onlineBin?.projected_qty ?? (actual_qty - reserved_qty + ordered_qty);
 
         return {
           item_code: itemCode,
           item_name: item.item_name || itemCode,
           item_group: item.item_group || "General",
-          warehouse: warehouse,
+          warehouse: onlineWarehouse,
           actual_qty,
           reserved_qty,
           ordered_qty,
@@ -305,56 +323,337 @@ router.post(
     try {
       const { item_code, qty, warehouse, rate = 0, entry_type = "Stock Reconciliation", mode } = req.body;
       const defaultCompany = process.env.DEFAULT_COMPANY ?? "Oxigen";
-      const targetWarehouse = warehouse || process.env.ONLINE_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || "Oxigen Warehouse - O";
+      const mainWarehouse = getMainWarehouse();
+      const onlineWarehouse = getOnlineWarehouse();
+      const targetWarehouse = warehouse || (entry_type === "Material Receipt" ? mainWarehouse : onlineWarehouse);
       const numQty = Number(qty) ?? 0;
       const today = new Date().toISOString().split("T")[0];
 
-      // If mode is "set" or entry_type is "Stock Reconciliation" (Editing inventory)
+      // When website stock is edited, set the target online warehouse to the desired quantity by
+      // calculating the delta vs. current stock instead of blindly moving the entered number.
       if (mode === "set" || entry_type === "Stock Reconciliation" || entry_type === "Stock Adjustment") {
-        const recoPayload = {
-          doctype: "Stock Reconciliation",
-          company: defaultCompany,
-          purpose: "Stock Reconciliation",
-          expense_account: "Temporary Opening - O",
-          posting_date: today,
-          items: [
-            {
-              item_code,
-              warehouse: targetWarehouse,
-              qty: Math.max(0, numQty),
-              valuation_rate: Number(rate) > 0 ? Number(rate) : 500,
-            },
-          ],
-        };
+        const isOnlineEdit = targetWarehouse === onlineWarehouse;
 
-        const erpRes = await erpFetch(getErpUrl("/api/resource/Stock Reconciliation"), {
-          method: "POST",
-          headers: getErpHeaders(),
-          body: JSON.stringify(recoPayload),
-        });
+        if (isOnlineEdit && item_code) {
+          const currentBinRes = await erpFetch(
+            getErpUrl(`/api/resource/Bin?${new URLSearchParams({
+              fields: JSON.stringify(["actual_qty", "reserved_qty"]),
+              filters: JSON.stringify([
+                ["item_code", "=", item_code],
+                ["warehouse", "=", onlineWarehouse],
+              ]),
+              limit_page_length: "1",
+            }).toString()}`),
+            { headers: getErpHeaders() }
+          ).catch(() => null);
 
-        if (!erpRes.ok) {
-          const err = (await erpRes.json().catch(() => ({}))) as any;
-          res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to reconcile stock." });
+          let currentOnlineQty = 0;
+          if (currentBinRes?.ok) {
+            const currentBinJson = (await currentBinRes.json()) as {
+              data?: { actual_qty?: number; reserved_qty?: number }[];
+            };
+            const row = currentBinJson.data?.[0];
+            currentOnlineQty = row ? Math.max(0, Number(row.actual_qty ?? 0) - Number(row.reserved_qty ?? 0)) : 0;
+          }
+
+          const deltaQty = numQty - currentOnlineQty;
+
+          if (deltaQty > 0) {
+            // Check available stock in Stores - O before transferring
+            const mainBinRes = await erpFetch(
+              getErpUrl(`/api/resource/Bin?${new URLSearchParams({
+                fields: JSON.stringify(["actual_qty", "reserved_qty"]),
+                filters: JSON.stringify([
+                  ["item_code", "=", item_code],
+                  ["warehouse", "=", mainWarehouse],
+                ]),
+                limit_page_length: "1",
+              }).toString()}`),
+              { headers: getErpHeaders() }
+            ).catch(() => null);
+
+            let mainAvailableQty = 0;
+            if (mainBinRes?.ok) {
+              const mainBinJson = (await mainBinRes.json()) as {
+                data?: { actual_qty?: number; reserved_qty?: number }[];
+              };
+              const row = mainBinJson.data?.[0];
+              mainAvailableQty = row ? Math.max(0, Number(row.actual_qty ?? 0) - Number(row.reserved_qty ?? 0)) : 0;
+            }
+
+            if (mainAvailableQty < deltaQty) {
+              itemCache.clear();
+              res.status(400).json({
+                error: `Low stock in main warehouse (${mainWarehouse}). Quantity cannot be added to website stock.`,
+              });
+              return;
+            }
+
+            // Transfer from Stores - O to Oxigen Warehouse - O
+            const transferPayload = {
+              doctype: "Stock Entry",
+              stock_entry_type: "Material Transfer",
+              company: defaultCompany,
+              posting_date: today,
+              items: [
+                {
+                  item_code,
+                  qty: deltaQty,
+                  s_warehouse: mainWarehouse,
+                  t_warehouse: onlineWarehouse,
+                },
+              ],
+            };
+
+            const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify(transferPayload),
+            });
+
+            if (seRes.ok) {
+              const seData: any = await seRes.json();
+              if (seData.data) {
+                await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                  method: "POST",
+                  headers: getErpHeaders(),
+                  body: JSON.stringify({ doc: seData.data }),
+                }).catch(() => {});
+              }
+              itemCache.clear();
+              res.status(200).json({ success: true, data: seData.data, warehouse: onlineWarehouse });
+              return;
+            }
+
+            const err = (await seRes.json().catch(() => ({}))) as any;
+            res.status(seRes.status).json({ error: parseErpError(err) || "Failed to transfer stock to the online warehouse." });
+            return;
+          }
+
+          if (deltaQty < 0) {
+            const returnQty = Math.abs(deltaQty);
+            const reversePayload = {
+              doctype: "Stock Entry",
+              stock_entry_type: "Material Transfer",
+              company: defaultCompany,
+              posting_date: today,
+              items: [
+                {
+                  item_code,
+                  qty: returnQty,
+                  s_warehouse: onlineWarehouse,
+                  t_warehouse: mainWarehouse,
+                },
+              ],
+            };
+
+            const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify(reversePayload),
+            });
+
+            if (seRes.ok) {
+              const seData: any = await seRes.json();
+              if (seData.data) {
+                await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                  method: "POST",
+                  headers: getErpHeaders(),
+                  body: JSON.stringify({ doc: seData.data }),
+                }).catch(() => {});
+              }
+              itemCache.clear();
+              res.status(200).json({ success: true, data: seData.data, warehouse: onlineWarehouse });
+              return;
+            }
+
+            const err = (await seRes.json().catch(() => ({}))) as any;
+            res.status(seRes.status).json({ error: parseErpError(err) || "Failed to reverse stock transfer." });
+            return;
+          }
+
+          itemCache.clear();
+          res.status(200).json({ success: true, data: null, warehouse: onlineWarehouse });
           return;
         }
 
-        const data: any = await erpRes.json();
-        if (data.data) {
-          await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+        // 1. Check current stock in targetWarehouse (e.g. Stores - O)
+        const currentBinRes = await erpFetch(
+          getErpUrl(`/api/resource/Bin?${new URLSearchParams({
+            fields: JSON.stringify(["actual_qty", "reserved_qty", "valuation_rate"]),
+            filters: JSON.stringify([
+              ["item_code", "=", item_code],
+              ["warehouse", "=", targetWarehouse],
+            ]),
+            limit_page_length: "1",
+          }).toString()}`),
+          { headers: getErpHeaders() }
+        ).catch(() => null);
+
+        let currentQty = 0;
+        let valRate = Number(rate) || 0;
+        if (currentBinRes?.ok) {
+          const currentBinJson = (await currentBinRes.json()) as any;
+          const row = currentBinJson.data?.[0];
+          if (row) {
+            currentQty = Number(row.actual_qty ?? 0);
+            if (!valRate && row.valuation_rate) {
+              valRate = Number(row.valuation_rate);
+            }
+          }
+        if (!valRate || valRate <= 0) {
+          const itemDocRes = await erpFetch(
+            getErpUrl(`/api/resource/Item/${encodeURIComponent(item_code)}?fields=${encodeURIComponent(JSON.stringify(["standard_rate", "valuation_rate"]))}`),
+            { headers: getErpHeaders() }
+          ).catch(() => null);
+          if (itemDocRes?.ok) {
+            const itemDocJson = (await itemDocRes.json()) as any;
+            valRate = Number(itemDocJson.data?.standard_rate || itemDocJson.data?.valuation_rate) || 0;
+          }
+        }
+        if (!valRate || valRate <= 0) {
+          valRate = 100;
+        }
+
+        const delta = numQty - currentQty;
+
+        if (delta > 0) {
+          // Add delta units strictly via Purchase Invoice with update_stock: 1
+          const supplier = await ErpAdapter.getOrCreateSupplier(defaultCompany);
+          const piPayload: any = {
+            doctype: "Purchase Invoice",
+            company: defaultCompany,
+            supplier,
+            posting_date: today,
+            due_date: today,
+            update_stock: 1,
+            set_warehouse: targetWarehouse,
+            items: [
+              {
+                item_code,
+                qty: delta,
+                rate: valRate,
+                warehouse: targetWarehouse,
+                expense_account: "Stock In Hand - O",
+                cost_center: "Main - O",
+              },
+            ],
+          };
+
+          let piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
             method: "POST",
             headers: getErpHeaders(),
-            body: JSON.stringify({ doc: data.data }),
+            body: JSON.stringify(piPayload),
           });
+
+          // If initial creation fails, retry without hardcoded expense account/cost center
+          if (!piRes.ok) {
+            delete piPayload.items[0].expense_account;
+            delete piPayload.items[0].cost_center;
+            piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify(piPayload),
+            });
+          }
+
+          if (piRes.ok) {
+            const piJson: any = await piRes.json().catch(() => ({}));
+            if (piJson.data) {
+              await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                method: "POST",
+                headers: getErpHeaders(),
+                body: JSON.stringify({ doc: piJson.data }),
+              }).catch(() => {});
+            }
+            itemCache.clear();
+            res.status(200).json({ success: true, data: piJson.data, warehouse: targetWarehouse });
+            return;
+          }
+
+          // Fallback: Stock Entry Material Receipt
+          const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify({
+              doctype: "Stock Entry",
+              stock_entry_type: "Material Receipt",
+              company: defaultCompany,
+              posting_date: today,
+              items: [
+                {
+                  item_code,
+                  qty: delta,
+                  t_warehouse: targetWarehouse,
+                },
+              ],
+            }),
+          }).catch(() => null);
+
+          if (seRes && seRes.ok) {
+            const seJson: any = await seRes.json().catch(() => ({}));
+            if (seJson.data) {
+              await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                method: "POST",
+                headers: getErpHeaders(),
+                body: JSON.stringify({ doc: seJson.data }),
+              }).catch(() => {});
+            }
+            itemCache.clear();
+            res.status(200).json({ success: true, data: seJson.data, warehouse: targetWarehouse });
+            return;
+          }
+
+          const err = (await piRes.json().catch(() => ({}))) as any;
+          res.status(piRes.status).json({ error: parseErpError(err) || "Failed to create Purchase Invoice in ERPNext." });
+          return;
+        } else if (delta < 0) {
+          // Reduce units via Stock Entry Material Issue
+          const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify({
+              doctype: "Stock Entry",
+              stock_entry_type: "Material Issue",
+              company: defaultCompany,
+              posting_date: today,
+              items: [
+                {
+                  item_code,
+                  qty: Math.abs(delta),
+                  s_warehouse: targetWarehouse,
+                },
+              ],
+            }),
+          }).catch(() => null);
+
+          if (seRes && seRes.ok) {
+            const seJson: any = await seRes.json().catch(() => ({}));
+            if (seJson.data) {
+              await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                method: "POST",
+                headers: getErpHeaders(),
+                body: JSON.stringify({ doc: seJson.data }),
+              }).catch(() => {});
+            }
+            itemCache.clear();
+            res.status(200).json({ success: true, data: seJson.data, warehouse: targetWarehouse });
+            return;
+          }
+
+          const err = (await seRes?.json().catch(() => ({}))) as any;
+          res.status(seRes?.status || 500).json({ error: parseErpError(err) || "Failed to issue stock in ERPNext." });
+          return;
         }
 
         itemCache.clear();
-        res.status(200).json({ success: true, data: data.data });
+        res.status(200).json({ success: true, message: "Stock is already up to date.", warehouse: targetWarehouse });
         return;
       }
 
       if (entry_type === "Material Receipt") {
-        // Create & Submit Purchase Invoice with update_stock: 1
+        const receiptWarehouse = targetWarehouse === onlineWarehouse ? mainWarehouse : targetWarehouse;
+
         const piPayload = {
           doctype: "Purchase Invoice",
           company: defaultCompany,
@@ -362,13 +661,13 @@ router.post(
           posting_date: today,
           due_date: today,
           update_stock: 1,
-          set_warehouse: targetWarehouse,
+          set_warehouse: receiptWarehouse,
           items: [
             {
               item_code,
               qty: numQty,
               rate: Number(rate) || 0,
-              warehouse: targetWarehouse,
+              warehouse: receiptWarehouse,
               expense_account: "Stock In Hand - O",
               cost_center: "Main - O",
             },
@@ -401,7 +700,6 @@ router.post(
         return;
       }
 
-      // If negative qty or explicit Material Issue
       const stockPayload = {
         doctype: "Stock Entry",
         stock_entry_type: "Material Issue",
@@ -439,6 +737,7 @@ router.post(
 
       itemCache.clear();
       res.status(201).json({ success: true, data: seData.data });
+    }
     } catch (err: any) {
       logger.error({ err }, "[admin/inventory/adjust]");
       res.status(500).json({ error: err.message || "Failed to adjust inventory." });
@@ -449,6 +748,60 @@ router.post(
 // ---------------------------------------------------------------------------
 // ORDERS (Sales Order CRUD)
 // ---------------------------------------------------------------------------
+
+type ShippingDetails = {
+  title?: string;
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+};
+
+async function resolveShippingAddresses(orderDocs: { shipping_address_name?: string }[]): Promise<Map<string, ShippingDetails | null>> {
+  const names = orderDocs
+    .map((o) => o.shipping_address_name)
+    .filter((n): n is string => Boolean(n));
+  const uniqueNames = [...new Set(names)];
+  const map = new Map<string, ShippingDetails | null>();
+  const CHUNK = 10;
+
+  for (let i = 0; i < uniqueNames.length; i += CHUNK) {
+    const slice = uniqueNames.slice(i, i + CHUNK);
+    const results = await Promise.all(
+      slice.map(async (name) => {
+        try {
+          const res = await erpFetch(
+            getErpUrl(`/api/resource/Address/${encodeURIComponent(name)}`),
+            { headers: getErpHeaders() }
+          );
+          if (!res.ok) return null;
+          const json = (await res.json()) as { data?: any };
+          const a = json.data ?? {};
+          return {
+            title: a.address_title || undefined,
+            line1: a.address_line1 || undefined,
+            line2: a.address_line2 || undefined,
+            city: a.city || undefined,
+            state: a.state || undefined,
+            pincode: a.pincode || undefined,
+            country: a.country || undefined,
+            phone: a.phone || undefined,
+            email: a.email_id || undefined,
+          } satisfies ShippingDetails;
+        } catch {
+          return null;
+        }
+      })
+    );
+    slice.forEach((name, idx) => map.set(name, results[idx] ?? null));
+  }
+  return map;
+}
+
 router.get(
   "/admin/orders",
   attachRequestId,
@@ -466,6 +819,7 @@ router.get(
           "delivery_date",
           "modified",
           "owner",
+          "shipping_address_name",
         ]),
         limit_page_length: "200",
         order_by: "transaction_date desc, modified desc",
@@ -482,7 +836,13 @@ router.get(
       }
 
       const data = (await erpRes.json()) as { data: any[] };
-      res.json({ data: data.data });
+      const orders = data.data || [];
+      const shippingMap = await resolveShippingAddresses(orders);
+      const withShipping = orders.map((o) => ({
+        ...o,
+        shipping: shippingMap.get(o.shipping_address_name) || null,
+      }));
+      res.json({ data: withShipping });
     } catch (err) {
       logger.error({ err }, "[admin/orders]");
       res.status(500).json({ error: "Internal server error." });
@@ -1103,6 +1463,7 @@ router.get(
           "file_url",
           "file_size",
           "is_private",
+          "is_folder",
           "creation",
           "attached_to_doctype",
           "attached_to_name",
@@ -1122,7 +1483,10 @@ router.get(
       }
 
       const data: any = await erpRes.json();
-      res.json({ data: data.data });
+      const files = (data.data || []).filter(
+        (f: any) => !f.is_folder
+      );
+      res.json({ data: files });
     } catch (err: any) {
       logger.error({ err }, "[admin/files.GET]");
       res.status(500).json({ error: err.message || "Internal server error." });
@@ -1142,19 +1506,16 @@ router.post(
         return;
       }
 
-      const formData = new FormData();
-      const fileBlob = new Blob([new Uint8Array(file.buffer)]);
-      formData.append("file", fileBlob, file.originalname);
-      formData.append("is_private", "0");
-      formData.append("folder", "Home/Attachments");
-
-      const headers = getErpHeaders();
-      delete headers["Content-Type"];
+      const { body, contentType } = buildMultipartBody([
+        { name: "file", value: file.buffer, filename: file.originalname },
+        { name: "is_private", value: "0" },
+        { name: "folder", value: "Home/Attachments" },
+      ]);
 
       const erpRes = await erpFetch(getErpUrl("/api/method/upload_file"), {
         method: "POST",
-        headers,
-        body: formData as any,
+        headers: { ...getErpHeaders(), "Content-Type": contentType },
+        body,
       });
 
       if (!erpRes.ok) {
@@ -1171,5 +1532,136 @@ router.post(
     }
   }
 );
+
+router.delete(
+  "/admin/files/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/File/${encodeURIComponent(name)}`),
+        {
+          method: "DELETE",
+          headers: getErpHeaders(),
+        }
+      );
+
+      if (!erpRes.ok) {
+        const err = erpRes.status === 404
+          ? "File not found."
+          : "Failed to delete the file in ERPNext.";
+        res.status(erpRes.status).json({ error: err });
+        return;
+      }
+
+      res.json({ success: true, message: `File ${name} deleted.` });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/files/:name.DELETE]");
+      res.status(500).json({ error: err.message || "Failed to delete file." });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Real-time Admin Notifications & Live Order Stream
+// ---------------------------------------------------------------------------
+
+router.get("/admin/notifications", attachRequestId, async (_req: Request, res: Response) => {
+  res.json({
+    data: notificationService.getAll(),
+    unread: notificationService.getUnreadCount(),
+  });
+});
+
+router.post("/admin/notifications", attachRequestId, async (req: Request, res: Response) => {
+  const expected = process.env["WEBHOOK_SECRET"] ?? "";
+  const provided = (req.headers["x-admin-shared-secret"] as string) ?? "";
+  if (!expected || !secureEqual(expected, provided)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  try {
+    const { orderId, customerName, email, city, total, itemCount, paymentMethod, items } = req.body;
+    if (!email) {
+      res.status(400).json({ error: "email is required" });
+      return;
+    }
+    const notif = notificationService.addOrderNotification({
+      orderId,
+      customerName,
+      email,
+      city,
+      total: Number(total) || 0,
+      itemCount: Number(itemCount) || 1,
+      paymentMethod,
+      items,
+    });
+    res.status(201).json({ data: notif });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/notifications.POST]");
+    res.status(500).json({ error: err.message || "Failed to create notification" });
+  }
+});
+
+router.post("/admin/notifications/mark-read", attachRequestId, async (req: Request, res: Response) => {
+  const { id } = req.body || {};
+  notificationService.markAsRead(id);
+  res.json({ success: true, unread: notificationService.getUnreadCount() });
+});
+
+router.post("/admin/notifications/clear", attachRequestId, async (_req: Request, res: Response) => {
+  notificationService.clear();
+  res.json({ success: true, unread: 0 });
+});
+
+router.delete("/admin/notifications/:id", attachRequestId, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  notificationService.deleteNotification(id);
+  res.json({ success: true, unread: notificationService.getUnreadCount() });
+});
+
+router.get("/admin/notifications/stream", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  const sendInitial = () => {
+    res.write(`event: init\ndata: ${JSON.stringify({
+      notifications: notificationService.getAll(),
+      unread: notificationService.getUnreadCount(),
+    })}\n\n`);
+  };
+
+  sendInitial();
+
+  const onNotification = (notif: any) => {
+    res.write(`event: notification\ndata: ${JSON.stringify({
+      notification: notif,
+      unread: notificationService.getUnreadCount(),
+    })}\n\n`);
+  };
+
+  const onChange = () => {
+    res.write(`event: change\ndata: ${JSON.stringify({
+      notifications: notificationService.getAll(),
+      unread: notificationService.getUnreadCount(),
+    })}\n\n`);
+  };
+
+  notificationService.on("notification", onNotification);
+  notificationService.on("change", onChange);
+
+  const heartbeat = setInterval(() => {
+    res.write(": heartbeat\n\n");
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    notificationService.off("notification", onNotification);
+    notificationService.off("change", onChange);
+  });
+});
 
 export default router;
