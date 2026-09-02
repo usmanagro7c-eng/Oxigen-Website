@@ -147,7 +147,7 @@ function SettingsPage() {
 
           {/* Security */}
           <section id="security">
-            <GlassCard title="Security" desc="Keep your ERP account safe.">
+            <GlassCard title="Security" desc="Keep your account safe.">
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="flex items-start gap-3">
