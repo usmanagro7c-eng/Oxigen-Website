@@ -115,7 +115,7 @@ export function CartDrawer() {
               </div>
             ) : (
               <>
-                <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4">
                   {cartItems.map((item) => (
                     <div key={item.slug} className="flex gap-3 rounded-2xl glass p-3">
                       <Link
