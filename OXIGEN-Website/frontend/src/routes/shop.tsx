@@ -69,10 +69,10 @@ function Shop() {
       />
 
       <section className="mx-auto max-w-6xl px-5 pb-8">
-        <div className="grid gap-7 md:grid-cols-3">
+        <div className="grid gap-4 sm:gap-7 grid-cols-2 xl:grid-cols-3">
           {loading
-            ? Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-96 w-full animate-pulse rounded-3xl bg-secondary glass p-6" />
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="aspect-[3/4] w-full animate-pulse rounded-3xl bg-secondary glass" />
               ))
             : products.map((p, i) => {
                 const slug = p.route?.split("/").pop() || slugify(p.item_name);
@@ -84,40 +84,40 @@ function Shop() {
 
                 return (
                   <Reveal key={p.item_code} delay={i * 0.1}>
-                    <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl glass p-6 transition-all duration-500 hover:-translate-y-2">
-                      <span className="absolute left-6 top-6 z-10 rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-semibold text-white shadow">
+                    <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl glass p-4 sm:p-6 transition-all duration-500 hover:-translate-y-2">
+                      <span className="absolute left-4 top-4 z-10 hidden rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-semibold text-white shadow sm:left-6 sm:top-6 sm:inline-block">
                         {p.item_group}
                       </span>
                       <button
                         aria-label="Toggle wishlist"
                         onClick={() => toggleWishlist(slug)}
-                        className={`absolute right-6 top-6 z-10 grid h-9 w-9 place-items-center rounded-full glass transition-colors ${saved ? "text-primary" : "text-ink hover:text-primary"}`}
+                        className={`absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full glass transition-colors sm:right-6 sm:top-6 ${saved ? "text-primary" : "text-ink hover:text-primary"}`}
                       >
                         <Heart className={`h-4 w-4 ${saved ? "fill-primary" : ""}`} />
                       </button>
                       <Link
                         to="/product/$slug"
                         params={{ slug }}
-                        className="relative mb-6 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary"
+                        className="relative mb-4 aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-white to-secondary sm:mb-6"
                       >
                         <img
                           src={img}
                           alt={`${p.item_name}`}
                           loading="lazy"
-                          className="h-full w-full object-contain p-6 transition-transform duration-700 group-hover:scale-110"
+                          className="h-full w-full object-contain p-4 transition-transform duration-700 group-hover:scale-110 sm:p-6"
                         />
                       </Link>
                       <Link
                         to="/product/$slug"
                         params={{ slug }}
-                        className="font-display text-lg font-bold text-ink hover:text-primary"
+                        className="line-clamp-2 font-display text-base font-bold text-ink hover:text-primary sm:line-clamp-none sm:text-lg"
                       >
                         {p.item_name}
                       </Link>
-                      <div className="mt-1 flex items-center justify-between">
+                      <div className="mt-1 flex items-center justify-between gap-1">
                         <p className="text-sm font-medium text-primary">Wellness</p>
                         {available ? (
-                          <span className="text-[11px] font-bold text-emerald-600">
+                          <span className="hidden text-[11px] font-bold text-emerald-600 sm:inline">
                             ● {stockQty} in stock
                           </span>
                         ) : (
@@ -126,23 +126,25 @@ function Shop() {
                           </span>
                         )}
                       </div>
-                      <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">
+                      <p className="mt-2 hidden flex-1 text-sm leading-relaxed text-muted-foreground sm:block">
                         {p.short_description || "Premium quality supplement."}
                       </p>
-                      <div className="mt-5 flex items-center justify-between">
+                      <div className="mt-4 flex items-center justify-between gap-2 sm:mt-5">
                         <div className="flex items-baseline gap-2">
-                          <span className="text-xl font-extrabold text-ink">
+                          <span className="text-lg font-extrabold text-ink sm:text-xl">
                             {formatPKR(price)}
                           </span>
                         </div>
                         <button
                           onClick={() => addToCart(slug)}
                           disabled={!available}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Add ${p.item_name} to cart`}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105 sm:px-4 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {available ? (
                             <>
-                              Add <ShoppingCart className="h-4 w-4" />
+                              <span className="hidden sm:inline">Add </span>
+                              <ShoppingCart className="h-4 w-4" />
                             </>
                           ) : (
                             <>
