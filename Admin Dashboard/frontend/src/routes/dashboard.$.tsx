@@ -67,12 +67,12 @@ function ToastHost() {
   }, []);
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed bottom-0 left-0 right-0 z-[60] flex flex-col items-center gap-2 pointer-events-none px-4 pb-safe">
       <AnimatePresence>
         {items.map((t) => (
           <motion.div key={t.id}
             initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="pointer-events-auto flex items-center gap-2 rounded-xl glass-strong border border-white/10 px-4 py-2.5 text-xs shadow-glow">
+            className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-xl glass-strong border border-white/10 px-4 py-2.5 text-xs shadow-glow">
             {t.kind === "success" && <Check className="h-3.5 w-3.5 text-emerald-300" />}
             {t.kind === "error" && <AlertCircle className="h-3.5 w-3.5 text-rose-300" />}
             {t.kind === "info" && <Sparkles className="h-3.5 w-3.5 text-primary" />}
@@ -316,18 +316,18 @@ function PageHeader({
           <p className="text-sm text-muted-foreground mt-0.5 font-medium">{subtitle}</p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
         <button onClick={onRefresh}
-          className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition shadow-sm">
+          className="inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 h-10 sm:h-9 px-3.5 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition shadow-sm">
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin text-primary")} /> Refresh
         </button>
         <button onClick={onExport}
-          className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition shadow-sm">
+          className="inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 h-10 sm:h-9 px-3.5 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition shadow-sm">
           <Download className="h-3.5 w-3.5" /> Export CSV
         </button>
         {primaryAction && onPrimary && (
           <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={onPrimary}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
+            className="inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 h-10 sm:h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
             <Plus className="h-3.5 w-3.5" /> {primaryAction}
           </motion.button>
         )}
@@ -373,37 +373,45 @@ function Toolbar({
   onFiltersToggle?: () => void; filtersOpen?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="relative flex-1 min-w-[220px] max-w-md">
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-2 flex-wrap">
+      <div className="relative flex-1 min-w-0 sm:min-w-[220px] sm:max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <input
           value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search records…"
-          className="w-full h-9 pl-9 pr-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+          className="w-full h-10 sm:h-9 pl-9 pr-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
         />
       </div>
-      <div className="flex items-center gap-1 rounded-xl bg-card border border-border p-1 shadow-sm">
-        {filters.map((f) => (
-          <button key={f} onClick={() => onActive(f)}
-            className={cn(
-              "h-7 px-3 rounded-lg text-xs font-semibold transition",
-              active === f ? "bg-gradient-to-r from-primary to-accent text-white shadow-sm" : "text-muted-foreground hover:text-foreground",
-            )}>
-            {f}
-          </button>
-        ))}
+      <div className="flex items-center justify-between sm:justify-start gap-2">
+        <div className="hide-scrollbar flex items-center gap-1 rounded-xl bg-card border border-border p-1 overflow-x-auto max-w-[64vw] sm:max-w-none">
+          {filters.map((f) => (
+            <button key={f} onClick={() => onActive(f)}
+              className={cn(
+                "h-7 px-3 rounded-lg text-xs font-semibold whitespace-nowrap transition",
+                active === f ? "bg-gradient-to-r from-primary to-accent text-white shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}>
+              {f}
+            </button>
+          ))}
+        </div>
+        <button onClick={onFiltersToggle}
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center gap-1.5 h-10 sm:h-9 px-3 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition shadow-sm",
+            filtersOpen && "bg-secondary text-foreground",
+          )}>
+          <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
+        </button>
       </div>
-      <button onClick={onFiltersToggle}
-        className={cn(
-          "inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition shadow-sm",
-          filtersOpen && "bg-secondary text-foreground",
-        )}>
-        <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
-      </button>
     </div>
   );
 }
 
 type RowAction = "view" | "edit" | "duplicate" | "delete";
+function renderCellValue(c: Column, r: Row) {
+  if (c.key === "status" || c.key === "visible" || c.key === "is_group_label") {
+    return <StatusPill label={String(r[c.key] ?? "Active")} />;
+  }
+  return String(r[c.key] ?? "—");
+}
 function DataTable({
   columns, rows, onRowClick, onAction,
 }: {
@@ -414,44 +422,85 @@ function DataTable({
   if (!rows.length) return null;
   const visibleColumns = columns.filter(c => !c.hidden);
   return (
-    <div className="rounded-2xl glass-strong border border-border overflow-visible shadow-sm">
-      <div className="overflow-x-auto overflow-y-visible">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-secondary/50">
-              {visibleColumns.map((c) => (
-                <th key={c.key}
-                  className={cn("px-4 py-3 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-bold", c.className)}>
-                  {c.label}
-                </th>
-              ))}
-              <th className="w-10" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <motion.tr key={r.rawKey || r.name || r.id || i}
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                onClick={() => onRowClick?.(r, i)}
-                className="border-b border-border/60 hover:bg-secondary/40 transition-colors cursor-pointer">
+    <>
+      {/* Desktop / tablet table */}
+      <div className="hidden md:block rounded-2xl glass-strong border border-border overflow-visible shadow-sm">
+        <div className="overflow-x-auto overflow-y-visible">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-secondary/50">
                 {visibleColumns.map((c) => (
-                  <td key={c.key} className={cn("px-4 py-3 text-[13px] font-medium text-foreground", c.className)}>
-                    {c.key === "status" || c.key === "visible" || c.key === "is_group_label" ? (
-                      <StatusPill label={String(r[c.key] ?? "Active")} />
-                    ) : (
-                      String(r[c.key] ?? "—")
-                    )}
-                  </td>
+                  <th key={c.key}
+                    className={cn("px-4 py-3 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-bold whitespace-nowrap", c.className)}>
+                    {c.label}
+                  </th>
                 ))}
-                <td className="px-2 text-right">
-                  <RowMenu onAction={(a) => onAction?.(a, r, i)} />
-                </td>
-              </motion.tr>
-            ))}
-          </tbody>
-        </table>
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <motion.tr key={r.rawKey || r.name || r.id || i}
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
+                  onClick={() => onRowClick?.(r, i)}
+                  className="border-b border-border/60 hover:bg-secondary/40 transition-colors cursor-pointer">
+                  {visibleColumns.map((c) => (
+                    <td key={c.key} className={cn("px-4 py-3 text-[13px] font-medium text-foreground align-top", c.className)}>
+                      {renderCellValue(c, r)}
+                    </td>
+                  ))}
+                  <td className="px-2 text-right align-top">
+                    <RowMenu onAction={(a) => onAction?.(a, r, i)} />
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-3">
+        {rows.map((r, i) => {
+          const titleCol = visibleColumns[0];
+          const detailCols = visibleColumns.slice(1);
+          const titleValue = r[titleCol?.key] ?? "—";
+          const titleImg = r.image || r.imageUrl;
+          return (
+            <motion.div
+              key={r.rawKey || r.name || r.id || i}
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
+              onClick={() => onRowClick?.(r, i)}
+              className="rounded-2xl bg-card border border-border shadow-sm p-4 cursor-pointer active:bg-secondary/40 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                {titleImg && (
+                  <img src={titleImg} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover border border-border" />
+                )}
+                <div className="flex-1 min-w-0">
+                  {titleCol && (
+                    <div className="text-sm font-bold text-foreground truncate">{renderCellValue(titleCol, { ...r, [titleCol.key]: titleValue })}</div>
+                  )}
+                  <div className="mt-1.5 space-y-1.5">
+                    {detailCols.map((c) => (
+                      <div key={c.key} className="flex items-start justify-between gap-3 text-xs">
+                        <span className="shrink-0 text-muted-foreground font-semibold">{c.label}</span>
+                        <span className="text-right font-medium text-foreground break-words min-w-0">
+                          {renderCellValue(c, r)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <span onClick={(e) => e.stopPropagation()}>
+                  <RowMenu onAction={(a) => onAction?.(a, r, i)} />
+                </span>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -530,19 +579,24 @@ function Pagination({ page, pages, onPage }: { page: number; pages: number; onPa
     <div className="flex items-center justify-between gap-2 text-xs">
       <div className="text-muted-foreground font-medium">Page {page} of {pages}</div>
       <div className="flex items-center gap-1">
-        <button onClick={() => onPage(Math.max(1, page - 1))} disabled={page === 1}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-card border border-border hover:bg-secondary disabled:opacity-40 transition">
+        <button onClick={() => onPage(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page"
+          className="inline-flex h-9 w-9 md:h-8 md:w-8 items-center justify-center rounded-lg bg-card border border-border hover:bg-secondary disabled:opacity-40 transition touch-target">
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
-        {Array.from({ length: pages }).map((_, i) => (
-          <button key={i} onClick={() => onPage(i + 1)}
-            className={cn("h-8 min-w-8 px-2 rounded-lg text-xs font-semibold transition",
-              page === i + 1 ? "bg-gradient-to-r from-primary to-accent text-white shadow-sm" : "bg-card border border-border hover:bg-secondary")}>
-            {i + 1}
-          </button>
-        ))}
-        <button onClick={() => onPage(Math.min(pages, page + 1))} disabled={page === pages}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-card border border-border hover:bg-secondary disabled:opacity-40 transition">
+        {/* Compact page indicator on mobile */}
+        <span className="md:hidden text-xs font-bold text-foreground px-2">{page}</span>
+        {/* Full page numbers on desktop */}
+        <div className="hidden md:flex items-center gap-1">
+          {Array.from({ length: pages }).map((_, i) => (
+            <button key={i} onClick={() => onPage(i + 1)}
+              className={cn("h-8 min-w-8 px-2 rounded-lg text-xs font-semibold transition",
+                page === i + 1 ? "bg-gradient-to-r from-primary to-accent text-white shadow-sm" : "bg-card border border-border hover:bg-secondary")}>
+              {i + 1}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => onPage(Math.min(pages, page + 1))} disabled={page === pages} aria-label="Next page"
+          className="inline-flex h-9 w-9 md:h-8 md:w-8 items-center justify-center rounded-lg bg-card border border-border hover:bg-secondary disabled:opacity-40 transition touch-target">
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -554,7 +608,7 @@ function EmptyState({ title, desc, action, onAction }: { title: string; desc: st
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl glass-strong border border-border p-10 text-center shadow-sm">
+      className="rounded-2xl glass-strong border border-border p-6 md:p-10 text-center shadow-sm">
       <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-sm mb-3">
         <Sparkles className="h-5 w-5" />
       </div>
@@ -562,7 +616,7 @@ function EmptyState({ title, desc, action, onAction }: { title: string; desc: st
       <p className="mt-1 text-sm text-muted-foreground max-w-sm mx-auto font-medium">{desc}</p>
       {action && onAction && (
         <button onClick={onAction}
-          className="mt-4 inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
+          className="mt-4 inline-flex w-full sm:w-auto items-center justify-center gap-1.5 h-10 sm:h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
           <Plus className="h-3.5 w-3.5" /> {action}
         </button>
       )}
@@ -908,10 +962,10 @@ function RecordModal({
             onClick={onClose}
             className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-md" />
           <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.98 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="pointer-events-auto w-full max-w-lg glass-strong border border-border rounded-2xl shadow-elegant overflow-hidden bg-card text-foreground">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-lg glass-strong border border-border rounded-t-2xl sm:rounded-2xl shadow-elegant overflow-hidden bg-card text-foreground max-h-[92vh] sm:max-h-[85vh] sm:overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                     {mode === "create" ? "Create new" : "Edit"}
@@ -922,7 +976,7 @@ function RecordModal({
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <form onSubmit={handleSubmit} className="p-5 space-y-3.5 max-h-[70vh] overflow-y-auto">
+              <form onSubmit={handleSubmit} className="p-5 space-y-3.5 flex-1 overflow-y-auto min-h-0">
                 {slug === "discounts" ? (
                   <>
                     {/* Title */}
@@ -1316,11 +1370,11 @@ function RecordModal({
                   );
                 }))}
               </form>
-              <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-secondary/30">
+              <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-secondary/30 shrink-0">
                 <button onClick={onClose}
-                  className="h-9 px-4 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition">Cancel</button>
+                  className="flex-1 sm:flex-none h-10 sm:h-9 px-4 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition">Cancel</button>
                 <button onClick={handleSubmit} disabled={saving}
-                  className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25 disabled:opacity-50 transition hover:opacity-95">
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25 disabled:opacity-50 transition hover:opacity-95">
                   <Check className="h-3.5 w-3.5" /> {mode === "create" ? "Create Record" : "Save Changes"}
                 </button>
               </div>
@@ -1334,10 +1388,10 @@ function RecordModal({
                 onClick={() => setMediaOpen(false)}
                 className="fixed inset-0 z-[60] bg-ink/40 backdrop-blur-md" />
               <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.98 }}
-                className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
-                <div className="pointer-events-auto w-full max-w-lg glass-strong border border-border rounded-2xl shadow-elegant overflow-hidden bg-card text-foreground">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+                className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 pointer-events-none">
+                <div className="pointer-events-auto w-full max-w-lg glass-strong border border-border rounded-t-2xl sm:rounded-2xl shadow-elegant overflow-hidden bg-card text-foreground max-h-[92vh] sm:max-h-[85vh] sm:overflow-hidden flex flex-col">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
                     <div>
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Media Library</div>
                       <div className="font-display text-lg font-bold mt-0.5 text-foreground">Pick an image</div>
@@ -1346,7 +1400,7 @@ function RecordModal({
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="p-5 max-h-[60vh] overflow-y-auto">
+                  <div className="flex-1 p-5 overflow-y-auto min-h-0">
                     {mediaLoading ? (
                       <div className="py-16 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
                         <RefreshCw className="h-5 w-5 animate-spin text-primary" />
