@@ -21,7 +21,7 @@ import {
   getAdminOrders, getAdminOrderDetail, createAdminOrder, updateAdminOrder, deleteAdminOrder,
   getAdminCustomers, createAdminCustomer, updateAdminCustomer, deleteAdminCustomer,
   getAdminInventory, adjustAdminInventory,
-  getAdminDiscounts, createAdminDiscount, deleteAdminDiscount,
+  getAdminDiscounts, createAdminDiscount, updateAdminDiscount, deleteAdminDiscount,
   getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser,
   getAdminFiles, uploadAdminFile, deleteAdminFile,
   getErpResource, createErpDoc, updateErpDoc, deleteErpDoc,
@@ -88,7 +88,7 @@ function ToastHost() {
  * Page Configuration Types
  * ============================================================ */
 type Stat = { label: string; value: string; delta?: string; trend?: "up" | "down" };
-type Column = { key: string; label: string; className?: string; type?: "text" | "number" | "select" | "textarea"; hidden?: boolean };
+type Column = { key: string; label: string; className?: string; type?: "text" | "number" | "select" | "textarea" | "date"; hidden?: boolean };
 type Row = Record<string, any>;
 type PageMeta = {
   subtitle: string;
@@ -199,17 +199,20 @@ const MODULE_META: Record<string, PageMeta> = {
   },
 
   discounts: {
-    subtitle: "Item price rules and discount lists.",
-    primaryAction: "Add price rule",
-    filters: ["All", "Standard Selling"],
+    subtitle: "Pricing rules for website discounts.",
+    primaryAction: "Add pricing rule",
+    filters: ["All", "Active", "Expired", "Disabled"],
     columns: [
+      { key: "title", label: "Title" },
       { key: "item_code", label: "Item Code" },
-      { key: "price_list", label: "Price List" },
-      { key: "price_list_rate", label: "Rate" },
-      { key: "currency", label: "Currency", className: "text-right" },
+      { key: "type", label: "Type" },
+      { key: "value", label: "Value" },
+      { key: "valid_from", label: "Valid From" },
+      { key: "valid_upto", label: "Valid To" },
+      { key: "status", label: "Status", className: "text-right" },
     ],
-    emptyTitle: "No price rules configured",
-    emptyDesc: "Add custom selling prices and discounts for your catalog.",
+    emptyTitle: "No pricing rules configured",
+    emptyDesc: "Add pricing rules to show discounts on your website products.",
   },
 
   team: {
@@ -758,11 +761,12 @@ const SELECT_OPTIONS_MAP: Record<string, { label: string; value: string }[]> = {
 };
 
 function RecordModal({
-  open, onClose, mode, title, columns: rawColumns, initial, onSave, itemGroups, slug,
+  open, onClose, mode, title, columns: rawColumns, initial, onSave, itemGroups, slug, itemCodes,
 }: {
   open: boolean; onClose: () => void; mode: "create" | "edit"; title: string;
   columns: Column[]; initial?: Row | null; onSave: (r: Row) => void;
   itemGroups?: ItemGroup[];
+  itemCodes?: { itemCode: string; name: string; code: string }[];
   slug?: string;
 }) {
   const [form, setForm] = useState<Row>({});
@@ -796,6 +800,20 @@ function RecordModal({
         ];
       }
     }
+    if (slug === "discounts") {
+      return [
+        { key: "item_code", label: "Item Code" },
+        { key: "title", label: "Title" },
+        { key: "rate_or_discount", label: "Rule Type" },
+        { key: "discount_percentage", label: "Discount %", type: "number" },
+        { key: "rate", label: "Rate (PKR)", type: "number" },
+        { key: "discount_amount", label: "Discount Amount (PKR)", type: "number" },
+        { key: "valid_from", label: "Valid From", type: "date" },
+        { key: "valid_upto", label: "Valid To", type: "date" },
+        { key: "priority", label: "Priority", type: "number" },
+        { key: "disable", label: "Disabled" },
+      ];
+    }
     return rawColumns;
   }, [slug, mode, rawColumns]);
 
@@ -808,6 +826,16 @@ function RecordModal({
       } else if (slug === "inventory") {
         if (mode === "create" && !seed.status) seed.status = "In stock";
         seed.warehouse = "Stores - O";
+      } else if (slug === "discounts") {
+        if (mode === "create" && !seed.rate_or_discount) seed.rate_or_discount = "Discount Percentage";
+        if (mode === "create" && !seed.title) seed.title = "Discount " + (seed.item_code || "");
+        if (mode === "edit") {
+          seed.rate_or_discount = initial?.type || "Discount Percentage";
+          seed.title = initial?.title || "";
+          seed.discount_percentage = initial?.type === "Discount Percentage" ? (initial?.value || "").replace(/[^0-9]/g, "") : "";
+          seed.rate = initial?.type === "Rate" ? (initial?.value || "").replace(/[^0-9]/g, "") : "";
+          seed.discount_amount = initial?.type === "Discount Amount" ? (initial?.value || "").replace(/[^0-9]/g, "") : "";
+        }
       }
       setForm(seed);
       setSaving(false);
@@ -895,7 +923,143 @@ function RecordModal({
                 </button>
               </div>
               <form onSubmit={handleSubmit} className="p-5 space-y-3.5 max-h-[70vh] overflow-y-auto">
-                {columns.map((c) => {
+                {slug === "discounts" ? (
+                  <>
+                    {/* Title */}
+                    <label className="block">
+                      <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Title</span>
+                      <input
+                        value={String(form.title ?? "")}
+                        onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        placeholder={`Discount ${String(form.item_code ?? "")}`}
+                      />
+                    </label>
+
+                    {/* Item Code */}
+                    <label className="block">
+                      <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Item</span>
+                      {(itemCodes && itemCodes.length > 0) ? (
+                        <select
+                          value={String(form.item_code ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, item_code: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                        >
+                          <option value="" className="bg-card text-foreground py-1.5">— Select product —</option>
+                          {itemCodes.map((opt) => (
+                            <option key={opt.itemCode} value={opt.itemCode} className="bg-card text-foreground py-1.5">
+                              {opt.name}{opt.name && opt.itemCode !== opt.name ? ` (${opt.itemCode})` : ` ${opt.itemCode}`}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          value={String(form.item_code ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, item_code: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm font-mono text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          placeholder="e.g. Nutri-Cept"
+                        />
+                      )}
+                    </label>
+
+                    {/* Rule Type */}
+                    <label className="block">
+                      <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Rule Type</span>
+                      <select
+                        value={String(form.rate_or_discount || "Discount Percentage")}
+                        onChange={(e) => setForm((f) => ({ ...f, rate_or_discount: e.target.value }))}
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                      >
+                        <option value="Discount Percentage">Discount Percentage (%)</option>
+                        <option value="Rate">Fixed Rate (new price)</option>
+                        <option value="Discount Amount">Discount Amount (Rs. off)</option>
+                      </select>
+                    </label>
+
+                    {/* Conditional value field */}
+                    {form.rate_or_discount === "Rate" ? (
+                      <label className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Rate (PKR)</span>
+                        <input
+                          type="number"
+                          value={String(form.rate ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          placeholder="New selling price"
+                        />
+                      </label>
+                    ) : form.rate_or_discount === "Discount Amount" ? (
+                      <label className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Discount Amount (PKR)</span>
+                        <input
+                          type="number"
+                          value={String(form.discount_amount ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, discount_amount: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          placeholder="Amount to subtract"
+                        />
+                      </label>
+                    ) : (
+                      <label className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Discount %</span>
+                        <input
+                          type="number"
+                          value={String(form.discount_percentage ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, discount_percentage: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          placeholder="e.g. 10"
+                        />
+                      </label>
+                    )}
+
+                    {/* Date range */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Valid From</span>
+                        <input
+                          type="date"
+                          value={String(form.valid_from ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, valid_from: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Valid To</span>
+                        <input
+                          type="date"
+                          value={String(form.valid_upto ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, valid_upto: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        />
+                      </label>
+                    </div>
+
+                    {/* Priority + Disabled */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Priority</span>
+                        <input
+                          type="number"
+                          value={String(form.priority ?? "0")}
+                          onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Disabled</span>
+                        <select
+                          value={String(form.disable || "0")}
+                          onChange={(e) => setForm((f) => ({ ...f, disable: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                        >
+                          <option value="0" className="bg-card text-foreground py-1.5">No (Active)</option>
+                          <option value="1" className="bg-card text-foreground py-1.5">Yes (Disabled)</option>
+                        </select>
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                columns.map((c) => {
                   // Skip columns not meant for form
                   if (c.key === "item_count" || c.key === "is_group_label") return null;
 
@@ -1119,6 +1283,20 @@ function RecordModal({
                     );
                   }
 
+                  if (c.type === "date") {
+                    return (
+                      <label key={c.key} className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
+                        <input
+                          type="date"
+                          value={String(form[c.key] ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        />
+                      </label>
+                    );
+                  }
+
                   return (
                     <label key={c.key} className="block">
                       <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
@@ -1136,7 +1314,7 @@ function RecordModal({
                       />
                     </label>
                   );
-                })}
+                }))}
               </form>
               <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-secondary/30">
                 <button onClick={onClose}
@@ -1238,6 +1416,7 @@ function LiveTablePage({
 }: { slug: string; icon: LucideIcon; title: string; meta: PageMeta }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [itemGroups, setItemGroups] = useState<ItemGroup[]>([]);
+  const [itemCodes, setItemCodes] = useState<{ itemCode: string; name: string; code: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(meta.filters[0] || "All");
   const [query, setQuery] = useState("");
@@ -1257,6 +1436,22 @@ function LiveTablePage({
       // Pre-fetch Item Groups for category selectors and references
       const groupsRes = await getItemGroups().catch(() => ({ data: [] }));
       setItemGroups(groupsRes.data || []);
+
+      // Pre-fetch product item codes for the pricing rule item picker
+      const itemsRes = await getItems({ limit: 500 }).catch(() => ({ data: [] }));
+      setItemCodes(
+        (itemsRes.data || [])
+          .map((it) => {
+            const itemCode = it.item_code || "";
+            const displayName = it.item_name || it.item_code || it.name || "";
+            return {
+              itemCode,
+              name: displayName,
+              code: itemCode,
+            };
+          })
+          .filter((x) => x.itemCode),
+      );
 
       if (slug === "products") {
         const res = await getItems({ limit: 200, _t: String(Date.now()) });
@@ -1346,14 +1541,28 @@ function LiveTablePage({
         setRows(mapped);
       } else if (slug === "discounts") {
         const res = await getAdminDiscounts();
-        const mapped = (res.data || []).map((d) => ({
-          rawKey: d.name,
-          item_code: d.item_code || d.name,
-          price_list: d.price_list || "Standard Selling",
-          price_list_rate: `PKR ${(d.price_list_rate || 0).toLocaleString()}`,
-          rawRate: d.price_list_rate || 0,
-          currency: d.currency || "PKR",
-        }));
+        const today = new Date().toISOString().slice(0, 10);
+        const mapped = (res.data || []).map((d) => {
+          const isDisabled = d.disable === 1;
+          const isExpired = d.valid_upto && d.valid_upto < today;
+          const status = isDisabled ? "Disabled" : isExpired ? "Expired" : "Active";
+          const type = d.rate_or_discount || "Discount Percentage";
+          let value = "";
+          if (type === "Discount Percentage") value = `${d.discount_percentage || 0}% OFF`;
+          else if (type === "Rate") value = `PKR ${(d.rate || 0).toLocaleString()}`;
+          else if (type === "Discount Amount") value = `PKR ${(d.discount_amount || 0).toLocaleString()} OFF`;
+          return {
+            rawKey: d.name,
+            title: d.title || "",
+            item_code: d.item_code || (d.item_codes?.[0] ?? "") || "",
+            type,
+            value,
+            priority: d.priority ?? 0,
+            valid_from: d.valid_from || "—",
+            valid_upto: d.valid_upto || "—",
+            status,
+          };
+        });
         setRows(mapped);
       } else if (slug === "team") {
         const res = await getAdminUsers();
@@ -1582,11 +1791,20 @@ function LiveTablePage({
             territory: formData.territory || "Pakistan",
           });
         } else if (slug === "discounts") {
-          await createAdminDiscount({
-            item_code: formData.item_code || formData.name,
-            price_list_rate: Number(String(formData.price_list_rate || "").replace(/[^0-9.]/g, "")) || 0,
-            price_list: formData.price_list || "Standard Selling",
-          });
+          const rateOrDiscount = formData.rate_or_discount || "Discount Percentage";
+          const payload: Record<string, unknown> = {
+            item_code: formData.item_code,
+            rate_or_discount: rateOrDiscount,
+            priority: Number(formData.priority) || 0,
+            disable: formData.disable === "1" ? 1 : 0,
+          };
+          if (rateOrDiscount === "Rate") payload.rate = Number(formData.rate) || 0;
+          else if (rateOrDiscount === "Discount Amount") payload.discount_amount = Number(formData.discount_amount) || 0;
+          else payload.discount_percentage = Number(formData.discount_percentage) || 0;
+          if (formData.valid_from) payload.valid_from = formData.valid_from;
+          if (formData.valid_upto) payload.valid_upto = formData.valid_upto;
+          if (formData.title) payload.title = formData.title;
+          await createAdminDiscount(payload);
         } else if (slug === "team") {
           await createAdminUser({
             email: formData.email,
@@ -1597,6 +1815,9 @@ function LiveTablePage({
           await createErpDoc(singular, formData);
         }
         pushToast("success", `${singular} created`);
+        // short pause to ensure ERPNext persisted child entry, then refresh list
+        await new Promise((r) => setTimeout(r, 300));
+        loadData();
       } else {
         // Edit mode
         const recordName = modal.row?.rawKey || modal.row?.name || modal.row?.id || modal.row?.rawId;
@@ -1653,10 +1874,27 @@ function LiveTablePage({
             full_name: formData.full_name,
             user_type: formData.user_type,
           });
+        } else if (slug === "discounts") {
+          const rateOrDiscount = formData.rate_or_discount || modal.row?.type || "Discount Percentage";
+          const payload: Record<string, unknown> = {
+            rate_or_discount: rateOrDiscount,
+            disable: formData.disable === "1" ? 1 : 0,
+          };
+          if (formData.item_code) payload.item_code = formData.item_code;
+          if (formData.priority !== undefined) payload.priority = Number(formData.priority) || 0;
+          if (formData.valid_from !== undefined) payload.valid_from = formData.valid_from || null;
+          if (formData.valid_upto !== undefined) payload.valid_upto = formData.valid_upto || null;
+          if (rateOrDiscount === "Rate" && formData.rate !== undefined) payload.rate = Number(formData.rate) || 0;
+          else if (rateOrDiscount === "Discount Amount" && formData.discount_amount !== undefined) payload.discount_amount = Number(formData.discount_amount) || 0;
+          else if (rateOrDiscount === "Discount Percentage" && formData.discount_percentage !== undefined) payload.discount_percentage = Number(formData.discount_percentage) || 0;
+          if (formData.title) payload.title = formData.title;
+          await updateAdminDiscount(recordName, payload);
         } else {
           await updateErpDoc(singular, recordName, formData);
         }
         pushToast("success", `${singular} updated`);
+        await new Promise((r) => setTimeout(r, 300));
+        loadData();
       }
       setModal({ open: false, mode: "create", row: null, index: -1 });
       loadData();
@@ -1723,6 +1961,7 @@ function LiveTablePage({
         title={singular} columns={meta.columns} initial={modal.row}
         onSave={handleSave}
         itemGroups={itemGroups}
+        itemCodes={itemCodes}
         slug={slug}
       />
     </div>
