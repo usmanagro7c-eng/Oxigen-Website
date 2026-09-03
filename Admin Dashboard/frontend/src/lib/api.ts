@@ -711,6 +711,15 @@ export async function createAdminDiscount(payload: any): Promise<{ data: any }> 
   });
 }
 
+export async function updateAdminDiscount(name: string, payload: any): Promise<{ data: any }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/discounts/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function deleteAdminDiscount(name: string): Promise<{ success: boolean; message: string }> {
   const csrfToken = await getCsrfToken();
   return fetchApi(`/admin/discounts/${encodeURIComponent(name)}`, {
