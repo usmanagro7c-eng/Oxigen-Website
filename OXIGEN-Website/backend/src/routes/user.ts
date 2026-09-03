@@ -279,21 +279,24 @@ router.get("/user/orders", requireAuth, async (req, res) => {
     if (orderData.length > 0) {
       const orderNames = orderData.map((o) => o.name);
       const itemParams = new URLSearchParams({
-        fields: JSON.stringify(["parent", "item_name", "item_code"]),
+        fields: JSON.stringify(["parent", "item_name", "item_code", "qty", "rate"]),
         filters: JSON.stringify([["parent", "in", orderNames]]),
         limit_page_length: "500",
       });
       const itemRes = await erpFetch(getErpUrl(`/api/resource/Sales Order Item?${itemParams.toString()}`), { headers: getErpHeaders() });
       if (itemRes.ok) {
-        const itemData = (await itemRes.json()) as { data: { parent: string; item_name: string; item_code: string }[] };
-        const itemsByOrder: Record<string, { name: string, code: string }[]> = {};
+        const itemData = (await itemRes.json()) as { data: { parent: string; item_name: string; item_code: string; qty: number; rate: number }[] };
+        const itemsByOrder: Record<string, { name: string; code: string; qty: number; price: number }[]> = {};
         for (const it of itemData.data) {
           if (!itemsByOrder[it.parent]) itemsByOrder[it.parent] = [];
-          itemsByOrder[it.parent].push({ name: it.item_name, code: it.item_code });
+          itemsByOrder[it.parent].push({ name: it.item_name, code: it.item_code, qty: it.qty || 0, price: it.rate || 0 });
         }
         for (const o of orderData) {
           o.items = (itemsByOrder[o.name] || []).map(i => ({
               name: i.name,
+              slug: i.code,
+              qty: i.qty,
+              price: i.price,
               image: `/api/items/image/${i.code}.jpg`
           }));
         }
