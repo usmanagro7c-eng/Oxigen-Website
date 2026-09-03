@@ -167,7 +167,7 @@ function OrderDetailsPage() {
       <div className="flex items-center justify-between gap-4">
         <Link
           to="/dashboard/orders"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary"
+          className="touch-target inline-flex items-center gap-1.5 rounded-lg py-2 text-sm font-semibold text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" /> Back to orders
         </Link>
@@ -175,7 +175,7 @@ function OrderDetailsPage() {
           <button
             onClick={handleCancel}
             disabled={cancelling}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-4 py-2 text-sm font-semibold text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
+            className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-4 py-2 text-sm font-semibold text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
           >
             <Ban className="h-4 w-4" /> {cancelling ? "Cancelling..." : "Cancel Order"}
           </button>
