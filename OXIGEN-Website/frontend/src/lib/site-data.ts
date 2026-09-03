@@ -271,7 +271,12 @@ export const catalog: CatalogItem[] = products.map((p) => {
 });
 
 export function getProduct(slug: string) {
-  return catalog.find((p) => p.slug === slug);
+  return catalog.find(
+    (p) =>
+      p.slug === slug ||
+      (slug === "nutri-cept" && p.slug.includes("nutri-cept")) ||
+      (slug === "oxidop" && p.slug.includes("oxidop"))
+  );
 }
 
 export function formatPKR(n: number) {
