@@ -847,3 +847,60 @@ export interface MonitorResponse {
 export async function getAdminMonitor(): Promise<MonitorResponse> {
   return fetchApi("/admin/monitor");
 }
+
+export interface BannerItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  image: string;
+  link: string;
+  cta?: string;
+  active: boolean;
+  order: number;
+}
+
+export async function getAdminBanners(): Promise<{ data: BannerItem[] }> {
+  return fetchApi("/admin/banners");
+}
+
+export async function createAdminBanner(payload: {
+  title?: string;
+  subtitle?: string;
+  image: string;
+  link?: string;
+  cta?: string;
+}): Promise<{ data: BannerItem }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi("/admin/banners", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminBanner(id: string, payload: Partial<BannerItem>): Promise<{ data: BannerItem }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/banners/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminBannersBatch(banners: BannerItem[]): Promise<{ data: BannerItem[] }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi("/admin/banners", {
+    method: "PUT",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify({ banners }),
+  });
+}
+
+export async function deleteAdminBanner(id: string): Promise<{ success: boolean; message: string }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/banners/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
