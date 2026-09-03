@@ -47,7 +47,7 @@ function OrdersPage() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                className={`touch-target rounded-lg px-3 py-2 text-xs font-semibold transition ${
                   filter === f
                     ? "bg-gradient-to-r from-primary to-accent text-white shadow-md shadow-primary/25"
                     : "bg-white/70 text-ink hover:bg-white"
@@ -124,20 +124,20 @@ function OrdersPage() {
                 <Link
                   to="/dashboard/orders/$orderId"
                   params={{ orderId: o.id }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-white shadow-md shadow-primary/25"
+                  className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-white shadow-md shadow-primary/25"
                 >
                   <Eye className="h-4 w-4" /> View Details
                 </Link>
                 <Link
                   to="/dashboard/tracking"
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-white"
+                  className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-white"
                 >
                   <Truck className="h-4 w-4" /> Track Order
                 </Link>
                 {["Processing", "To Deliver", "To Deliver and Bill"].includes(o.status) && (
                   <button
                     onClick={() => cancelOrder(o.id)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                    className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
                   >
                     <XCircle className="h-4 w-4" /> Cancel Order
                   </button>
@@ -145,12 +145,12 @@ function OrdersPage() {
                 {["Cancelled", "Completed", "Delivered"].includes(o.status) && (
                   <button
                     onClick={() => removeOrder(o.id)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                    className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
                   >
                     <XCircle className="h-4 w-4" /> Remove Order
                   </button>
                 )}
-                <button className="inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-white">
+                <button className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-white">
                   <RotateCcw className="h-4 w-4" /> Buy Again
                 </button>
               </div>
