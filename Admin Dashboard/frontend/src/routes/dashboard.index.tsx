@@ -122,8 +122,8 @@ function SalesChart({ monthlyRevenue }: { monthlyRevenue?: number[] }) {
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
       transition={{ duration: 0.6 }}
-      className="rounded-2xl glass-strong p-5 md:p-6 shadow-sm lg:col-span-2">
-      <div className="flex items-start justify-between mb-5">
+      className="rounded-2xl glass-strong p-4 sm:p-5 md:p-6 shadow-sm lg:col-span-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
         <div>
           <div className="text-base font-bold text-foreground">Sales Performance</div>
           <div className="text-xs text-muted-foreground mt-0.5">Live Sales Orders across 12 months</div>
@@ -135,7 +135,7 @@ function SalesChart({ monthlyRevenue }: { monthlyRevenue?: number[] }) {
         </div>
       </div>
       <div className="relative">
-        <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-56">
+        <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto aspect-[600/220]" preserveAspectRatio="xMidYMid meet">
           <defs>
             <linearGradient id="area-fill" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="oklch(0.48 0.22 291)" stopOpacity="0.3" />
@@ -159,8 +159,8 @@ function SalesChart({ monthlyRevenue }: { monthlyRevenue?: number[] }) {
               initial={{ scale: 0 }} whileInView={{ scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.8 + i * 0.05 }} />
           ))}
         </svg>
-        <div className="grid grid-cols-12 mt-1 px-6 text-[11px] font-medium text-muted-foreground">
-          {labels.map(l => <div key={l} className="text-center">{l}</div>)}
+        <div className="grid grid-cols-12 mt-1 px-2 sm:px-6 text-[10px] sm:text-[11px] font-medium text-muted-foreground">
+          {labels.map(l => <div key={l} className="text-center truncate">{l}</div>)}
         </div>
       </div>
     </motion.div>
@@ -182,7 +182,7 @@ function AIInsights({ stats }: { stats: DashboardStats | null }) {
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
       transition={{ duration: 0.6, delay: 0.1 }}
-      className="relative rounded-2xl p-5 md:p-6 overflow-hidden glass-strong shadow-sm border border-border">
+      className="relative rounded-2xl p-4 sm:p-5 md:p-6 overflow-hidden glass-strong shadow-sm border border-border">
       <div className="relative">
         <div className="flex items-center gap-2.5 mb-4">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-primary to-accent shadow-sm">
@@ -234,7 +234,7 @@ function RecentOrders({ orders }: { orders: DashboardStats["recentOrders"] }) {
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className="rounded-2xl glass-strong p-5 md:p-6 shadow-sm lg:col-span-2">
+      className="rounded-2xl glass-strong p-4 sm:p-5 md:p-6 shadow-sm lg:col-span-2">
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-base font-bold text-foreground">Recent Orders</div>
@@ -282,7 +282,7 @@ function TopProducts({ products }: { products: DashboardStats["topProducts"] }) 
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className="rounded-2xl glass-strong p-5 md:p-6 shadow-sm">
+      className="rounded-2xl glass-strong p-4 sm:p-5 md:p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <div className="text-base font-bold text-foreground">Top Products</div>
         <Link to="/dashboard/$" params={{ _splat: "products" }} className="text-xs font-semibold text-primary hover:underline">
@@ -330,7 +330,7 @@ function InventoryStatus({ inventory }: { inventory: DashboardStats["inventory"]
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className="rounded-2xl glass-strong p-5 md:p-6 shadow-sm">
+      className="rounded-2xl glass-strong p-4 sm:p-5 md:p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <div className="text-base font-bold text-foreground">Inventory Status</div>
         <span className="text-xs font-semibold text-muted-foreground">{inventory.total} total items</span>
@@ -366,7 +366,7 @@ function QuickActions() {
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className="rounded-2xl glass-strong p-5 md:p-6 shadow-sm">
+      className="rounded-2xl glass-strong p-4 sm:p-5 md:p-6 shadow-sm">
       <div className="text-base font-bold text-foreground mb-4">Quick Actions</div>
       <div className="grid grid-cols-2 gap-2.5">
         {actions.map((a, i) => (
@@ -404,7 +404,7 @@ function ActivityFeed({ activity }: { activity: DashboardStats["activity"] }) {
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className="rounded-2xl glass-strong p-5 md:p-6 shadow-sm">
+      className="rounded-2xl glass-strong p-4 sm:p-5 md:p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <div className="text-base font-bold text-foreground flex items-center gap-2">
           <Activity className="h-4 w-4 text-primary" /> Live Activity
@@ -527,22 +527,22 @@ function DashboardHome() {
       </motion.div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {stats.map((s, i) => <StatCard key={s.label} s={s} i={i} />)}
       </div>
 
       {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         <SalesChart monthlyRevenue={statsData?.monthlyRevenue} />
         <AIInsights stats={statsData} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         <RecentOrders orders={statsData?.recentOrders ?? []} />
         <TopProducts products={statsData?.topProducts ?? []} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
         <InventoryStatus inventory={statsData?.inventory ?? { inStock: 0, lowStock: 0, outOfStock: 0, total: 0 }} />
         <QuickActions />
         <ActivityFeed activity={statsData?.activity ?? []} />
