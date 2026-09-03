@@ -154,7 +154,7 @@ export const Route = createFileRoute("/product/$slug")({
               subtitle: (detail?.short_description as string) || "",
               desc: (detail?.description as string) || "",
               price: detail?.standard_rate || 0,
-              was: 0,
+              was: detail?.valuation_rate || 0,
               tag: (detail?.item_group as string) || "",
               img: getProductImage(detail?.image),
               gallery: ((detail?.slideshow_images as string[]) || []).map((i: string) =>
@@ -331,9 +331,16 @@ function ProductPage() {
                       {formatPKR(product.price)}
                     </span>
                     {product.was > 0 && (
-                      <span className="text-lg text-muted-foreground line-through">
-                        {formatPKR(product.was)}
-                      </span>
+                      <>
+                        <span className="text-lg text-muted-foreground line-through">
+                          {formatPKR(product.was)}
+                        </span>
+                        {product.was > product.price && (
+                          <span className="inline-flex items-center rounded-full bg-gradient-to-r from-primary to-accent px-2.5 py-1 text-xs font-extrabold text-white">
+                            {Math.round(((product.was - product.price) / product.was) * 100)}% OFF
+                          </span>
+                        )}
+                      </>
                     )}
                   </>
                 ) : (
