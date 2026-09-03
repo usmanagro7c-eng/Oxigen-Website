@@ -52,7 +52,7 @@ export function Navbar() {
           <img
             src={oxigenLogo}
             alt="OxiGen — Pakistan's No.1 Vitamin Brand"
-            className="h-7 w-auto sm:h-9"
+            className="h-7 w-auto xs:h-8 sm:h-9"
           />
         </Link>
 
@@ -78,7 +78,7 @@ export function Navbar() {
           <Link
             to="/wishlist"
             aria-label="Wishlist"
-            className="relative grid h-11 w-11 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
+            className="touch-target relative grid h-11 w-11 shrink-0 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
           >
             <Heart className="h-5 w-5" />
             {wishlist.length > 0 && (
@@ -91,7 +91,7 @@ export function Navbar() {
           <Link
             to={user ? "/account" : "/signin"}
             aria-label={user ? "Account" : "Sign in"}
-            className="grid h-11 w-11 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
+            className="touch-target grid h-11 w-11 shrink-0 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
           >
             <UserIcon className="h-5 w-5" />
           </Link>
@@ -99,7 +99,7 @@ export function Navbar() {
           <button
             aria-label="Cart"
             onClick={() => setDrawerOpen(true)}
-            className="relative grid h-11 w-11 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
+            className="touch-target relative grid h-11 w-11 shrink-0 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
           >
             <ShoppingCart className="h-5 w-5" />
             {cartCount > 0 && (
@@ -119,7 +119,7 @@ export function Navbar() {
           <button
             aria-label="Menu"
             onClick={() => setOpen((v) => !v)}
-            className="grid h-11 w-11 place-items-center rounded-xl glass md:hidden"
+            className="touch-target grid h-11 w-11 shrink-0 place-items-center rounded-xl glass md:hidden"
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -132,7 +132,7 @@ export function Navbar() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="mx-auto mt-2 max-h-[70vh] max-w-6xl overflow-y-auto rounded-2xl glass p-3 md:hidden"
+            className="mx-auto mt-2 max-h-[85vh] max-w-6xl overflow-y-auto rounded-2xl glass p-3 safe-pl safe-pr safe-pb md:hidden"
           >
             {nav
               .filter((n) => n.to !== "/shop")
@@ -144,7 +144,7 @@ export function Navbar() {
                     setOpen(false);
                     if (n.to === "/") window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="block rounded-xl px-4 py-3.5 text-sm font-medium text-ink hover:bg-white/50"
+                  className="block rounded-xl px-4 py-4 text-sm font-medium text-ink hover:bg-white/50"
                 >
                   {n.label}
                 </Link>
@@ -152,7 +152,7 @@ export function Navbar() {
             <Link
               to="/shop"
               onClick={() => setOpen(false)}
-              className="mt-2 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-white shadow-lg"
+              className="mt-2 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-4 text-sm font-semibold text-white shadow-lg"
             >
               Shop Now <ShoppingBag className="h-4 w-4" />
             </Link>
