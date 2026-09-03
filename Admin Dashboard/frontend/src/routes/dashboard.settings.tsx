@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import {
   Settings as SettingsIcon, Building2, Sliders, Palette, BellRing, ShieldCheck,
-  Sun, Moon, Monitor, KeyRound, Smartphone, Laptop2, ChevronRight,
+  Sun, Moon, Monitor, KeyRound, Smartphone, Laptop2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Breadcrumb, Header, GlassCard, FieldGroup, Input, Select, SaveButton } from "@/components/dashboard/glass-form";
@@ -116,13 +116,12 @@ function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
         {/* Sticky nav */}
         <aside className="lg:sticky lg:top-24 lg:self-start">
-          <ul className="glass-strong rounded-2xl border border-border p-1.5 space-y-0.5 shadow-sm">
+          <ul className="hide-scrollbar glass-strong rounded-2xl border border-border p-1.5 space-y-0.5 shadow-sm flex lg:flex-col overflow-x-auto lg:overflow-visible">
             {SECTIONS.map(s => (
-              <li key={s.id}>
-                <a href={`#${s.id}`} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              <li key={s.id} className="shrink-0">
+                <a href={`#${s.id}`} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                   <s.icon className="h-4 w-4" />
-                  <span className="flex-1 truncate">{s.label}</span>
-                  <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100" />
+                  <span className="lg:flex-1 truncate">{s.label}</span>
                 </a>
               </li>
             ))}
