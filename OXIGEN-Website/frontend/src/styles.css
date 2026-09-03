@@ -12,6 +12,9 @@
   --color-royal: oklch(0.48 0.22 291);
   --color-cyan: oklch(0.72 0.14 210);
   --color-emerald: oklch(0.72 0.15 162);
+
+  /* Extra-small breakpoint for small phones (~320px) */
+  --breakpoint-xs: 20rem;
 }
 
 /*
@@ -150,6 +153,8 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
   }
 }
 
@@ -175,6 +180,33 @@
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+@utility hide-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Minimum 44x44px touch target for accessibility / fat-finger friendly UIs. */
+@utility touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* iOS safe-area insets for fixed/edge-aligned elements. */
+@utility safe-pt {
+  padding-top: env(safe-area-inset-top);
+}
+@utility safe-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility safe-pl {
+  padding-left: env(safe-area-inset-left);
+}
+@utility safe-pr {
+  padding-right: env(safe-area-inset-right);
 }
 
 @utility glass-dark {
