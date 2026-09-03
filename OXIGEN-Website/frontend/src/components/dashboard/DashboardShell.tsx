@@ -108,7 +108,7 @@ export function DashboardShell({ children }: { children?: ReactNode }) {
               onClick={() => setMobileOpen(false)}
             />
             <motion.aside
-              className="fixed inset-y-0 left-0 z-50 w-72 p-4 lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] p-4 safe-pl lg:hidden"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
@@ -117,7 +117,7 @@ export function DashboardShell({ children }: { children?: ReactNode }) {
               <div className="relative h-full">
                 <button
                   onClick={() => setMobileOpen(false)}
-                  className="absolute -right-2 -top-2 z-10 grid h-9 w-9 place-items-center rounded-full glass"
+                  className="touch-target absolute -right-2 -top-2 z-10 grid h-11 w-11 place-items-center rounded-full glass"
                   aria-label="Close menu"
                 >
                   <X className="h-4 w-4" />
@@ -212,10 +212,10 @@ function DashboardHeader({
   onOpenMenu: () => void;
 }) {
   return (
-    <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl glass px-4 py-3 sm:px-5">
+    <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl glass px-3 py-3 xs:gap-3 sm:px-5">
       <button
         onClick={onOpenMenu}
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-ink lg:hidden"
+        className="touch-target grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/70 text-ink lg:hidden"
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5" />
@@ -242,7 +242,7 @@ function DashboardHeader({
 
         <Link
           to="/dashboard/notifications"
-          className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-ink transition hover:text-primary"
+          className="touch-target relative grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/70 text-ink transition hover:text-primary"
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5" />
@@ -255,7 +255,7 @@ function DashboardHeader({
 
         <Link
           to="/dashboard/profile"
-          className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-accent text-sm font-bold text-white shadow-md shadow-primary/25"
+          className="touch-target grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-accent text-sm font-bold text-white shadow-md shadow-primary/25"
           aria-label="Profile"
         >
           {initials(profile?.name || user?.name || "User")}
@@ -274,17 +274,17 @@ function MobileBottomNav({ isActive }: { isActive: (to: string, exact?: boolean)
     dashboardNav[5], // Profile
   ];
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 bg-background/85 backdrop-blur-xl lg:hidden">
-      <ul className="mx-auto flex max-w-md items-center justify-around px-2 py-2">
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 bg-background/85 backdrop-blur-xl lg:hidden safe-pb">
+      <ul className="mx-auto flex max-w-md items-stretch justify-around px-2 py-1.5">
         {items.map((i) => {
           const active = isActive(i.to, i.exact);
           const Icon = i.icon;
           return (
-            <li key={i.to}>
+            <li key={i.to} className="flex-1">
               <Link
                 to={i.to as any}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-semibold transition-colors",
+                  "touch-target flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[10px] font-semibold transition-colors",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
