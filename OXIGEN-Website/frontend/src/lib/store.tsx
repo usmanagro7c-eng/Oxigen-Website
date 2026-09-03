@@ -14,7 +14,7 @@ export type Order = {
   status: string;
   total: number;
   item_summary?: string;
-  items?: { name: string; image?: string }[];
+  items?: { name: string; image?: string; slug?: string; qty?: number; price?: number }[];
 };
 export type OrderPlaced = Order & {
   items?: { slug: string; name: string; qty: number; price: number }[];
@@ -151,6 +151,7 @@ type StoreValue = {
     paymentMethod?: string;
   }) => Promise<OrderPlaced | null>;
   cancelOrder: (orderId: string) => Promise<boolean>;
+  removeOrder: (orderId: string) => Promise<boolean>;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -252,7 +253,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             subtitle: (i.short_description as string) || "",
             desc: (i.description as string) || "",
             price: (i.standard_rate as number) || 0,
-            was: 0,
+            was: (i.valuation_rate as number) || 0,
             tag: (i.item_group as string) || "",
             img: (i.image as string)?.startsWith("http")
               ? (i.image as string)
@@ -320,6 +321,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             items: (o as any).items?.map((it: any) => ({
               name: it.name,
               image: it.image,
+              slug: it.slug,
+              qty: it.qty,
+              price: it.price,
             })) || [],
           })),
         );
