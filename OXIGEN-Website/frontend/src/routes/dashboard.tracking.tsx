@@ -149,7 +149,7 @@ function TrackingPage() {
             <button
               key={o.id}
               onClick={() => setSelectedId(o.id)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              className={`touch-target rounded-lg px-4 py-2 text-xs font-semibold transition ${
                 selectedId === o.id
                   ? "bg-gradient-to-r from-primary to-accent text-white"
                   : o.status === "Cancelled"
@@ -244,7 +244,7 @@ function TrackingPage() {
                     navigator.clipboard?.writeText(order.tracking);
                     toast.success("Tracking number copied");
                   }}
-                  className="grid h-9 w-9 place-items-center rounded-lg bg-white/70 text-ink ring-1 ring-inset ring-border hover:bg-white"
+                  className="touch-target grid h-10 w-10 place-items-center rounded-lg bg-white/70 text-ink ring-1 ring-inset ring-border hover:bg-white"
                   aria-label="Copy tracking number"
                 >
                   <Copy className="h-4 w-4" />
