@@ -12,6 +12,16 @@ import {
 } from "../lib/erpnext-client.js";
 import { itemCache } from "../lib/item-cache.js";
 
+interface PricingRule {
+  name: string;
+  rate_or_discount: string;
+  rate: number;
+  discount_percentage: number;
+  discount_amount: number;
+  application_priority: number;
+  modified: string;
+}
+
 /**
  * Shared ERPNext interaction logic for orders and items.
  */
@@ -348,6 +358,10 @@ export class ErpAdapter {
     }
     // ────────────────────────────────────────────────────────────────────────
 
+    // ── Batch fetch active Pricing Rules ────────────────────────────────
+    const pricingRuleMap = await ErpAdapter.fetchActivePricingRules(itemCodes);
+    // ────────────────────────────────────────────────────────────────────────
+
     // Normalize: website_image → image, and if website_image is missing use Item.image
     // Only return explicitly allowed fields — never forward raw ERP data
     const SAFE_FIELDS = ["name", "item_code", "item_name", "route", "published", "website_image", "website_image_alt", "thumbnail", "short_description", "description", "web_long_description", "item_group", "brand", "stock_uom", "ranking", "has_variants", "on_backorder", "custom_stock_qty"];
@@ -371,8 +385,18 @@ export class ErpAdapter {
 
       safeItem["image"] = (item["website_image"] as string | null) || fallback.image || null;
       safeItem["item_name"] = (item["web_item_name"] as string) || (item["item_name"] as string);
-      safeItem["standard_rate"] = resolvedPrice;
-      safeItem["valuation_rate"] = resolvedPrice;
+
+      // Apply pricing rules: standard_rate = effective price, valuation_rate = original "was" price
+      const pricingResult = ErpAdapter.applyBestPricingRule(resolvedPrice, pricingRuleMap.get(itemCode));
+      if (pricingResult) {
+        safeItem["standard_rate"] = pricingResult.effective;
+        safeItem["valuation_rate"] = resolvedPrice;
+        safeItem["discount_percentage"] = pricingResult.discountPct;
+      } else {
+        safeItem["standard_rate"] = resolvedPrice;
+        safeItem["valuation_rate"] = resolvedPrice;
+      }
+
       safeItem["custom_stock_qty"] = stockQty;
 
       return safeItem;
@@ -563,13 +587,27 @@ export class ErpAdapter {
     }
     // ────────────────────────────────────────────────────────────────────
 
+    // ── Fetch active Pricing Rule for this item ────────────────────────
+    let effectivePrice = valuation_rate;
+    let discountPct = 0;
+    if (itemCode) {
+      const pricingMap = await ErpAdapter.fetchActivePricingRules([itemCode]);
+      const pricingResult = ErpAdapter.applyBestPricingRule(valuation_rate, pricingMap.get(itemCode));
+      if (pricingResult) {
+        effectivePrice = pricingResult.effective;
+        discountPct = pricingResult.discountPct;
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────
+
     // Normalize fields
     const normalized = {
       ...item,
       image: (item["website_image"] as string | null) || itemImage || null,
       item_name: item["web_item_name"] || item["item_name"],
-      standard_rate: valuation_rate,
+      standard_rate: effectivePrice,
       valuation_rate,
+      discount_percentage: discountPct,
       slideshow_images,
       custom_stock_qty: stockQtySingle,
     };
@@ -715,6 +753,144 @@ export class ErpAdapter {
     }
 
     return result;
+  }
+
+  /**
+   * Batch fetches active selling Pricing Rules for a set of item codes.
+   * ERPNext v14 uses a child table "items" for item codes, so we fetch all
+   * active rules and then pull each doc's items to build an item→rules map.
+   */
+  static async fetchActivePricingRules(
+    itemCodes: string[]
+  ): Promise<Map<string, PricingRule[]>> {
+    const result = new Map<string, PricingRule[]>();
+    const uniqueCodes = [...new Set(itemCodes.filter(Boolean))];
+    if (!uniqueCodes.length) return result;
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const params = new URLSearchParams({
+      fields: JSON.stringify([
+        "name", "title", "rate_or_discount",
+        "rate", "discount_percentage", "discount_amount",
+        "valid_from", "valid_upto", "priority",
+        "modified",
+      ]),
+      filters: JSON.stringify([
+        ["selling", "=", 1],
+        ["disable", "=", 0],
+        ["apply_on", "=", "Item Code"],
+      ]),
+      limit_page_length: "500",
+      order_by: "modified desc",
+    });
+
+    const res = await erpFetch(
+      getErpUrl(`/api/resource/Pricing Rule?${params}`),
+      { headers: getErpHeaders() }
+    ).catch(() => null);
+
+    if (!res?.ok) return result;
+
+    const json = (await res.json()) as {
+      data: {
+        name: string;
+        title?: string;
+        rate_or_discount: string;
+        rate?: number;
+        discount_percentage?: number;
+        discount_amount?: number;
+        valid_from?: string;
+        valid_upto?: string;
+        priority?: number;
+        modified: string;
+      }[];
+    };
+
+    // Pre-filter parent rules by date validity
+    const candidateNames: string[] = [];
+    for (const row of json.data ?? []) {
+      if (row.valid_from && row.valid_from > today) continue;
+      if (row.valid_upto && row.valid_upto < today) continue;
+      candidateNames.push(row.name);
+    }
+
+    // Fetch each individual doc to read the "items" child table
+    const detailResults = await Promise.all(
+      candidateNames.map(async (name) => {
+        const docRes = await erpFetch(
+          getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(name)}`),
+          { headers: getErpHeaders() }
+        ).catch(() => null);
+        if (!docRes?.ok) return null;
+        const docJson = (await docRes.json()) as {
+          data: {
+            items?: { item_code: string }[];
+          };
+        };
+        return docJson.data?.items ?? [];
+      })
+    );
+
+    for (let i = 0; i < candidateNames.length; i++) {
+      const name = candidateNames[i];
+      const match = (json.data ?? []).find((r) => r.name === name);
+      if (!match) continue;
+
+      const ruleItems = detailResults[i] ?? [];
+      for (const child of ruleItems) {
+        if (!child.item_code) continue;
+        const existing = result.get(child.item_code) ?? [];
+        existing.push({
+          name,
+          rate_or_discount: match.rate_or_discount,
+          rate: match.rate ?? 0,
+          discount_percentage: match.discount_percentage ?? 0,
+          discount_amount: match.discount_amount ?? 0,
+          application_priority: match.priority ?? 0,
+          modified: match.modified,
+        });
+        result.set(child.item_code, existing);
+      }
+    }
+
+    logger.info({ ruleCount: candidateNames.length, matchedItems: result.size }, "[ErpAdapter] Active pricing rules loaded");
+    return result;
+  }
+
+  /**
+   * Picks the best pricing rule for an item and computes the discounted price.
+   * Returns { effective, discountPct } or null if no rule applies.
+   */
+  static applyBestPricingRule(
+    basePrice: number,
+    rules: PricingRule[] | undefined
+  ): { effective: number; discountPct: number } | null {
+    if (!rules?.length || basePrice <= 0) return null;
+
+    // Sort: highest application_priority → farthest valid_upto (already expired not here) → most recently modified
+    const sorted = [...rules].sort((a, b) => {
+      if (b.application_priority !== a.application_priority) return b.application_priority - a.application_priority;
+      return b.modified.localeCompare(a.modified);
+    });
+
+    const best = sorted[0];
+    let effective = basePrice;
+
+    if (best.rate_or_discount === "Rate") {
+      effective = Math.max(0, best.rate);
+    } else if (best.rate_or_discount === "Discount Amount") {
+      effective = Math.max(0, basePrice - best.discount_amount);
+    } else {
+      // Discount Percentage
+      effective = basePrice * (1 - best.discount_percentage / 100);
+      effective = Math.max(0, Math.round(effective));
+    }
+
+    if (effective >= basePrice) return null;
+
+    const discountPct = Math.round(((basePrice - effective) / basePrice) * 100);
+    return { effective, discountPct };
   }
 
   /**
