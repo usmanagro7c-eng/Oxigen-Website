@@ -66,7 +66,7 @@ function Stats() {
   return (
     <section className="mx-auto -mt-6 max-w-6xl px-5">
       <Reveal>
-        <div className="grid grid-cols-2 gap-4 rounded-[2rem] glass p-4 sm:p-8 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 rounded-[2rem] glass p-4 sm:grid-cols-4 sm:p-8 md:gap-4 md:grid-cols-4">
           {stats.map((s) => (
             <div key={s.label} className="flex flex-col items-center gap-2 text-center">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white">
