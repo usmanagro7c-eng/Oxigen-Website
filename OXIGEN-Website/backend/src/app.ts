@@ -170,7 +170,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     req.path === "/health" ||
     req.path.startsWith("/api/auth/login") ||
     req.path.startsWith("/api/auth/signup") ||
-    req.path.startsWith("/api/webhooks")
+    req.path.startsWith("/api/webhooks") ||
+    req.path.startsWith("/api/items/cache/clear") ||
+    req.path.startsWith("/api/notifications")
   ) {
     next();
     return;
