@@ -164,7 +164,7 @@ export function Products() {
             sub="Quality ingredients, transparent formulations, science-informed nutrition."
           />
         </Reveal>
-        <div className="mt-8 grid grid-cols-2 gap-4 sm:gap-7 sm:mt-14 xl:grid-cols-3">
+        <div className="mt-8 grid grid-cols-2 gap-4 sm:gap-7 sm:mt-14 md:grid-cols-3 xl:grid-cols-3">
           {loading
             ? Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="aspect-[3/4] w-full animate-pulse rounded-3xl bg-secondary glass" />
@@ -545,7 +545,7 @@ export function Contact() {
                 </a>
                 <a
                   href={brand.phoneHref}
-                  className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-primary"
+                  className="flex items-center gap-2 rounded-lg py-1.5 text-muted-foreground transition-colors hover:text-primary"
                 >
                   <Phone className="h-4 w-4 text-primary" /> {brand.phone}
                 </a>
