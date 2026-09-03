@@ -1605,9 +1605,35 @@ router.get(
       }
 
       const data: any = await erpRes.json();
-      const files = (data.data || []).filter(
-        (f: any) => !f.is_folder
+      const rawFiles = (data.data || []).filter(
+        (f: any) => !f.is_folder && f.file_url && f.file_url.trim() !== ""
       );
+
+      // Deduplicate files by file_url while aggregating attached references and DB IDs
+      const fileMap = new Map<string, any>();
+      for (const f of rawFiles) {
+        const key = f.file_url.trim().toLowerCase();
+        if (!fileMap.has(key)) {
+          fileMap.set(key, {
+            ...f,
+            file_ids: [f.name],
+            attachments: f.attached_to_doctype ? [`${f.attached_to_doctype}: ${f.attached_to_name}`] : [],
+          });
+        } else {
+          const existing = fileMap.get(key);
+          if (!existing.file_ids.includes(f.name)) {
+            existing.file_ids.push(f.name);
+          }
+          if (f.attached_to_doctype) {
+            const att = `${f.attached_to_doctype}: ${f.attached_to_name}`;
+            if (!existing.attachments.includes(att)) {
+              existing.attachments.push(att);
+            }
+          }
+        }
+      }
+
+      const files = Array.from(fileMap.values());
       res.json({ data: files });
     } catch (err: any) {
       logger.error({ err }, "[admin/files.GET]");
@@ -1661,26 +1687,34 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const { name } = req.params;
-      const erpRes = await erpFetch(
-        getErpUrl(`/api/resource/File/${encodeURIComponent(name)}`),
-        {
-          method: "DELETE",
-          headers: getErpHeaders(),
-        }
-      );
+      const idsToDelete = name.split(",").map((s) => s.trim()).filter(Boolean);
+      let anySuccess = false;
+      let lastError = "";
 
-      if (!erpRes.ok) {
-        const err = erpRes.status === 404
-          ? "File not found."
-          : "Failed to delete the file in ERPNext.";
-        res.status(erpRes.status).json({ error: err });
+      for (const id of idsToDelete) {
+        const erpRes = await erpFetch(
+          getErpUrl(`/api/resource/File/${encodeURIComponent(id)}`),
+          {
+            method: "DELETE",
+            headers: getErpHeaders(),
+          }
+        );
+        if (erpRes.ok) {
+          anySuccess = true;
+        } else {
+          lastError = `Failed for ${id} (status ${erpRes.status})`;
+        }
+      }
+
+      if (!anySuccess && idsToDelete.length > 0) {
+        res.status(500).json({ error: lastError || "Failed to delete file from ERPNext." });
         return;
       }
 
-      res.json({ success: true, message: `File ${name} deleted.` });
+      res.json({ success: true, message: `File(s) deleted.` });
     } catch (err: any) {
       logger.error({ err }, "[admin/files/:name.DELETE]");
-      res.status(500).json({ error: err.message || "Failed to delete file." });
+      res.status(500).json({ error: err.message || "Internal server error." });
     }
   }
 );
