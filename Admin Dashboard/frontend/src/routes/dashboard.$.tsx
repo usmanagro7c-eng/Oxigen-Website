@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRight, Search, SlidersHorizontal, Download, Plus, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, ChevronLeft, Sparkles, RefreshCw,
-  Eye, Pencil, Copy, Trash2, X, Check, AlertCircle, Upload, ImagePlus,
+  Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -16,7 +16,7 @@ import {
 import { findItem, NAV } from "@/components/dashboard/nav-config";
 import { cn } from "@/lib/utils";
 import {
-  getItems, createItem, updateItem, deleteItem,
+  getItems, getItemDetail, createItem, updateItem, deleteItem,
   getItemGroups, createItemGroup, updateItemGroup, deleteItemGroup,
   getAdminOrders, getAdminOrderDetail, createAdminOrder, updateAdminOrder, deleteAdminOrder,
   getAdminCustomers, createAdminCustomer, updateAdminCustomer, deleteAdminCustomer,
@@ -166,7 +166,7 @@ const MODULE_META: Record<string, PageMeta> = {
 
   customers: {
     subtitle: "Customer accounts and contacts stored securely.",
-    primaryAction: "Add customer",
+    primaryAction: "",
     filters: ["All", "Individual", "Commercial"],
     columns: [
       { key: "customer_name", label: "Customer Name" },
@@ -405,7 +405,7 @@ function Toolbar({
   );
 }
 
-type RowAction = "view" | "edit" | "duplicate" | "delete";
+type RowAction = "view" | "edit" | "delete";
 function renderCellValue(c: Column, r: Row) {
   if (c.key === "status" || c.key === "visible" || c.key === "is_group_label") {
     return <StatusPill label={String(r[c.key] ?? "Active")} />;
@@ -508,7 +508,6 @@ function RowMenu({ onAction }: { onAction: (a: RowAction) => void }) {
   const items: { key: RowAction; label: string; icon: LucideIcon; danger?: boolean }[] = [
     { key: "view", label: "View details", icon: Eye },
     { key: "edit", label: "Edit", icon: Pencil },
-    { key: "duplicate", label: "Duplicate", icon: Copy },
     { key: "delete", label: "Delete", icon: Trash2, danger: true },
   ];
 
@@ -628,10 +627,10 @@ function EmptyState({ title, desc, action, onAction }: { title: string; desc: st
  * Drawer & Dynamic Modal
  * ============================================================ */
 function DetailDrawer({
-  open, onClose, row, columns, title, slug, onEdit, onDuplicate, onDelete,
+  open, onClose, row, columns, title, slug, onEdit, onDelete,
 }: {
   open: boolean; onClose: () => void; row: Row | null; columns: Column[]; title: string; slug?: string;
-  onEdit: () => void; onDuplicate: () => void; onDelete: () => void;
+  onEdit: () => void; onDelete: () => void;
 }) {
   return (
     <AnimatePresence>
@@ -716,10 +715,6 @@ function DetailDrawer({
               <button onClick={onDelete}
                 className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-semibold transition">
                 <Trash2 className="h-3.5 w-3.5" /> Delete
-              </button>
-              <button onClick={onDuplicate}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-semibold transition">
-                <Copy className="h-3.5 w-3.5" /> Duplicate
               </button>
               <button onClick={onEdit}
                 className="ml-auto inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25">
@@ -875,8 +870,12 @@ function RecordModal({
     if (open) {
       const seed: Row = {};
       columns.forEach((c) => { seed[c.key] = initial?.[c.key] ?? ""; });
-      if (slug === "products" && mode === "create" && !seed.status) {
-        seed.status = "Enable";
+      if (slug === "products") {
+        seed.images = Array.isArray(initial?.slideshow_images)
+          ? initial.slideshow_images
+          : (initial?.image ? [initial.image] : []);
+        if (!seed.image && Array.isArray(seed.images) && seed.images.length) seed.image = seed.images[0];
+        if (mode === "create" && !seed.status) seed.status = "Enable";
       } else if (slug === "inventory") {
         if (mode === "create" && !seed.status) seed.status = "In stock";
         seed.warehouse = "Stores - O";
@@ -912,11 +911,18 @@ function RecordModal({
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (!files.length) return;
     try {
-      const res = await uploadAdminFile(file);
-      setForm(f => ({ ...f, image: res.data.file_url }));
+      const additions: string[] = [];
+      for (const file of files) {
+        const res = await uploadAdminFile(file);
+        additions.push(res.data.file_url);
+      }
+      setForm((f) => {
+        const current = Array.isArray(f.images) ? f.images : [];
+        return { ...f, images: [...current, ...additions], image: f.image || additions[0] || "" };
+      });
     } catch (err) {
       console.error("Upload failed", err);
     }
@@ -924,14 +930,52 @@ function RecordModal({
 
   const handleImageDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
+    const files = Array.from(e.dataTransfer.files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (!files.length) return;
     try {
-      const res = await uploadAdminFile(file);
-      setForm(f => ({ ...f, image: res.data.file_url }));
+      const additions: string[] = [];
+      for (const file of files) {
+        const res = await uploadAdminFile(file);
+        additions.push(res.data.file_url);
+      }
+      setForm((f) => {
+        const current = Array.isArray(f.images) ? f.images : [];
+        return { ...f, images: [...current, ...additions], image: f.image || additions[0] || "" };
+      });
     } catch (err) {
       console.error("Upload failed", err);
     }
+  };
+
+  const addMediaImage = (fileUrl: string) => {
+    setForm((f) => {
+      const current = Array.isArray(f.images) ? f.images : [];
+      if (current.includes(fileUrl)) return f;
+      return { ...f, images: [...current, fileUrl], image: f.image || fileUrl || "" };
+    });
+  };
+
+  const removeImage = (idx: number) => {
+    setForm((f) => {
+      const current = Array.isArray(f.images) ? f.images.slice() : [];
+      current.splice(idx, 1);
+      return {
+        ...f,
+        images: current,
+        image: current[0] ?? "",
+      };
+    });
+  };
+
+  const moveImage = (idx: number, dir: -1 | 1) => {
+    setForm((f) => {
+      const current = Array.isArray(f.images) ? f.images.slice() : [];
+      const target = idx + dir;
+      if (target < 0 || target >= current.length) return f;
+      const [item] = current.splice(idx, 1);
+      current.splice(target, 0, item);
+      return { ...f, images: current, image: current[0] ?? f.image ?? "" };
+    });
   };
 
   const openMedia = async () => {
@@ -1119,39 +1163,93 @@ function RecordModal({
 
                   // Image upload for products / inventory
                   if ((slug === "products" || slug === "inventory") && c.key === "image") {
+                    const galleryImages: string[] = Array.isArray(form.images)
+                      ? form.images.filter(Boolean)
+                      : (form.image ? [form.image] : []);
+                    const isProduct = slug === "products";
                     return (
-                      <label key={c.key} className="block">
-                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
-                        {form.image ? (
-                          <div className="relative overflow-hidden rounded-xl border border-border bg-secondary/30">
-                            <img src={getItemImageUrl(form.image)} alt="Preview" className="h-44 w-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => setForm(f => ({ ...f, image: "" }))}
-                              className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
-                              aria-label="Remove image"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                            <label className="absolute bottom-2 right-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-black/60 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/80">
-                              <RefreshCw className="h-3.5 w-3.5" /> Replace
-                              <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                            </label>
+                      <div key={c.key} className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                          {isProduct ? "Product Images (Slideshow)" : c.label}
+                        </span>
+
+                        {galleryImages.length > 0 && (
+                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mb-2.5">
+                            {galleryImages.map((src, i) => (
+                              <div
+                                key={src + i}
+                                className="group relative overflow-hidden rounded-xl border border-border bg-secondary/30 aspect-square"
+                              >
+                                {isProduct && i === 0 && (
+                                  <span className="absolute left-1.5 top-1.5 z-10 rounded-md bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase text-white shadow">
+                                    Main
+                                  </span>
+                                )}
+                                <img src={getItemImageUrl(src)} alt={`Image ${i + 1}`} className="h-full w-full object-cover" />
+                                {/* Reorder controls */}
+                                {isProduct && (
+                                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 transition group-hover:opacity-100">
+                                    <button
+                                      type="button"
+                                      onClick={() => moveImage(i, -1)}
+                                      disabled={i === 0}
+                                      className="grid h-6 w-6 place-items-center rounded-md bg-white/90 text-black transition hover:bg-white disabled:opacity-30"
+                                      aria-label="Move earlier"
+                                    >
+                                      <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeImage(i)}
+                                      className="grid h-6 w-6 place-items-center rounded-md bg-red-500 text-white transition hover:bg-red-600"
+                                      aria-label="Remove image"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => moveImage(i, 1)}
+                                      disabled={i === galleryImages.length - 1}
+                                      className="grid h-6 w-6 place-items-center rounded-md bg-white/90 text-black transition hover:bg-white disabled:opacity-30"
+                                      aria-label="Move later"
+                                    >
+                                      <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                                {!isProduct && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeImage(i)}
+                                    className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
+                                    aria-label="Remove image"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        ) : (
-                          <label
-                            className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-secondary/20 px-4 py-8 text-center transition hover:border-primary/60 hover:bg-secondary/40"
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={handleImageDrop}
-                          >
-                            <span className="grid h-12 w-12 place-items-center rounded-full bg-primary/10 text-primary transition group-hover:scale-110">
-                              <Upload className="h-5 w-5" />
-                            </span>
-                            <span className="text-sm font-semibold text-foreground">Click to choose an image</span>
-                            <span className="text-xs text-muted-foreground">or drag &amp; drop here · PNG, JPG, WebP</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                          </label>
                         )}
+
+                        {isProduct && (
+                          <p className="mb-2 text-[11px] text-muted-foreground">
+                            First image is the main / listing image. Add multiple images to create the website slideshow.
+                          </p>
+                        )}
+
+                        <label
+                          className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-secondary/20 px-4 py-5 text-center transition hover:border-primary/60 hover:bg-secondary/40"
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={handleImageDrop}
+                        >
+                          <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary transition group-hover:scale-110">
+                            <Plus className="h-5 w-5" />
+                          </span>
+                          <span className="text-sm font-semibold text-foreground">Add image{galleryImages.length ? "s" : ""}</span>
+                          <span className="text-xs text-muted-foreground">click or drag &amp; drop · multiple allowed · PNG, JPG, WebP</span>
+                          <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
+                        </label>
 
                         <button
                           type="button"
@@ -1160,7 +1258,7 @@ function RecordModal({
                         >
                           <ImagePlus className="h-4 w-4" /> Pick from Media Library
                         </button>
-                      </label>
+                      </div>
                     );
                   }
                   
@@ -1416,7 +1514,14 @@ function RecordModal({
                             <button
                               key={f.name || f.file_url}
                               type="button"
-                              onClick={() => { setForm((s) => ({ ...s, image: f.file_url })); setMediaOpen(false); }}
+                              onClick={() => {
+                                if ((slug === "products" || slug === "inventory") ? true : false) {
+                                  addMediaImage(f.file_url);
+                                } else {
+                                  setForm((s) => ({ ...s, image: f.file_url }));
+                                }
+                                setMediaOpen(false);
+                              }}
                               className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-secondary/20 transition hover:border-primary/60"
                               title={f.file_name || f.name}
                             >
@@ -1425,7 +1530,9 @@ function RecordModal({
                               ) : (
                                 <div className="flex h-full w-full items-center justify-center text-2xl">📄</div>
                               )}
-                              {form.image === f.file_url && (
+                              {((slug === "products" || slug === "inventory")
+                                ? (Array.isArray(form.images) ? form.images : [form.image]).includes(f.file_url)
+                                : form.image === f.file_url) && (
                                 <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
                                   <Check className="h-3 w-3" />
                                 </span>
@@ -1527,6 +1634,7 @@ function LiveTablePage({
             status: statusVal,
             description: it.description || "",
             image: it.image || it.website_image || "",
+            slideshow_images: (it as any).slideshow_images || [],
           };
         });
         setRows(mapped);
@@ -1698,45 +1806,31 @@ function LiveTablePage({
       return;
     }
     if (a === "edit") {
-      setModal({ open: true, mode: "edit", row: r, index: idx });
-      return;
-    }
-    if (a === "duplicate") {
-      try {
-        const copyPayload = { ...r };
-        delete copyPayload.rawKey;
-        delete copyPayload.name;
-        delete copyPayload.id;
-
-        if (slug === "products") {
-          await createItem({
-            item_name: `${r.name} (Copy)`,
-            item_group: r.item_group || "General",
-            standard_rate: Number(String(r.price).replace(/[^0-9.]/g, "")) || 0,
-            stock_uom: "Nos",
-          });
-        } else if (slug === "categories" || slug === "collections") {
-          await createItemGroup({
-            item_group_name: `${r.name} Copy`,
-            parent_item_group: r.parent || "All Item Groups",
-            is_group: r.is_group === "1" ? 1 : 0,
-          });
-        } else if (slug === "customers") {
-          await createAdminCustomer({
-            customer_name: `${r.customer_name} (Copy)`,
-            email_id: `copy-${Date.now()}@example.com`,
-          });
-        } else if (slug === "inventory") {
-          pushToast("info", "Inventory records are synced live");
-          return;
-        } else {
-          await createErpDoc(singular, copyPayload);
+      if (slug === "products") {
+        const itemCode = r.rawKey || r.sku || r.name;
+        try {
+          const detailRes = await getItemDetail(itemCode);
+          if (detailRes && detailRes.data) {
+            const detail = detailRes.data as any;
+            const fullSlideshow: string[] = Array.isArray(detail.slideshow_images) && detail.slideshow_images.length
+              ? detail.slideshow_images
+              : (detail.image ? [detail.image] : (r.slideshow_images || []));
+            const enhancedRow = {
+              ...r,
+              ...detail,
+              rawKey: itemCode,
+              image: detail.image || r.image,
+              images: fullSlideshow.length ? fullSlideshow : (r.image ? [r.image] : []),
+              slideshow_images: fullSlideshow,
+            };
+            setModal({ open: true, mode: "edit", row: enhancedRow, index: idx });
+            return;
+          }
+        } catch {
+          // fallback to standard row
         }
-        pushToast("success", `${singular} duplicated`);
-        loadData();
-      } catch (err: any) {
-        pushToast("error", err.message || `Failed to duplicate ${singular}`);
       }
+      setModal({ open: true, mode: "edit", row: r, index: idx });
       return;
     }
     if (a === "delete") {
@@ -1798,6 +1892,7 @@ function LiveTablePage({
             description: formData.description || "",
             image: formData.image || undefined,
             imageUrl: formData.imageUrl || undefined,
+            images: Array.isArray(formData.images) ? formData.images.filter(Boolean) : undefined,
             status: chosenStatus,
             publish: chosenStatus === "Enable",
           });
@@ -1822,6 +1917,7 @@ function LiveTablePage({
             description: formData.description || "",
             image: formData.image || undefined,
             imageUrl: formData.imageUrl || undefined,
+            images: Array.isArray(formData.images) ? formData.images.filter(Boolean) : undefined,
             status: chosenStatus,
             publish: true,
           });
@@ -1883,6 +1979,7 @@ function LiveTablePage({
             description: formData.description,
             image: formData.image || undefined,
             imageUrl: formData.imageUrl || undefined,
+            images: Array.isArray(formData.images) ? formData.images.filter(Boolean) : undefined,
             status: formData.status || "Enable",
             stock_uom: "Nos",
           });
@@ -2005,7 +2102,6 @@ function LiveTablePage({
           setDrawer({ open: false, row: null, index: -1 });
           setModal({ open: true, mode: "edit", row: r, index: i });
         }}
-        onDuplicate={() => { if (drawer.row) { handleAction("duplicate", drawer.row, drawer.index); setDrawer({ open: false, row: null, index: -1 }); } }}
         onDelete={() => { if (drawer.row) { handleAction("delete", drawer.row, drawer.index); setDrawer({ open: false, row: null, index: -1 }); } }}
       />
 
@@ -2200,7 +2296,7 @@ function MediaLibraryPage() {
     if (!window.confirm(`Delete "${f.file_name || f.name}" permanently?`)) return;
     setLoading(true);
     try {
-      await deleteAdminFile(f.name);
+      await deleteAdminFile(f.file_ids ? f.file_ids.join(",") : f.name);
       pushToast("success", `${f.file_name || f.name} deleted`);
       loadFiles();
     } catch (err: any) {
@@ -2220,7 +2316,7 @@ function MediaLibraryPage() {
       <input ref={fileRef} type="file" multiple className="hidden" onChange={onFiles} />
 
       <StatsRow stats={[
-        { label: "Assets", value: String(files.length) },
+        { label: "Unique Assets", value: String(files.length) },
         { label: "Storage", value: "Attachments" },
         { label: "Status", value: "Synced", delta: "Active", trend: "up" },
         { label: "Upload Mode", value: "Direct" },
@@ -2236,7 +2332,7 @@ function MediaLibraryPage() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {files.map((f, i) => (
-            <motion.div key={f.name || i}
+            <motion.div key={f.name || f.file_url || i}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.02 }}
               whileHover={{ y: -3 }}
@@ -2245,13 +2341,20 @@ function MediaLibraryPage() {
             >
               <div onClick={() => openFile(f)} className="h-full w-full flex items-center justify-center rounded-xl bg-white/[0.04] overflow-hidden">
                 {f.file_url && (f.file_url.endsWith(".jpg") || f.file_url.endsWith(".jpeg") || f.file_url.endsWith(".png") || f.file_url.endsWith(".webp")) ? (
-                  <img src={f.file_url} alt={f.file_name} className="h-full w-full object-cover" />
+                  <img src={getItemImageUrl(f.file_url)} alt={f.file_name} className="h-full w-full object-cover" />
                 ) : (
                   <span className="text-2xl font-mono text-muted-foreground">📄</span>
                 )}
               </div>
-              <div onClick={() => openFile(f)} className="mt-2 text-[11px] text-white/90 truncate font-medium">
-                {f.file_name || f.name}
+              <div onClick={() => openFile(f)} className="mt-2 flex flex-col">
+                <span className="text-[11px] text-white/90 truncate font-medium">
+                  {f.file_name || f.name}
+                </span>
+                {Array.isArray(f.attachments) && f.attachments.length > 0 && (
+                  <span className="text-[9px] text-primary/80 truncate">
+                    Attached ({f.attachments.length})
+                  </span>
+                )}
               </div>
               <div className="absolute right-2 top-2 flex flex-col gap-1.5 opacity-0 transition group-hover:opacity-100">
                 <button type="button" onClick={(e) => { e.stopPropagation(); downloadFile(f); }}
