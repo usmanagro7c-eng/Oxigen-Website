@@ -69,7 +69,7 @@ function Shop() {
       />
 
       <section className="mx-auto max-w-6xl px-5 pb-8">
-        <div className="grid gap-4 sm:gap-7 grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:gap-7 grid-cols-2 md:grid-cols-3 xl:grid-cols-3">
           {loading
             ? Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="aspect-[3/4] w-full animate-pulse rounded-3xl bg-secondary glass" />
@@ -91,7 +91,7 @@ function Shop() {
                         {p.item_group}
                       </span>
                       {off > 0 && (
-                        <span className="absolute right-4 top-4 z-10 rounded-lg bg-gradient-to-r from-primary to-accent px-2.5 py-1 text-[11px] font-extrabold text-white shadow sm:right-6 sm:top-6">
+                        <span className="absolute right-4 top-14 z-10 rounded-lg bg-gradient-to-r from-primary to-accent px-2.5 py-1 text-[11px] font-extrabold text-white shadow sm:top-16">
                           {off}% OFF
                         </span>
                       )}
@@ -136,8 +136,8 @@ function Shop() {
                       <p className="mt-2 hidden flex-1 text-sm leading-relaxed text-muted-foreground sm:block">
                         {p.short_description || "Premium quality supplement."}
                       </p>
-                      <div className="mt-4 flex items-center justify-between gap-2 sm:mt-5">
-                        <div className="flex items-baseline gap-2">
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 sm:mt-5">
+                        <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-baseline sm:gap-2">
                           <span className="text-lg font-extrabold text-ink sm:text-xl">
                             {formatPKR(price)}
                           </span>
@@ -151,7 +151,7 @@ function Shop() {
                           onClick={() => addToCart(slug)}
                           disabled={!available}
                           aria-label={`Add ${p.item_name} to cart`}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105 sm:px-4 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="touch-target inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105 sm:px-4 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {available ? (
                             <>
@@ -230,7 +230,7 @@ function Shop() {
       <section className="mx-auto max-w-6xl px-5 pb-20 pt-4 text-center">
         <a
           href={brand.whatsapp}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald to-accent px-7 py-3.5 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105"
+          className="touch-target inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald to-accent px-7 py-3.5 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105"
         >
           Order on WhatsApp <ArrowUpRight className="h-4 w-4" />
         </a>
