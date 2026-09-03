@@ -81,14 +81,14 @@ function CheckoutPage() {
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
                 to="/shop"
-                className="rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white"
+                className="touch-target rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white"
               >
                 Continue Shopping
               </Link>
               {user && (
                 <Link
                   to="/dashboard/orders"
-                  className="rounded-xl glass px-6 py-3 text-sm font-semibold text-ink"
+                  className="touch-target rounded-xl glass px-6 py-3 text-sm font-semibold text-ink"
                 >
                   View Orders
                 </Link>
