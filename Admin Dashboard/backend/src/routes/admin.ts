@@ -1198,7 +1198,7 @@ router.delete(
 );
 
 // ---------------------------------------------------------------------------
-// DISCOUNTS / ITEM PRICES
+// DISCOUNTS / PRICING RULES
 // ---------------------------------------------------------------------------
 router.get(
   "/admin/discounts",
@@ -1208,30 +1208,58 @@ router.get(
       const params = new URLSearchParams({
         fields: JSON.stringify([
           "name",
-          "item_code",
-          "price_list",
-          "price_list_rate",
-          "currency",
+          "title",
+          "apply_on",
+          "rate_or_discount",
+          "rate",
+          "discount_percentage",
+          "discount_amount",
           "valid_from",
           "valid_upto",
-          "selling",
+          "priority",
+          "disable",
+          "modified",
+          "creation",
         ]),
-        limit_page_length: "200",
+        filters: JSON.stringify([["selling", "=", 1]]),
+        limit_page_length: "1000",
         order_by: "modified desc",
       });
 
       const erpRes = await erpFetch(
-        getErpUrl(`/api/resource/Item Price?${params}`),
+        getErpUrl(`/api/resource/Pricing Rule?${params}`),
         { headers: getErpHeaders() }
       );
 
       if (!erpRes.ok) {
-        res.status(502).json({ error: "Failed to fetch Item Prices." });
+        res.status(502).json({ error: "Failed to fetch pricing rules." });
         return;
       }
 
-      const data: any = await erpRes.json();
-      res.json({ data: data.data });
+      const listJson: any = await erpRes.json();
+      const rules = listJson.data ?? [];
+
+      // Child table "items" parent fields ke through nahi milta — har doc ko
+      // individual fetch karke item_code list nikaalni hoti hai (v14 structure).
+      const enriched = await Promise.all(
+        rules.map(async (rule: any) => {
+          const itemCodes: string[] = [];
+          const detailRes = await erpFetch(
+            getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(rule.name)}`),
+            { headers: getErpHeaders() }
+          ).catch(() => null);
+          if (detailRes?.ok) {
+            const detailJson: any = await detailRes.json();
+            const items = detailJson.data?.items ?? [];
+            for (const it of items) {
+              if (it.item_code) itemCodes.push(it.item_code);
+            }
+          }
+          return { ...rule, item_codes: itemCodes, item_code: itemCodes[0] || "" };
+        })
+      );
+
+      res.json({ data: enriched });
     } catch (err: any) {
       logger.error({ err }, "[admin/discounts.GET]");
       res.status(500).json({ error: err.message || "Internal server error." });
@@ -1244,17 +1272,49 @@ router.post(
   attachRequestId,
   async (req: Request, res: Response) => {
     try {
-      const { item_code, price_list_rate, price_list = "Standard Selling", currency = "PKR" } = req.body;
-      const payload = {
-        doctype: "Item Price",
+      const {
         item_code,
-        price_list,
-        price_list_rate: Number(price_list_rate) || 0,
-        currency,
+        title,
+        rate_or_discount = "Discount Percentage",
+        discount_percentage,
+        rate,
+        discount_amount,
+        valid_from,
+        valid_upto,
+        priority = 0,
+        disable = 0,
+      } = req.body;
+
+      if (!item_code) {
+        res.status(400).json({ error: "Item code is required." });
+        return;
+      }
+
+      const payload: Record<string, unknown> = {
+        doctype: "Pricing Rule",
+        title: title || `Discount ${item_code}`,
+        apply_on: "Item Code",
         selling: 1,
+        price_or_product_discount: "Price",
+        rate_or_discount,
+        priority: Number(priority) || 0,
+        disable: Number(disable) || 0,
+        company: process.env.DEFAULT_COMPANY || "Oxigen",
+        items: [{ item_code }],
       };
 
-      const erpRes = await erpFetch(getErpUrl("/api/resource/Item Price"), {
+      if (rate_or_discount === "Rate") {
+        payload.rate = Number(rate) || 0;
+      } else if (rate_or_discount === "Discount Amount") {
+        payload.discount_amount = Number(discount_amount) || 0;
+      } else {
+        payload.discount_percentage = Number(discount_percentage) || 0;
+      }
+
+      if (valid_from) payload.valid_from = valid_from;
+      if (valid_upto) payload.valid_upto = valid_upto;
+
+      const erpRes = await erpFetch(getErpUrl("/api/resource/Pricing Rule"), {
         method: "POST",
         headers: getErpHeaders(),
         body: JSON.stringify(payload),
@@ -1262,7 +1322,7 @@ router.post(
 
       if (!erpRes.ok) {
         const err = (await erpRes.json().catch(() => ({}))) as any;
-        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to create price entry." });
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to create pricing rule." });
         return;
       }
 
@@ -1271,7 +1331,69 @@ router.post(
       res.status(201).json({ data: data.data });
     } catch (err: any) {
       logger.error({ err }, "[admin/discounts.POST]");
-      res.status(500).json({ error: err.message || "Failed to create discount/price." });
+      res.status(500).json({ error: err.message || "Failed to create pricing rule." });
+    }
+  }
+);
+
+router.put(
+  "/admin/discounts/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const {
+        item_code,
+        rate_or_discount,
+        discount_percentage,
+        rate,
+        discount_amount,
+        valid_from,
+        valid_upto,
+        priority,
+        disable,
+        title,
+      } = req.body;
+
+      const payload: Record<string, unknown> = {};
+      if (title !== undefined) payload.title = title;
+      if (rate_or_discount !== undefined) payload.rate_or_discount = rate_or_discount;
+      if (priority !== undefined) payload.priority = Number(priority) || 0;
+      if (disable !== undefined) payload.disable = Number(disable) || 0;
+      if (valid_from !== undefined) payload.valid_from = valid_from || null;
+      if (valid_upto !== undefined) payload.valid_upto = valid_upto || null;
+      if (item_code !== undefined) payload.items = [{ item_code }];
+
+      if (rate_or_discount === "Rate" && rate !== undefined) payload.rate = Number(rate) || 0;
+      else if (rate_or_discount === "Discount Amount" && discount_amount !== undefined) payload.discount_amount = Number(discount_amount) || 0;
+      else if (rate_or_discount === "Discount Percentage" && discount_percentage !== undefined) payload.discount_percentage = Number(discount_percentage) || 0;
+
+      if (Object.keys(payload).length === 0) {
+        res.status(400).json({ error: "No fields to update." });
+        return;
+      }
+
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(name)}`),
+        {
+          method: "PUT",
+          headers: getErpHeaders(),
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to update pricing rule." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      itemCache.clear();
+      res.json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/discounts/:name.PUT]");
+      res.status(500).json({ error: err.message || "Internal server error." });
     }
   }
 );
@@ -1283,7 +1405,7 @@ router.delete(
     try {
       const { name } = req.params;
       const erpRes = await erpFetch(
-        getErpUrl(`/api/resource/Item Price/${encodeURIComponent(name)}`),
+        getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(name)}`),
         {
           method: "DELETE",
           headers: getErpHeaders(),
@@ -1291,12 +1413,12 @@ router.delete(
       );
 
       if (!erpRes.ok) {
-        res.status(erpRes.status).json({ error: "Failed to delete price entry." });
+        res.status(erpRes.status).json({ error: "Failed to delete pricing rule." });
         return;
       }
 
       itemCache.clear();
-      res.json({ success: true, message: `Price entry ${name} deleted.` });
+      res.json({ success: true, message: `Pricing rule ${name} deleted.` });
     } catch (err: any) {
       logger.error({ err }, "[admin/discounts/:name.DELETE]");
       res.status(500).json({ error: err.message || "Internal server error." });
