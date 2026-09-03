@@ -419,6 +419,7 @@ export class ErpAdapter {
     publish?: boolean;
     website_warehouse?: string;
     short_description?: string;
+    images?: string[];
   }): Promise<{ name: string; item_code: string } | null> {
     const defaultCompany = process.env.DEFAULT_COMPANY ?? "Oxigen";
     const mainWarehouse = (process.env.MAIN_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || process.env.ONLINE_WAREHOUSE || "Oxigen Warehouse - O").trim();
@@ -578,8 +579,187 @@ export class ErpAdapter {
       logger.warn({ stockErr, newItemCode }, "[ErpAdapter] Error creating Purchase Invoice for initial stock");
     }
 
+    // ── 5. Write slideshow gallery images (non-fatal) ──
+    const imagesToSlideshow = Array.isArray(payload.images) && payload.images.length > 0
+      ? payload.images
+      : (payload.image ? [payload.image] : []);
+    if (imagesToSlideshow.length > 0) {
+      await ErpAdapter.upsertSlideshow({
+        itemCode: newItemCode,
+        webItemName: payload.item_name,
+        images: imagesToSlideshow,
+      });
+    }
+
     itemCache.clear();
     return itemData.data;
+  }
+
+  /**
+   * Ensures a Website Item exists for an item code, then (re)writes the
+   * Website Slideshow gallery with the given ordered images and links it to
+   * the Website Item. The first image is also set as the primary website image.
+   * This is non-fatal: any ERPNext slideshow failure is logged and swallowed so
+   * that a product save always succeeds.
+   */
+  static async upsertSlideshow(opts: {
+    itemCode: string;
+    webItemName?: string;
+    images: string[];
+  }): Promise<void> {
+    const { itemCode, webItemName, images } = opts;
+    const cleanImages = (images || []).filter(Boolean);
+
+    try {
+      // ── 1. Find (or create) the Website Item for this item code ──
+      let websiteItemName: string | null = null;
+      const webSearchRes = await erpFetch(
+        getErpUrl(`/api/resource/Website Item?${new URLSearchParams({
+          fields: JSON.stringify(["name", "published", "item_code", "slideshow"]),
+          filters: JSON.stringify([["item_code", "=", itemCode]]),
+          limit_page_length: "1",
+        }).toString()}`),
+        { headers: getErpHeaders() },
+      ).catch(() => null);
+
+      if (webSearchRes && webSearchRes.ok) {
+        const webSearchJson: any = await webSearchRes.json().catch(() => ({}));
+        const doc = webSearchJson.data?.[0];
+        if (doc && doc.name) websiteItemName = doc.name;
+      }
+
+      const onlineWarehouse = (process.env.ONLINE_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || "Oxigen Warehouse - O").trim();
+      if (!websiteItemName) {
+        const createWebRes = await erpFetch(getErpUrl("/api/resource/Website Item"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Website Item",
+            item_code: itemCode,
+            web_item_name: webItemName || itemCode,
+            published: 1,
+            website_warehouse: onlineWarehouse,
+            website_image: cleanImages[0] || null,
+          }),
+        }).catch(() => null);
+        if (createWebRes && createWebRes.ok) {
+          const created: any = await createWebRes.json().catch(() => ({}));
+          websiteItemName = created.data?.name || null;
+        }
+        if (!websiteItemName) return;
+      }
+
+      // ── 2. Determine the slideshow name ──
+      const currentWeb = await erpFetch(
+        getErpUrl(`/api/resource/Website Item/${encodeURIComponent(websiteItemName)}`),
+        { headers: getErpHeaders() },
+      ).catch(() => null);
+      let slideshowName: string | null = null;
+      if (currentWeb && currentWeb.ok) {
+        const currentData: any = await currentWeb.json().catch(() => ({}));
+        slideshowName = currentData.data?.slideshow || currentData.data?.website_slideshow || null;
+      }
+
+      if (!slideshowName) {
+        slideshowName = `ws-${itemCode}`;
+      }
+
+      // ── 3. Create or update the Website Slideshow document in ERPNext ──
+      if (cleanImages.length === 0) {
+        // No images → detach slideshow if one exists
+        await erpFetch(getErpUrl("/api/method/frappe.client.set_value"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Website Item",
+            name: websiteItemName,
+            fieldname: "slideshow",
+            value: null,
+          }),
+        }).catch(() => {});
+        return;
+      }
+
+      const childRows = cleanImages.map((img) => ({
+        image: img,
+        image_description: "",
+      }));
+
+      // Check if Website Slideshow exists
+      const checkSsRes = await erpFetch(
+        getErpUrl(`/api/resource/Website Slideshow/${encodeURIComponent(slideshowName)}`),
+        { headers: getErpHeaders() }
+      ).catch(() => null);
+
+      if (checkSsRes && checkSsRes.ok) {
+        await erpFetch(
+          getErpUrl(`/api/resource/Website Slideshow/${encodeURIComponent(slideshowName)}`),
+          {
+            method: "PUT",
+            headers: getErpHeaders(),
+            body: JSON.stringify({
+              slideshow_name: slideshowName,
+              slideshow_items: childRows,
+            }),
+          },
+        );
+      } else {
+        const createSlideshowRes = await erpFetch(getErpUrl("/api/resource/Website Slideshow"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Website Slideshow",
+            name: slideshowName,
+            slideshow_name: slideshowName,
+            slideshow_items: childRows,
+          }),
+        });
+        if (!createSlideshowRes.ok) {
+          const err = (await createSlideshowRes.json().catch(() => ({}))) as any;
+          logger.warn({ err, slideshowName }, "[ErpAdapter] Failed to create Website Slideshow");
+        }
+      }
+
+      // ── 4. Link slideshow + primary website_image to the Website Item and Item ──
+      await erpFetch(getErpUrl("/api/method/frappe.client.set_value"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({
+          doctype: "Website Item",
+          name: websiteItemName,
+          fieldname: "slideshow",
+          value: slideshowName,
+        }),
+      }).catch(() => {});
+
+      if (cleanImages[0]) {
+        await erpFetch(getErpUrl("/api/method/frappe.client.set_value"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Website Item",
+            name: websiteItemName,
+            fieldname: "website_image",
+            value: cleanImages[0],
+          }),
+        }).catch(() => {});
+
+        await erpFetch(getErpUrl("/api/method/frappe.client.set_value"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Item",
+            name: itemCode,
+            fieldname: "image",
+            value: cleanImages[0],
+          }),
+        }).catch(() => {});
+      }
+
+      logger.info({ itemCode, websiteItemName, slideshowName, count: cleanImages.length }, "[ErpAdapter] Slideshow created & linked to Website Item");
+    } catch (err) {
+      logger.warn({ err, itemCode }, "[ErpAdapter] Slideshow upsert failed (non-fatal)");
+    }
   }
 
   /**
@@ -717,27 +897,44 @@ export class ErpAdapter {
 
     // ── Fetch Website Slideshow images ──────────────────────────────
     let slideshow_images: string[] = [];
-    const slideshowName = item["website_slideshow"] as string | undefined;
+    const slideshowName = (item["slideshow"] || item["website_slideshow"]) as string | undefined;
     if (slideshowName) {
-      const slideshowParams = new URLSearchParams({
-        fields: JSON.stringify(["image"]),
-        filters: JSON.stringify([["parent", "=", slideshowName]]),
-        limit_page_length: "20",
-        order_by: "idx asc",
-      });
-      const slideshowRes = await erpFetch(
-        getErpUrl(`/api/resource/Website Slideshow Item?${slideshowParams}`),
+      const ssRes = await erpFetch(
+        getErpUrl(`/api/resource/Website Slideshow/${encodeURIComponent(slideshowName)}`),
         { headers: getErpHeaders() },
       ).catch(() => null);
 
-      if (slideshowRes?.ok) {
-        const slideshowData = (await slideshowRes.json()) as {
-          data: { image: string }[];
+      if (ssRes?.ok) {
+        const ssData = (await ssRes.json()) as {
+          data?: { slideshow_items?: { image?: string }[] };
         };
-        slideshow_images = slideshowData.data
+        slideshow_images = (ssData.data?.slideshow_items ?? [])
           .map((s) => s.image)
-          .filter(Boolean);
+          .filter((img): img is string => Boolean(img));
         logger.info({ slideshowName, imageCount: slideshow_images.length }, "[ErpAdapter] Slideshow loaded");
+      }
+    }
+
+    // Fallback: If no slideshow images found from Website Slideshow, check File attachments
+    if (slideshow_images.length === 0) {
+      const candidateNames = [name, item["name"] as string, itemCode].filter(Boolean) as string[];
+      if (candidateNames.length > 0) {
+        const fileParams = new URLSearchParams({
+          fields: JSON.stringify(["file_url"]),
+          filters: JSON.stringify([["attached_to_name", "in", candidateNames]]),
+          limit_page_length: "20",
+          order_by: "creation asc",
+        });
+        const fileRes = await erpFetch(
+          getErpUrl(`/api/resource/File?${fileParams}`),
+          { headers: getErpHeaders() },
+        ).catch(() => null);
+        if (fileRes?.ok) {
+          const fileData = (await fileRes.json()) as { data?: { file_url?: string }[] };
+          slideshow_images = (fileData.data ?? [])
+            .map((f) => f.file_url)
+            .filter((url): url is string => Boolean(url));
+        }
       }
     }
     // ────────────────────────────────────────────────────────────────────
