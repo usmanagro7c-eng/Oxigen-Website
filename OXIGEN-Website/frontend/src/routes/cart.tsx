@@ -41,7 +41,7 @@ function CartPage() {
               <p className="text-muted-foreground">Your cart is empty.</p>
               <Link
                 to="/shop"
-                className="rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white"
+                className="touch-target rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white"
               >
                 Start Shopping
               </Link>
@@ -56,7 +56,7 @@ function CartPage() {
                     <Link
                       to="/product/$slug"
                       params={{ slug: item.slug }}
-                      className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-secondary"
+                      className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-secondary sm:h-28 sm:w-28"
                     >
                       <img
                         src={item.img}
@@ -79,7 +79,7 @@ function CartPage() {
                         <button
                           aria-label="Remove"
                           onClick={() => removeFromCart(item.slug)}
-                          className="text-muted-foreground transition-colors hover:text-destructive"
+                          className="touch-target grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:text-destructive"
                         >
                           <Trash2 className="h-5 w-5" />
                         </button>
@@ -89,17 +89,17 @@ function CartPage() {
                           <button
                             aria-label="Decrease"
                             onClick={() => setQty(item.slug, item.qty - 1)}
-                            className="grid h-8 w-8 place-items-center rounded-lg hover:bg-white/60"
+                            className="touch-target grid h-10 w-10 place-items-center rounded-lg hover:bg-white/60"
                           >
-                            <Minus className="h-3.5 w-3.5" />
+                            <Minus className="h-4 w-4" />
                           </button>
-                          <span className="w-7 text-center text-sm font-semibold">{item.qty}</span>
+                          <span className="w-8 text-center text-sm font-semibold">{item.qty}</span>
                           <button
                             aria-label="Increase"
                             onClick={() => setQty(item.slug, item.qty + 1)}
-                            className="grid h-8 w-8 place-items-center rounded-lg hover:bg-white/60"
+                            className="touch-target grid h-10 w-10 place-items-center rounded-lg hover:bg-white/60"
                           >
-                            <Plus className="h-3.5 w-3.5" />
+                            <Plus className="h-4 w-4" />
                           </button>
                         </div>
                         <span className="text-lg font-extrabold text-ink">
@@ -132,7 +132,7 @@ function CartPage() {
                 </div>
                 <Link
                   to="/checkout"
-                  className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg"
+                  className="touch-target mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg"
                 >
                   Proceed to Checkout <ArrowRight className="h-4 w-4" />
                 </Link>
