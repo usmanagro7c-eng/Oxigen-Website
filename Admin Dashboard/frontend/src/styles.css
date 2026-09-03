@@ -13,6 +13,8 @@
   --color-royal: oklch(0.48 0.22 291);
   --color-cyan: oklch(0.72 0.14 210);
   --color-emerald: oklch(0.72 0.15 162);
+
+  --breakpoint-xs: 26rem;
 }
 
 @theme inline {
@@ -190,6 +192,8 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -275,6 +279,20 @@
     background-size: 36px 36px;
     mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
   }
+
+  /* ===== Responsive helpers ===== */
+  .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+  .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+  .pl-safe { padding-left: max(env(safe-area-inset-left), 0px); }
+  .pr-safe { padding-right: max(env(safe-area-inset-right), 0px); }
+
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+  .touch-target { min-height: 44px; min-width: 44px; }
 }
 
 /* === Keyframes === */
