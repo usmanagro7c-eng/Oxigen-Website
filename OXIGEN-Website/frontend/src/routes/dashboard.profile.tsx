@@ -49,7 +49,7 @@ function ProfilePage() {
             <div className="grid h-28 w-28 place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-accent text-3xl font-black text-white shadow-lg shadow-primary/25">
               {form.name ? form.name.split(" ").map((n) => n[0]).slice(0, 2).join("") : "U"}
             </div>
-            <button className="absolute -bottom-2 -right-2 grid h-9 w-9 place-items-center rounded-full bg-white text-primary shadow-md ring-1 ring-border">
+            <button className="touch-target absolute -bottom-2 -right-2 grid h-10 w-10 place-items-center rounded-full bg-white text-primary shadow-md ring-1 ring-border">
               <Camera className="h-4 w-4" />
             </button>
           </div>
@@ -68,7 +68,7 @@ function ProfilePage() {
           action={
             <button
               onClick={() => setEditing((v) => !v)}
-              className="rounded-lg bg-white/70 px-3 py-1.5 text-xs font-semibold text-ink ring-1 ring-inset ring-border hover:bg-white"
+              className="touch-target rounded-lg bg-white/70 px-4 py-2 text-xs font-semibold text-ink ring-1 ring-inset ring-border hover:bg-white"
             >
               {editing ? "Cancel" : "Edit Profile"}
             </button>
