@@ -228,7 +228,7 @@ export const Route = createFileRoute("/product/$slug")({
         <h1 className="font-display text-3xl font-extrabold text-ink">Product not found</h1>
         <Link
           to="/shop"
-          className="mt-6 inline-block rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white"
+          className="touch-target mt-6 inline-block rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white"
         >
           Back to Shop
         </Link>
@@ -384,12 +384,12 @@ function ProductPage() {
               {product.available && (
                 <div className="mt-6 flex flex-wrap items-center gap-4">
                   <span className="text-sm font-semibold text-ink">Quantity</span>
-                  <div className="inline-flex items-center rounded-xl border border-border glass p-1">
+                  <div className="inline-flex touch-target items-center rounded-xl border border-border glass p-1">
                     <button
                       aria-label="Decrease quantity"
                       onClick={() => setQty((q) => Math.max(1, q - 1))}
                       disabled={qty <= 1}
-                      className="grid h-10 w-10 place-items-center rounded-lg text-ink transition-colors hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="grid h-11 w-11 place-items-center rounded-lg text-ink transition-colors hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Minus className="h-4 w-4" />
                     </button>
@@ -403,7 +403,7 @@ function ProductPage() {
                         setQty((q) => Math.min(max, q + 1));
                       }}
                       disabled={qty >= (typeof (product as any).stockQty === "number" ? Math.max(1, (product as any).stockQty) : 99)}
-                      className="grid h-10 w-10 place-items-center rounded-lg text-ink transition-colors hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="grid h-11 w-11 place-items-center rounded-lg text-ink transition-colors hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -415,25 +415,25 @@ function ProductPage() {
                 </div>
               )}
 
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-col gap-3 xs:flex-row xs:flex-wrap">
                 <button
                   onClick={() => addToCart(product.slug, qty)}
                   disabled={!product.available}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="touch-target inline-flex flex-1 xs:min-w-[140px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ShoppingCart className="h-4 w-4" /> Add to Cart
                 </button>
                 <button
                   onClick={buyNow}
                   disabled={!product.available}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl glass px-6 py-3.5 text-sm font-semibold text-ink transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="touch-target inline-flex flex-1 xs:min-w-[140px] items-center justify-center gap-2 rounded-xl glass px-6 py-3.5 text-sm font-semibold text-ink transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Buy Now
                 </button>
                 <button
                   aria-label="Toggle wishlist"
                   onClick={() => toggleWishlist(product.slug)}
-                  className={`grid h-[52px] w-[52px] place-items-center rounded-xl glass transition-colors ${saved ? "text-primary" : "text-ink hover:text-primary"}`}
+                  className={`touch-target mx-auto w-full xs:w-auto grid h-[52px] xs:h-[52px] place-items-center rounded-xl glass transition-colors ${saved ? "text-primary" : "text-ink hover:text-primary"}`}
                 >
                   <Heart className={`h-5 w-5 ${saved ? "fill-primary" : ""}`} />
                 </button>
@@ -442,7 +442,7 @@ function ProductPage() {
                 href={orderOnWhatsAppUrl(product.name, product.price, qty)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald/20 transition-transform hover:scale-[1.02]"
+                className="touch-target mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald/20 transition-transform hover:scale-[1.02]"
               >
                 <MessageCircle className="h-4 w-4" /> Order on WhatsApp
               </a>
@@ -581,7 +581,7 @@ function ProductPage() {
                     <button
                       onClick={() => addToCart(p.slug)}
                       aria-label={`Add ${p.name} to cart`}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white sm:px-4"
+                      className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white sm:px-4"
                     >
                       <ShoppingCart className="h-4 w-4" />
                     </button>
