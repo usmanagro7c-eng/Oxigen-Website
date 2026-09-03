@@ -77,6 +77,8 @@ function Shop() {
             : products.map((p, i) => {
                 const slug = p.route?.split("/").pop() || slugify(p.item_name);
                 const price = p.standard_rate || 0;
+                const was = p.valuation_rate || 0;
+                const off = was > price ? Math.round(((was - price) / was) * 100) : 0;
                 const stockQty = typeof p.custom_stock_qty === "number" ? p.custom_stock_qty : 0;
                 const available = stockQty > 0;
                 const saved = inWishlist(slug);
@@ -88,6 +90,11 @@ function Shop() {
                       <span className="absolute left-4 top-4 z-10 hidden rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-semibold text-white shadow sm:left-6 sm:top-6 sm:inline-block">
                         {p.item_group}
                       </span>
+                      {off > 0 && (
+                        <span className="absolute right-4 top-4 z-10 rounded-lg bg-gradient-to-r from-primary to-accent px-2.5 py-1 text-[11px] font-extrabold text-white shadow sm:right-6 sm:top-6">
+                          {off}% OFF
+                        </span>
+                      )}
                       <button
                         aria-label="Toggle wishlist"
                         onClick={() => toggleWishlist(slug)}
@@ -134,6 +141,11 @@ function Shop() {
                           <span className="text-lg font-extrabold text-ink sm:text-xl">
                             {formatPKR(price)}
                           </span>
+                          {was > price && (
+                            <span className="text-sm text-muted-foreground line-through">
+                              {formatPKR(was)}
+                            </span>
+                          )}
                         </div>
                         <button
                           onClick={() => addToCart(slug)}
