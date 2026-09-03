@@ -22,14 +22,24 @@ router.post("/items", async (req: Request, res: Response) => {
 router.put("/items/:name", async (req: Request, res: Response) => {
   try {
     const { name } = req.params;
-    const { item_name, item_group, standard_rate, description, image, stock_uom, status } = req.body;
+    const { item_name, item_group, standard_rate, description, image, stock_uom, status, images } = req.body;
 
+    let itemCode = name;
+    if (name.startsWith("WEB-ITM-")) {
+      const webDoc = await erpFetch(getErpUrl(`/api/resource/Website Item/${encodeURIComponent(name)}`), { headers: getErpHeaders() }).catch(() => null);
+      if (webDoc?.ok) {
+        const webJson = await webDoc.json() as any;
+        if (webJson.data?.item_code) itemCode = webJson.data.item_code;
+      }
+    }
+
+    const finalImage = (Array.isArray(images) && images.length > 0) ? images[0] : image;
     const itemPayload: Record<string, any> = {};
     if (item_name !== undefined) itemPayload.item_name = item_name;
     if (item_group !== undefined) itemPayload.item_group = item_group;
     if (standard_rate !== undefined) itemPayload.standard_rate = Number(standard_rate);
     if (description !== undefined) itemPayload.description = description;
-    if (image !== undefined) itemPayload.image = image;
+    if (finalImage !== undefined) itemPayload.image = finalImage;
     if (stock_uom !== undefined) itemPayload.stock_uom = stock_uom;
 
     const isDisable = status === "Disable" || status === "Disabled";
@@ -44,7 +54,7 @@ router.put("/items/:name", async (req: Request, res: Response) => {
     }
 
     const erpRes = await erpFetch(
-      getErpUrl(`/api/resource/Item/${encodeURIComponent(name)}`),
+      getErpUrl(`/api/resource/Item/${encodeURIComponent(itemCode)}`),
       {
         method: "PUT",
         headers: getErpHeaders(),
@@ -65,7 +75,7 @@ router.put("/items/:name", async (req: Request, res: Response) => {
         published: isPublished,
         ...(item_name ? { web_item_name: item_name } : {}),
         ...(description ? { description, short_description: description } : {}),
-        ...(image ? { website_image: image } : {}),
+        ...(finalImage ? { website_image: finalImage } : {}),
       };
 
       if (isInStock) {
@@ -169,6 +179,18 @@ router.put("/items/:name", async (req: Request, res: Response) => {
       } catch {
         /* non-fatal */
       }
+    }
+
+    // ── Write slideshow gallery images (non-fatal) ──
+    const imagesToSlideshow = Array.isArray(images)
+      ? images
+      : (image ? [image] : undefined);
+    if (imagesToSlideshow !== undefined) {
+      await ErpAdapter.upsertSlideshow({
+        itemCode: name,
+        webItemName: item_name,
+        images: imagesToSlideshow,
+      });
     }
 
     itemCache.clear();
