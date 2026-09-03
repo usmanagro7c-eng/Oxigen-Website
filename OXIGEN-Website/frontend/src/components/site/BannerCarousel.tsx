@@ -2,17 +2,47 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { heroBanners } from "@/lib/site-data";
+import { getBanners, getProductImage, type BannerItem } from "@/lib/api";
 
 export function BannerCarousel() {
   const [i, setI] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [liveBanners, setLiveBanners] = useState<BannerItem[]>([]);
   const touchStartX = useRef<number | null>(null);
-  const n = heroBanners.length;
 
+  useEffect(() => {
+    getBanners()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setLiveBanners(data.filter((b) => b.active !== false));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const banners = liveBanners.length > 0
+    ? liveBanners.map((b) => ({
+        id: b.id,
+        title: b.title,
+        sub: b.subtitle || "",
+        img: getProductImage(b.image),
+        href: b.link || "/shop",
+        cta: b.cta || "Shop Now",
+      }))
+    : heroBanners.map((b) => ({
+        id: b.id,
+        title: b.title,
+        sub: b.sub || "",
+        img: b.id === "nutri-cept" ? "/banners/banner-nutricept.jpg" : "/banners/banner-oxidop.jpg",
+        href: b.href || `/product/${b.id}`,
+        cta: b.cta || "Shop Now",
+      }));
+
+  const n = banners.length;
   const go = useCallback((d: number) => setI((p) => (p + d + n) % n), [n]);
 
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || n <= 1) return;
     const t = setInterval(() => setI((p) => (p + 1) % n), 6500);
     return () => clearInterval(t);
   }, [n, isPaused]);
@@ -50,63 +80,80 @@ export function BannerCarousel() {
             className="flex transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{ transform: `translateX(-${i * 100}%)` }}
           >
-            {heroBanners.map((b, idx) => {
-              const bannerSrc =
-                b.id === "nutri-cept"
-                  ? "/banners/banner-nutricept.jpg"
-                  : "/banners/banner-oxidop.jpg";
+            {banners.map((b, idx) => {
+              const isInternal = b.href.startsWith("/");
 
-              return (
-                <Link
-                  key={b.id || idx}
-                  to="/product/$slug"
-                  params={{ slug: b.id }}
-                  className="relative block w-full shrink-0 overflow-hidden"
-                  aria-label={b.title}
-                >
+              const innerContent = (
+                <>
                   <img
-                    src={bannerSrc}
+                    src={b.img}
                     alt={`${b.title} — ${b.sub}`}
                     loading={idx === 0 ? "eager" : "lazy"}
                     className="aspect-[4/3] w-full h-auto block object-cover object-center transition-transform duration-1000 ease-out group-hover:scale-[1.01] sm:aspect-[2.35/1]"
                   />
                   <span className="sr-only">{`${b.title} — ${b.sub}. ${b.cta}`}</span>
+                </>
+              );
+
+              return isInternal ? (
+                <Link
+                  key={b.id || idx}
+                  to={b.href as any}
+                  className="relative block w-full shrink-0 overflow-hidden"
+                  aria-label={b.title}
+                >
+                  {innerContent}
                 </Link>
+              ) : (
+                <a
+                  key={b.id || idx}
+                  href={b.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative block w-full shrink-0 overflow-hidden"
+                  aria-label={b.title}
+                >
+                  {innerContent}
+                </a>
               );
             })}
           </div>
 
           {/* Navigation Arrows */}
-          <button
-            onClick={() => go(-1)}
-            aria-label="Previous banner"
-            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full glass p-3 text-ink shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white active:scale-95 sm:left-5 sm:opacity-0 sm:group-hover:opacity-100"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => go(1)}
-            aria-label="Next banner"
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full glass p-3 text-ink shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white active:scale-95 sm:right-5 sm:opacity-0 sm:group-hover:opacity-100"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-
-          {/* Bottom Indicators */}
-          <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-2">
-            {heroBanners.map((b, idx) => (
+          {n > 1 && (
+            <>
               <button
-                key={b.id || idx}
-                onClick={() => setI(idx)}
-                aria-label={`Go to banner ${idx + 1}`}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  idx === i
-                    ? "w-9 bg-white shadow-md shadow-black/40"
-                    : "w-2.5 bg-white/60 hover:bg-white/90"
-                }`}
-              />
-            ))}
-          </div>
+                onClick={() => go(-1)}
+                aria-label="Previous banner"
+                className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full glass p-3 text-ink shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white active:scale-95 sm:left-5 sm:opacity-0 sm:group-hover:opacity-100"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => go(1)}
+                aria-label="Next banner"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full glass p-3 text-ink shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white active:scale-95 sm:right-5 sm:opacity-0 sm:group-hover:opacity-100"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+
+              {/* Bottom Indicators */}
+              <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-2">
+                {banners.map((b, idx) => (
+                  <button
+                    key={b.id || idx}
+                    onClick={() => setI(idx)}
+                    aria-label={`Go to banner ${idx + 1}`}
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      idx === i
+                        ? "w-9 bg-white shadow-md shadow-black/40"
+                        : "w-2.5 bg-white/60 hover:bg-white/90"
+                    }`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>
