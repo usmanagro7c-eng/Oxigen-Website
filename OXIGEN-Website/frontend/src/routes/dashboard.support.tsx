@@ -54,7 +54,7 @@ function SupportPage() {
           </label>
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary/25"
+            className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary/25"
           >
             <Plus className="h-4 w-4" /> Submit Ticket
           </button>
