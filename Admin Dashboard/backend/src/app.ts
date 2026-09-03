@@ -185,7 +185,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     req.path.startsWith("/api/auth/login") ||
     req.path.startsWith("/api/auth/signup") ||
     req.path.startsWith("/api/webhooks") ||
-    req.path.startsWith("/api/admin/notifications")
+    req.path.startsWith("/api/admin/notifications") ||
+    req.path.startsWith("/api/items/cache/clear")
   ) {
     next();
     return;
