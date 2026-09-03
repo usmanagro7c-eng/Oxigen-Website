@@ -93,13 +93,13 @@ function DashboardHome() {
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 to="/shop"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white/95 px-4 py-2 text-sm font-semibold text-primary shadow-lg shadow-black/10 transition hover:bg-white"
+                className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/95 px-4 py-2 text-sm font-semibold text-primary shadow-lg shadow-black/10 transition hover:bg-white"
               >
                 <ShoppingBag className="h-4 w-4" /> Continue shopping
               </Link>
               <Link
                 to="/dashboard/orders"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-inset ring-white/25 backdrop-blur transition hover:bg-white/25"
+                className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-inset ring-white/25 backdrop-blur transition hover:bg-white/25"
               >
                 View orders <ArrowRight className="h-4 w-4" />
               </Link>
@@ -142,7 +142,7 @@ function DashboardHome() {
           <SectionHeader
             title="Recent Orders"
             action={
-              <Link to="/dashboard/orders" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+              <Link to="/dashboard/orders" className="inline-flex items-center gap-1 rounded-lg py-2 text-sm font-semibold text-primary hover:underline">
                 View all <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             }
@@ -179,7 +179,7 @@ function DashboardHome() {
           <SectionHeader
             title="Notifications"
             action={
-              <Link to="/dashboard/notifications" className="text-sm font-semibold text-primary hover:underline">
+              <Link to="/dashboard/notifications" className="rounded-lg py-2 text-sm font-semibold text-primary hover:underline">
                 All
               </Link>
             }
@@ -220,7 +220,7 @@ function ProductStrip({ title, items }: { title: string; items: any[] }) {
       <SectionHeader
         title={title}
         action={
-          <Link to="/shop" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+          <Link to="/shop" className="inline-flex items-center gap-1 rounded-lg py-2 text-sm font-semibold text-primary hover:underline">
             Shop <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         }
