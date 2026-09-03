@@ -42,7 +42,7 @@ export function TrendingGrid() {
         </Link>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3">
         {catalog.map((p: any, idx: number) => {
           const price = p.standard_rate || 0;
           const was = p.valuation_rate || 0;
