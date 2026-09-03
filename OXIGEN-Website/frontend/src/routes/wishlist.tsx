@@ -55,7 +55,7 @@ function WishlistPage() {
                   <button
                     aria-label="Remove from wishlist"
                     onClick={() => toggleWishlist(p.slug)}
-                    className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full glass text-ink hover:text-destructive sm:right-5 sm:top-5"
+                    className="touch-target absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full glass text-ink hover:text-destructive sm:right-5 sm:top-5"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -79,14 +79,14 @@ function WishlistPage() {
                     {p.name}
                   </Link>
                   <p className="mt-1 line-clamp-1 text-sm font-medium text-primary">{p.subtitle}</p>
-                  <div className="mt-4 flex items-center justify-between gap-2 sm:mt-5">
-                    <span className="text-lg font-extrabold text-ink sm:text-lg">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 sm:mt-5">
+                    <span className="min-w-0 text-lg font-extrabold text-ink sm:text-lg">
                       {p.available ? formatPKR(p.price) : "Coming Soon"}
                     </span>
                     <button
                       onClick={() => addToCart(p.slug)}
                       aria-label={`Add ${p.name} to cart`}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white sm:px-4"
+                      className="touch-target inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-3 py-2.5 text-sm font-semibold text-white sm:px-4"
                     >
                       <span className="hidden sm:inline">Add </span>
                       <ShoppingCart className="h-4 w-4" />
