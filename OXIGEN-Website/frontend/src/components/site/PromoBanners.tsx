@@ -20,7 +20,7 @@ export function PromoBanners() {
         </div>
         <Link
           to="/shop"
-          className="rounded-xl glass px-4 py-2 text-xs font-bold text-primary transition-all hover:scale-105"
+          className="touch-target rounded-xl glass px-4 py-2 text-xs font-bold text-primary transition-all hover:scale-105"
         >
           View All Products →
         </Link>
@@ -81,7 +81,7 @@ export function PromoBanners() {
                       <Link
                         to="/product/$slug"
                         params={{ slug }}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105"
+                        className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-primary/20 transition-transform duration-300 hover:scale-105"
                       >
                         <ShoppingBag className="h-3.5 w-3.5" />
                         {b.cta}
