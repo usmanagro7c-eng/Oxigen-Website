@@ -78,6 +78,7 @@ function NewWizard() {
             stock_uom: "Nos",
             description: restForm.description || "",
             image: image || undefined,
+            images: image ? [image] : undefined,
             publish: true,
           };
           if (imageUrl) payload.imageUrl = imageUrl;
