@@ -531,27 +531,44 @@ export class ErpAdapter {
 
     // ── Fetch Website Slideshow images ──────────────────────────────
     let slideshow_images: string[] = [];
-    const slideshowName = item["website_slideshow"] as string | undefined;
+    const slideshowName = (item["slideshow"] || item["website_slideshow"]) as string | undefined;
     if (slideshowName) {
-      const slideshowParams = new URLSearchParams({
-        fields: JSON.stringify(["image"]),
-        filters: JSON.stringify([["parent", "=", slideshowName]]),
-        limit_page_length: "20",
-        order_by: "idx asc",
-      });
-      const slideshowRes = await erpFetch(
-        getErpUrl(`/api/resource/Website Slideshow Item?${slideshowParams}`),
+      const ssRes = await erpFetch(
+        getErpUrl(`/api/resource/Website Slideshow/${encodeURIComponent(slideshowName)}`),
         { headers: getErpHeaders() },
       ).catch(() => null);
 
-      if (slideshowRes?.ok) {
-        const slideshowData = (await slideshowRes.json()) as {
-          data: { image: string }[];
+      if (ssRes?.ok) {
+        const ssData = (await ssRes.json()) as {
+          data?: { slideshow_items?: { image?: string }[] };
         };
-        slideshow_images = slideshowData.data
+        slideshow_images = (ssData.data?.slideshow_items ?? [])
           .map((s) => s.image)
-          .filter(Boolean);
+          .filter((img): img is string => Boolean(img));
         logger.info({ slideshowName, imageCount: slideshow_images.length }, "[ErpAdapter] Slideshow loaded");
+      }
+    }
+
+    // Fallback: If no slideshow images found from Website Slideshow, check File attachments
+    if (slideshow_images.length === 0) {
+      const candidateNames = [name, item["name"] as string, itemCode].filter(Boolean) as string[];
+      if (candidateNames.length > 0) {
+        const fileParams = new URLSearchParams({
+          fields: JSON.stringify(["file_url"]),
+          filters: JSON.stringify([["attached_to_name", "in", candidateNames]]),
+          limit_page_length: "20",
+          order_by: "creation asc",
+        });
+        const fileRes = await erpFetch(
+          getErpUrl(`/api/resource/File?${fileParams}`),
+          { headers: getErpHeaders() },
+        ).catch(() => null);
+        if (fileRes?.ok) {
+          const fileData = (await fileRes.json()) as { data?: { file_url?: string }[] };
+          slideshow_images = (fileData.data ?? [])
+            .map((f) => f.file_url)
+            .filter((url): url is string => Boolean(url));
+        }
       }
     }
     // ────────────────────────────────────────────────────────────────────
