@@ -229,6 +229,8 @@ function ProductStrip({ title, items }: { title: string; items: any[] }) {
         {items.map((p) => {
           const slug = p.route?.split("/").pop() || slugify(p.item_name);
           const price = p.standard_rate || 0;
+          const was = p.valuation_rate || 0;
+          const off = was > price ? Math.round(((was - price) / was) * 100) : 0;
           const available = p.custom_stock_qty !== 0;
           const img = getProductImage(p.image);
 
@@ -239,13 +241,27 @@ function ProductStrip({ title, items }: { title: string; items: any[] }) {
               params={{ slug }}
               className="group rounded-xl border border-border/60 bg-white/60 p-3 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
             >
-              <div className="mb-2 aspect-square overflow-hidden rounded-lg bg-secondary">
+              <div className="relative mb-2 aspect-square overflow-hidden rounded-lg bg-secondary">
                 <img src={img} alt={p.item_name} loading="lazy" className="h-full w-full object-contain p-2 transition-transform duration-500 group-hover:scale-105" />
+                {off > 0 && (
+                  <span className="absolute right-1.5 top-1.5 rounded bg-gradient-to-r from-primary to-accent px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                    {off}% OFF
+                  </span>
+                )}
               </div>
               <p className="line-clamp-2 text-xs font-semibold text-ink">{p.item_name}</p>
-              <p className="mt-1 text-sm font-extrabold text-primary">
-                {available ? formatPKR(price) : "Soon"}
-              </p>
+              {available ? (
+                <p className="mt-1 flex items-baseline gap-1.5 text-sm font-extrabold text-primary">
+                  {formatPKR(price)}
+                  {was > price && (
+                    <span className="text-xs font-normal text-muted-foreground line-through">
+                      {formatPKR(was)}
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm font-extrabold text-primary">Soon</p>
+              )}
             </Link>
           );
         })}
