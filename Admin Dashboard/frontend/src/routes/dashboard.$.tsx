@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRight, Search, SlidersHorizontal, Download, Plus, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, ChevronLeft, Sparkles, RefreshCw,
-  Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus,
+  Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus, ArrowUp, ArrowDown, ExternalLink, Link as LinkIcon,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -24,6 +24,7 @@ import {
   getAdminDiscounts, createAdminDiscount, updateAdminDiscount, deleteAdminDiscount,
   getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser,
   getAdminFiles, uploadAdminFile, deleteAdminFile,
+  getAdminBanners, createAdminBanner, updateAdminBanner, updateAdminBannersBatch, deleteAdminBanner, type BannerItem,
   getErpResource, createErpDoc, updateErpDoc, deleteErpDoc,
   getDashboardStats, getItemImageUrl, type DashboardStats, type ItemGroup,
 } from "@/lib/api";
@@ -261,6 +262,7 @@ function DashboardCatchAll() {
   const item = findItem(slug);
 
   if (slug === "analytics") return <AnalyticsPage />;
+  if (slug === "banners")   return <BannersManagerPage />;
   if (slug === "media")     return <MediaLibraryPage />;
 
   const meta = MODULE_META[slug] ?? {
@@ -2372,6 +2374,547 @@ function MediaLibraryPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * Website Banners Manager
+ * ============================================================ */
+function BannersManagerPage() {
+  const item = findItem("banners") || { label: "Website Banners", icon: LayoutTemplate };
+  const [banners, setBanners] = useState<BannerItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingBanner, setEditingBanner] = useState<BannerItem | null>(null);
+  const [form, setForm] = useState<{ title: string; subtitle: string; image: string; link: string; cta: string; active: boolean }>({
+    title: "",
+    subtitle: "",
+    image: "",
+    link: "/shop",
+    cta: "Shop Now",
+    active: true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [mediaFiles, setMediaFiles] = useState<any[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const loadBanners = () => {
+    setLoading(true);
+    getAdminBanners()
+      .then((res) => {
+        const list = (res.data || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        setBanners(list);
+      })
+      .catch(() => pushToast("error", "Failed to load banners"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadBanners();
+  }, []);
+
+  const openCreateModal = () => {
+    setEditingBanner(null);
+    setForm({
+      title: "",
+      subtitle: "",
+      image: "",
+      link: "/shop",
+      cta: "Shop Now",
+      active: true,
+    });
+    setModalOpen(true);
+  };
+
+  const openEditModal = (b: BannerItem) => {
+    setEditingBanner(b);
+    setForm({
+      title: b.title || "",
+      subtitle: b.subtitle || "",
+      image: b.image || "",
+      link: b.link || "/shop",
+      cta: b.cta || "Shop Now",
+      active: b.active !== false,
+    });
+    setModalOpen(true);
+  };
+
+  const openMediaLibrary = async () => {
+    setMediaOpen(true);
+    setMediaLoading(true);
+    try {
+      const res = await getAdminFiles();
+      setMediaFiles((res.data || []).filter((f) => f.file_url));
+    } catch {
+      setMediaFiles([]);
+    } finally {
+      setMediaLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const res = await uploadAdminFile(file);
+      setForm((prev) => ({ ...prev, image: res.data.file_url }));
+      pushToast("success", "Banner image uploaded");
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to upload image");
+    } finally {
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
+  };
+
+  const handleSaveBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.image) {
+      pushToast("error", "Banner image is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editingBanner) {
+        await updateAdminBanner(editingBanner.id, form);
+        pushToast("success", "Banner updated");
+      } else {
+        await createAdminBanner(form);
+        pushToast("success", "Banner created");
+      }
+      setModalOpen(false);
+      loadBanners();
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to save banner");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteBanner = async (b: BannerItem) => {
+    if (!window.confirm(`Delete banner "${b.title || b.id}"?`)) return;
+    try {
+      await deleteAdminBanner(b.id);
+      pushToast("success", "Banner deleted");
+      loadBanners();
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to delete banner");
+    }
+  };
+
+  const handleMove = async (idx: number, dir: -1 | 1) => {
+    const targetIdx = idx + dir;
+    if (targetIdx < 0 || targetIdx >= banners.length) return;
+    const reordered = [...banners];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    const updated = reordered.map((item, i) => ({ ...item, order: i + 1 }));
+    setBanners(updated);
+    try {
+      await updateAdminBannersBatch(updated);
+      pushToast("success", "Banner order updated");
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to reorder banners");
+      loadBanners();
+    }
+  };
+
+  const handleToggleActive = async (b: BannerItem) => {
+    try {
+      const nextActive = !b.active;
+      await updateAdminBanner(b.id, { active: nextActive });
+      setBanners((prev) => prev.map((item) => item.id === b.id ? { ...item, active: nextActive } : item));
+      pushToast("success", nextActive ? "Banner activated" : "Banner paused");
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to update banner status");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <ToastHost />
+      <Breadcrumb label="Website Banners" />
+      <PageHeader
+        icon={item.icon}
+        title="Website Banners"
+        subtitle="Manage rotating banners and promotions displayed on the website homepage."
+        primaryAction="Add Banner"
+        onPrimary={openCreateModal}
+        onRefresh={loadBanners}
+        loading={loading}
+      />
+
+      <StatsRow
+        stats={[
+          { label: "Total Banners", value: String(banners.length) },
+          { label: "Active", value: String(banners.filter((b) => b.active !== false).length) },
+          { label: "Placement", value: "Hero Carousel" },
+          { label: "Auto Scroll", value: "6.5s" },
+        ]}
+      />
+
+      {loading ? (
+        <div className="py-16 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+          <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+          <span>Loading website banners...</span>
+        </div>
+      ) : banners.length === 0 ? (
+        <EmptyState
+          title="No banners created yet"
+          desc="Add hero banners to showcase products and seasonal campaigns on the homepage."
+          action="Create First Banner"
+          onAction={openCreateModal}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {banners.map((b, idx) => (
+            <motion.div
+              key={b.id || idx}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.04 }}
+              className={cn(
+                "group relative overflow-hidden rounded-2xl border glass transition-all hover:border-primary/40",
+                b.active ? "border-white/10" : "border-white/5 opacity-60 bg-black/20"
+              )}
+            >
+              {/* Banner Preview Frame */}
+              <div className="relative aspect-[2.35/1] w-full overflow-hidden bg-black/40">
+                <img
+                  src={b.image ? (b.image.startsWith("http") || b.image.startsWith("/banners/") ? b.image : getItemImageUrl(b.image)) : "/placeholder.png"}
+                  alt={b.title}
+                  className="h-full w-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+                {/* Badges */}
+                <div className="absolute left-3 top-3 flex items-center gap-1.5">
+                  <span className="rounded-lg bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur border border-white/10">
+                    #{idx + 1}
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider backdrop-blur",
+                      b.active
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                        : "bg-zinc-500/20 text-zinc-400 border border-zinc-500/30"
+                    )}
+                  >
+                    {b.active ? "Active" : "Disabled"}
+                  </span>
+                </div>
+
+                {/* Reorder Buttons */}
+                <div className="absolute right-3 top-3 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleMove(idx, -1)}
+                    disabled={idx === 0}
+                    className="grid h-7 w-7 place-items-center rounded-lg bg-black/60 text-white backdrop-blur transition hover:bg-black/80 disabled:opacity-30"
+                    aria-label="Move Up"
+                    title="Move earlier in slideshow"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMove(idx, 1)}
+                    disabled={idx === banners.length - 1}
+                    className="grid h-7 w-7 place-items-center rounded-lg bg-black/60 text-white backdrop-blur transition hover:bg-black/80 disabled:opacity-30"
+                    aria-label="Move Down"
+                    title="Move later in slideshow"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {/* Banner Content Overlay */}
+                <div className="absolute inset-x-3 bottom-3 text-white">
+                  <h3 className="font-display text-base font-bold truncate leading-tight">{b.title}</h3>
+                  {b.subtitle && <p className="text-xs text-white/80 truncate mt-0.5">{b.subtitle}</p>}
+                </div>
+              </div>
+
+              {/* Card Footer Info & Controls */}
+              <div className="flex items-center justify-between p-3.5 bg-card/40 border-t border-white/5 text-xs">
+                <div className="flex items-center gap-2 truncate max-w-[55%] text-muted-foreground">
+                  <LinkIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className="truncate font-mono text-[11px]">{b.link || "/shop"}</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(b)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition",
+                      b.active
+                        ? "bg-secondary text-muted-foreground hover:text-foreground"
+                        : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                    )}
+                  >
+                    {b.active ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(b)}
+                    className="grid h-8 w-8 place-items-center rounded-lg bg-white/[0.04] hover:bg-white/10 text-foreground transition"
+                    title="Edit Banner"
+                    aria-label="Edit"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBanner(b)}
+                    className="grid h-8 w-8 place-items-center rounded-lg bg-white/[0.04] hover:bg-rose-500/20 text-muted-foreground hover:text-rose-400 transition"
+                    title="Delete Banner"
+                    aria-label="Delete"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Banner Create / Edit Modal */}
+      <AnimatePresence>
+        {modalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setModalOpen(false)}
+              className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 pointer-events-none"
+            >
+              <div className="pointer-events-auto w-full max-w-lg glass-strong border border-border rounded-t-2xl sm:rounded-2xl shadow-elegant overflow-hidden bg-card text-foreground max-h-[92vh] flex flex-col">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
+                      {editingBanner ? "Edit Banner" : "New Banner"}
+                    </div>
+                    <div className="font-display text-lg font-bold mt-0.5 text-foreground">
+                      {editingBanner ? editingBanner.title || "Edit Website Banner" : "Create Website Banner"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setModalOpen(false)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveBanner} className="p-5 space-y-4 overflow-y-auto flex-1">
+                  {/* Banner Image Preview / Selector */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Banner Image (1920x840 or 2.35:1 Recommended)
+                    </label>
+                    {form.image ? (
+                      <div className="relative aspect-[2.35/1] w-full rounded-xl overflow-hidden border border-border bg-black/30 group">
+                        <img src={form.image.startsWith("http") || form.image.startsWith("/banners/") ? form.image : getItemImageUrl(form.image)} alt="Banner Preview" className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setForm((prev) => ({ ...prev, image: "" }))}
+                          className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/70 text-white backdrop-blur transition hover:bg-rose-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-secondary/20 px-4 py-6 text-center transition hover:border-primary/60 hover:bg-secondary/40">
+                          <ImagePlus className="h-6 w-6 text-primary transition group-hover:scale-110" />
+                          <span className="text-sm font-semibold text-foreground">Upload Banner Image</span>
+                          <span className="text-xs text-muted-foreground">PNG, JPG, WebP (high resolution recommended)</span>
+                          <input ref={uploadInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={openMediaLibrary}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white/[0.03] px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+                        >
+                          <ImagePlus className="h-4 w-4" /> Pick from Media Library
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Title */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">Banner Title / Heading</label>
+                    <input
+                      type="text"
+                      value={form.title}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      placeholder="e.g. Nutri-Cept® Women's Wellness"
+                      required
+                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                    />
+                  </div>
+
+                  {/* Subtitle */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">Subtitle / Tagline</label>
+                    <input
+                      type="text"
+                      value={form.subtitle}
+                      onChange={(e) => setForm({ ...form, subtitle: e.target.value })}
+                      placeholder="e.g. Complete Hormonal Balance, PCOS Support & Ovulation Health"
+                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                    />
+                  </div>
+
+                  {/* Destination Link */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">Target Link / URL</label>
+                    <input
+                      type="text"
+                      value={form.link}
+                      onChange={(e) => setForm({ ...form, link: e.target.value })}
+                      placeholder="e.g. /product/nutri-cept or /shop"
+                      required
+                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm font-mono"
+                    />
+                  </div>
+
+                  {/* CTA Text */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">Button Text (CTA)</label>
+                    <input
+                      type="text"
+                      value={form.cta}
+                      onChange={(e) => setForm({ ...form, cta: e.target.value })}
+                      placeholder="e.g. Shop Now"
+                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                    />
+                  </div>
+
+                  {/* Active Switch */}
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <div>
+                      <span className="text-sm font-semibold">Active Status</span>
+                      <p className="text-xs text-muted-foreground">Show this banner in the live website carousel</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, active: !form.active })}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                        form.active ? "bg-primary" : "bg-muted"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+                          form.active ? "translate-x-5" : "translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setModalOpen(false)}
+                      className="h-10 px-4 rounded-xl text-sm text-muted-foreground hover:text-foreground transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving || !form.image}
+                      className="inline-flex items-center gap-1.5 h-10 px-5 rounded-xl bg-primary-gradient text-primary-foreground text-sm font-medium shadow-glow disabled:opacity-50"
+                    >
+                      {saving ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" /> Saving…
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4" /> Save Banner
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Media Library Selector Modal */}
+      <AnimatePresence>
+        {mediaOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMediaOpen(false)}
+              className="fixed inset-0 z-[60] bg-ink/50 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="pointer-events-auto w-full max-w-2xl glass-strong border border-border rounded-2xl shadow-elegant overflow-hidden bg-card text-foreground max-h-[80vh] flex flex-col">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+                  <div className="font-display text-base font-bold">Select Banner Image</div>
+                  <button
+                    onClick={() => setMediaOpen(false)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="p-5 overflow-y-auto flex-1">
+                  {mediaLoading ? (
+                    <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+                      <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+                      <span>Loading media assets...</span>
+                    </div>
+                  ) : mediaFiles.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-muted-foreground">No media images found.</div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {mediaFiles.map((f, i) => (
+                        <button
+                          key={f.name || f.file_url || i}
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, image: f.file_url }));
+                            setMediaOpen(false);
+                          }}
+                          className="group relative aspect-video rounded-xl overflow-hidden border border-border bg-secondary/30 transition hover:border-primary hover:scale-[1.02]"
+                        >
+                          <img src={getItemImageUrl(f.file_url)} alt={f.file_name} className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
