@@ -3,7 +3,7 @@ import {
   ShoppingCart, Package, Tags, Boxes, BadgePercent,
   Truck,
   Users,
-  BarChart3, Bell, Image as ImageIcon,
+  BarChart3, Bell, Image as ImageIcon, LayoutTemplate,
   Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -47,6 +47,7 @@ export const NAV: NavGroup[] = [
   {
     title: "Content",
     items: [
+      { slug: "banners", label: "Website Banners", icon: LayoutTemplate },
       { slug: "media", label: "Media Library", icon: ImageIcon },
     ],
   },
