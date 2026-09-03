@@ -92,7 +92,7 @@ function AddressesPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-border/70 pt-3">
                   {!a.isDefault && (
-                    <button onClick={() => setDefault(a.id)} className="inline-flex items-center gap-1 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-white">
+                    <button onClick={() => setDefault(a.id)} className="touch-target inline-flex items-center gap-1 rounded-lg bg-white/70 px-4 py-2 text-xs font-semibold text-ink hover:bg-white">
                       <Star className="h-3.5 w-3.5" /> Set Default
                     </button>
                   )}
@@ -101,11 +101,11 @@ function AddressesPage() {
                       setEditingAddress(a);
                       setOpen(true);
                     }}
-                    className="inline-flex items-center gap-1 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-white"
+                    className="touch-target inline-flex items-center gap-1 rounded-lg bg-white/70 px-4 py-2 text-xs font-semibold text-ink hover:bg-white"
                   >
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </button>
-                  <button onClick={() => remove(a.id)} className="inline-flex items-center gap-1 rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20">
+                  <button onClick={() => remove(a.id)} className="touch-target inline-flex items-center gap-1 rounded-lg bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive hover:bg-destructive/20">
                     <Trash2 className="h-3.5 w-3.5" /> Delete
                   </button>
                 </div>
@@ -145,7 +145,7 @@ function AddressModal({
           <h3 className="font-display text-lg font-extrabold text-ink">
             {address ? "Edit Address" : "Add Address"}
           </h3>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full bg-white/70 text-ink" aria-label="Close">
+          <button onClick={onClose} className="touch-target grid h-10 w-10 place-items-center rounded-full bg-white/70 text-ink" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -174,7 +174,7 @@ function AddressModal({
             <Field name="province" label="Province" defaultValue={address?.province} required />
           </div>
           <Field name="postal" label="Postal Code" defaultValue={address?.postal} />
-          <button type="submit" className="mt-2 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-white">
+          <button type="submit" className="touch-target mt-2 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-white">
             Save Address
           </button>
         </form>
