@@ -5,7 +5,7 @@ import { brand, nav, categories } from "@/lib/site-data";
 
 export function Footer() {
   return (
-    <footer className="relative mt-8 overflow-hidden px-3 pb-5 sm:px-5">
+    <footer className="relative mt-8 overflow-hidden px-3 pb-5 safe-pl safe-pr sm:px-5">
       <div className="mx-auto max-w-6xl rounded-3xl glass p-6 sm:p-8">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand & Socials */}
@@ -26,7 +26,7 @@ export function Footer() {
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Facebook"
-                className="grid h-8 w-8 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
+                className="touch-target grid h-10 w-10 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
               >
                 <Facebook className="h-3.5 w-3.5" />
               </a>
@@ -35,21 +35,21 @@ export function Footer() {
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Instagram"
-                className="grid h-8 w-8 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
+                className="touch-target grid h-10 w-10 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
               >
                 <Instagram className="h-3.5 w-3.5" />
               </a>
               <a
                 href={`mailto:${brand.email}`}
                 aria-label="Email"
-                className="grid h-8 w-8 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
+                className="touch-target grid h-10 w-10 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
               >
                 <Mail className="h-3.5 w-3.5" />
               </a>
               <a
                 href={brand.phoneHref}
                 aria-label="Phone"
-                className="grid h-8 w-8 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
+                className="touch-target grid h-10 w-10 place-items-center rounded-lg bg-white/50 text-muted-foreground transition-all hover:bg-white hover:text-primary hover:scale-105"
               >
                 <Phone className="h-3.5 w-3.5" />
               </a>
@@ -132,16 +132,16 @@ export function Footer() {
             <p className="mt-3 text-xs text-muted-foreground">
               Get wellness tips and exclusive seasonal offers.
             </p>
-            <form className="mt-3 flex gap-1.5" onSubmit={(e) => e.preventDefault()}>
+            <form className="mt-3 flex flex-col gap-1.5 sm:flex-row" onSubmit={(e) => e.preventDefault()}>
               <input
                 type="email"
                 required
                 placeholder="Your email"
-                className="w-full rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-xs outline-none backdrop-blur focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                className="w-full min-h-[44px] rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-xs outline-none backdrop-blur focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
               />
               <button
                 type="submit"
-                className="rounded-xl bg-gradient-to-r from-primary to-accent px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-transform hover:scale-105 active:scale-95"
+                className="touch-target rounded-xl bg-gradient-to-r from-primary to-accent px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-transform hover:scale-105 active:scale-95 sm:shrink-0"
               >
                 Join
               </button>
