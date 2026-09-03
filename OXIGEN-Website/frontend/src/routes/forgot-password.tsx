@@ -49,7 +49,7 @@ function ForgotPasswordPage() {
               </p>
               <Link
                 to="/signin"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white shadow-lg"
+                className="touch-target inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white shadow-lg"
               >
                 <ArrowLeft className="h-4 w-4" /> Back to Sign In
               </Link>
@@ -74,7 +74,7 @@ function ForgotPasswordPage() {
               </div>
               <button
                 type="submit"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg"
+                className="touch-target inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg"
               >
                 <Send className="h-4 w-4" /> Send Reset Link
               </button>
