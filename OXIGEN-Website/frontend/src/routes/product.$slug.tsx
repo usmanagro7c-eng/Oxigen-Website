@@ -14,6 +14,10 @@ import {
   Flame,
   Clock,
   Star,
+  ChevronLeft,
+  ChevronRight,
+  Pause,
+  Play,
 } from "lucide-react";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { Reveal } from "@/components/site/Reveal";
@@ -120,24 +124,45 @@ function StockTimer({ slug }: { slug: string }) {
   );
 }
 
+function stripHtml(html?: string | null): string {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]*>?/gm, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+}
+
 export const Route = createFileRoute("/product/$slug")({
   loader: async ({ params }) => {
-    // Try the static catalog first
     const catalogProduct = getProduct(params.slug);
-    if (catalogProduct) return { product: catalogProduct, fromAPI: false };
 
-    // Fallback: fetch from the ERP API and resolve by route
+    // 1. Fetch from the ERP API and resolve by route, code, or name
     try {
-      const res = await fetch(
-        `${API_BASE}/items`,
-      );
+      const res = await fetch(`${API_BASE}/items`);
       if (res.ok) {
         const json = await res.json();
-        const apiItems = json.data || [];
-        const match = apiItems.find(
-          (i: Record<string, unknown>) =>
-            (i.route as string)?.split("/").pop() === params.slug,
-        );
+        const apiItems = (json.data || []) as Record<string, unknown>[];
+        const match = apiItems.find((i: Record<string, unknown>) => {
+          const itemRoute = (i.route as string)?.split("/").pop() || "";
+          const itemCode = (i.item_code as string) || "";
+          const itemName = (i.item_name || i.web_item_name || "") as string;
+          const slugifiedName = slugify(itemName);
+          const slugifiedCode = slugify(itemCode);
+
+          return (
+            itemRoute === params.slug ||
+            slugifiedName === params.slug ||
+            slugifiedCode === params.slug ||
+            (params.slug.includes("nutri-cept") && (itemCode.toLowerCase().includes("nutri-cept") || (i.name as string)?.includes("0002"))) ||
+            (params.slug.includes("oxidop") && (itemCode.toLowerCase().includes("oxidop") || (i.name as string)?.includes("0001")))
+          );
+        });
+
         if (match) {
           const itemRes = await fetch(
             `${API_BASE}/items/${encodeURIComponent(match["name"] as string)}`,
@@ -147,21 +172,34 @@ export const Route = createFileRoute("/product/$slug")({
             const detail = itemJson.data;
             const availableQty =
               typeof detail?.custom_stock_qty === "number" ? detail.custom_stock_qty : null;
+            const mainImg = detail?.image ? getProductImage(detail.image) : (catalogProduct?.img || "/placeholder.png");
+            const rawSlideshow = ((detail?.slideshow_images as string[]) || []).map((i: string) =>
+              getProductImage(i),
+            );
+
+            // Only show slideshow if this product explicitly has slideshow images configured in ERPNext.
+            // If the product has no slideshow in ERPNext, gallery is strictly [mainImg] (no slideshow shown).
+            const finalGallery = rawSlideshow.length > 0
+              ? Array.from(new Set([mainImg, ...rawSlideshow])).filter(Boolean) as string[]
+              : [mainImg];
+
+            const rawSubtitle = (detail?.short_description as string) || catalogProduct?.subtitle || "";
+            const cleanSubtitle = stripHtml(rawSubtitle);
+            const rawDesc = (detail?.description as string) || (detail?.web_long_description as string) || catalogProduct?.desc || "";
+
             // Normalize API product to CatalogItem shape
             const normalized = {
-              slug: (detail?.route as string)?.split("/").pop() ?? slugify(detail?.item_name || ""),
-              name: detail?.web_item_name || detail?.item_name,
-              subtitle: (detail?.short_description as string) || "",
-              desc: (detail?.description as string) || "",
-              price: detail?.standard_rate || 0,
-              was: detail?.valuation_rate || 0,
-              tag: (detail?.item_group as string) || "",
-              img: getProductImage(detail?.image),
-              gallery: ((detail?.slideshow_images as string[]) || []).map((i: string) =>
-                getProductImage(i),
-              ),
-              highlights: [],
-              ingredients: (detail?.web_long_description as string) || "",
+              slug: params.slug,
+              name: stripHtml(detail?.web_item_name || detail?.item_name || catalogProduct?.name),
+              subtitle: cleanSubtitle,
+              desc: rawDesc,
+              price: detail?.standard_rate || catalogProduct?.price || 0,
+              was: detail?.valuation_rate || catalogProduct?.was || 0,
+              tag: (detail?.item_group as string) || catalogProduct?.tag || "",
+              img: mainImg,
+              gallery: finalGallery,
+              highlights: catalogProduct?.highlights ?? [],
+              ingredients: (detail?.web_long_description as string) || catalogProduct?.ingredients || "",
               stockQty: availableQty,
               available: availableQty === null ? true : availableQty > 0,
             };
@@ -170,7 +208,11 @@ export const Route = createFileRoute("/product/$slug")({
         }
       }
     } catch {
-      // ignore — fall through to not-found
+      // ignore — fall through to catalog fallback
+    }
+
+    if (catalogProduct) {
+      return { product: catalogProduct, fromAPI: false };
     }
 
     throw notFound();
@@ -244,6 +286,7 @@ function ProductPage() {
   const navigate = useNavigate();
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
+  const [paused, setPaused] = useState(false);
 
   const saved = inWishlist(product.slug);
   // "You may also like" — pull from Frappe Website Items via API first;
@@ -254,6 +297,14 @@ function ProductPage() {
   const gallery = product.gallery?.length ? product.gallery : [product.img];
   const reviews = getProductReviews(product.slug);
   const { total: reviewCount, avg: avgRating } = getReviewStats(reviews);
+
+  useEffect(() => {
+    if (gallery.length < 2 || paused) return;
+    const id = setInterval(() => setActiveImg((i) => (i + 1) % gallery.length), 4000);
+    return () => clearInterval(id);
+  }, [gallery.length, paused]);
+
+  const goTo = (i: number) => setActiveImg(((i % gallery.length) + gallery.length) % gallery.length);
 
   const buyNow = () => {
     if (!product.available) return;
@@ -275,15 +326,57 @@ function ProductPage() {
         <div className="mt-6 grid gap-10 lg:grid-cols-2">
           <Reveal>
             <div>
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-secondary via-white to-secondary p-8">
-                <span className="absolute left-6 top-6 rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-semibold text-white shadow">
+              <div
+                className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-secondary via-white to-secondary p-8"
+                onMouseEnter={() => setPaused(true)}
+                onMouseLeave={() => setPaused(false)}
+              >
+                <span className="absolute left-6 top-6 z-20 rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-semibold text-white shadow">
                   {product.tag}
                 </span>
-                <img
-                  src={gallery[activeImg]}
-                  alt={product.name}
-                  className="mx-auto aspect-square w-full max-w-md object-contain"
-                />
+
+                {/* Crossfading images */}
+                <div className="relative aspect-square w-full max-w-md mx-auto">
+                  {gallery.map((src: string, i: number) => (
+                    <img
+                      key={src + i}
+                      src={src}
+                      alt={`${product.name} ${i + 1}`}
+                      loading={i === 0 ? "eager" : "lazy"}
+                      className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-700 ${activeImg === i ? "opacity-100" : "opacity-0"}`}
+                    />
+                  ))}
+                </div>
+
+                {/* Arrows + counter */}
+                {gallery.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => goTo(activeImg - 1)}
+                      aria-label="Previous image"
+                      className="absolute left-3 top-1/2 z-20 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/80 text-ink shadow-md backdrop-blur transition hover:bg-white hover:scale-105 touch-target"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => goTo(activeImg + 1)}
+                      aria-label="Next image"
+                      className="absolute right-3 top-1/2 z-20 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/80 text-ink shadow-md backdrop-blur transition hover:bg-white hover:scale-105 touch-target"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => setPaused((p) => !p)}
+                      aria-label={paused ? "Play slideshow" : "Pause slideshow"}
+                      className="absolute bottom-3 left-1/2 z-20 grid h-9 w-9 -translate-x-1/2 place-items-center rounded-full bg-white/80 text-ink shadow-md backdrop-blur transition hover:bg-white"
+                    >
+                      {paused ? <Play className="h-4 w-4 translate-x-[1px]" /> : <Pause className="h-4 w-4" />}
+                    </button>
+                    <span className="absolute right-3 bottom-3 z-20 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
+                      {activeImg + 1} / {gallery.length}
+                    </span>
+                  </>
+                )}
               </div>
               {gallery.length > 1 && (
                 <div className="mt-4 grid grid-cols-4 gap-3">
