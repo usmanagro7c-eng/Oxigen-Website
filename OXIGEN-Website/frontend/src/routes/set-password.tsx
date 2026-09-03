@@ -102,7 +102,7 @@ function SetPasswordPage() {
             <Link
               to="/signin"
               search={{ registered: undefined as string | undefined }}
-              className="mt-4 inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-white"
+              className="touch-target mt-4 inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-white"
             >
               Sign In Now
             </Link>
@@ -175,7 +175,7 @@ function SetPasswordPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg disabled:opacity-50"
+              className="touch-target inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3.5 text-sm font-semibold text-white shadow-lg disabled:opacity-50"
             >
               {submitting ? "Setting Password..." : "Set Password"}
             </button>
