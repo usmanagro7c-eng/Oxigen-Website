@@ -208,10 +208,29 @@ app.get(["/files/*", "/private/files/*", "/api/files/*", "/api/private/files/*"]
       targetPath = targetPath.replace("/api/private/files/", "/private/files/");
     }
 
-    const erpUrl = getErpUrl(targetPath);
-    const erpRes = await erpFetch(erpUrl, {
+    let erpUrl = getErpUrl(targetPath);
+    let erpRes = await erpFetch(erpUrl, {
       headers: getErpHeaders(),
     });
+
+    // Fallback: If 403 / 404 and targetPath was /private/files/, try public /files/ (or vice-versa)
+    if (!erpRes.ok && targetPath.includes("/private/files/")) {
+      const fallbackPath = targetPath.replace("/private/files/", "/files/");
+      const fallbackRes = await erpFetch(getErpUrl(fallbackPath), {
+        headers: getErpHeaders(),
+      });
+      if (fallbackRes.ok) {
+        erpRes = fallbackRes;
+      }
+    } else if (!erpRes.ok && targetPath.includes("/files/")) {
+      const fallbackPath = targetPath.replace("/files/", "/private/files/");
+      const fallbackRes = await erpFetch(getErpUrl(fallbackPath), {
+        headers: getErpHeaders(),
+      });
+      if (fallbackRes.ok) {
+        erpRes = fallbackRes;
+      }
+    }
 
     if (!erpRes.ok) {
       res.status(erpRes.status).send("File not found in ERPNext.");
