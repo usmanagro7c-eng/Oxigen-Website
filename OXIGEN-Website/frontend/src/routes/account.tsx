@@ -86,9 +86,9 @@ function AccountPage() {
                     </div>
                     <div className="mt-3 space-y-1 text-sm text-muted-foreground">
                       {(o.items || []).map((it) => (
-                        <div key={it.slug} className="flex justify-between">
-                          <span>{it.name} × {it.qty}</span>
-                          <span>{formatPKR(it.price * it.qty)}</span>
+                        <div key={it.slug || it.name} className="flex justify-between">
+                          <span>{it.name} × {it.qty ?? 1}</span>
+                          <span>{formatPKR((it.price ?? 0) * (it.qty ?? 1))}</span>
                         </div>
                       ))}
                     </div>
