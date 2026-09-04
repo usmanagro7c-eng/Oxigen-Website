@@ -72,14 +72,22 @@ export function BannerCarousel() {
   };
 
   const banners = hasApiBanners
-    ? apiBanners.map((b) => ({
-        key: b.id,
-        image: getProductImage(b.image),
-        title: b.title,
-        href: b.products?.[0]?.route
-          ? `/product/${b.products[0].route.replace(/^\/product\//, "")}`
-          : "/shop",
-      }))
+    ? apiBanners.map((b) => {
+        const prodCount = b.products?.length || 0;
+        let href = "/shop";
+        if (prodCount === 1 && b.products?.[0]?.route) {
+          const slug = (b.products[0].route.split("/").pop() || "").replace(/^\/product\//, "");
+          href = `/product/${slug}`;
+        } else if (prodCount >= 2) {
+          href = `/offers/${b.id}`;
+        }
+        return {
+          key: b.id,
+          image: getProductImage(b.image),
+          title: b.title,
+          href,
+        };
+      })
     : heroBanners.map((b) => ({
         key: b.id,
         image: b.id === "nutri-cept" ? "/banners/banner-nutricept.jpg" : "/banners/banner-oxidop.jpg",
