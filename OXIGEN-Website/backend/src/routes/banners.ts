@@ -5,6 +5,50 @@ import { erpFetch, getErpUrl, getErpHeaders } from "../lib/erpnext-client.js";
 
 const router: IRouter = Router();
 
+// Fetch a Website Item by name OR item_code. Falls back to a filter search so
+// banners linked by item_code (e.g. "Nutri-Cept — Women's Wellness") still resolve.
+// Direct doctype lookups allow virtual/child fields (image, standard_rate),
+// but those can NOT be requested in a list query. So the fallback search only
+// requests real columns, then re-fetches the full doc by its `name`.
+async function fetchWebsiteItem(query: string, fields: string): Promise<any> {
+  // 1) Try direct lookup by document name (full fields incl. image, standard_rate)
+  const directRes = await erpFetch(
+    getErpUrl(`/api/resource/Website Item/${encodeURIComponent(query)}?${fields}`),
+    { headers: getErpHeaders() }
+  ).catch(() => null);
+  if (directRes?.ok) {
+    const json: any = await directRes.json().catch(() => null);
+    if (json?.data) return json.data;
+  }
+
+  // 2) Fallback: locate the doc by item_code using only real columns
+  const searchFields = encodeURIComponent(
+    JSON.stringify(["name", "item_name", "item_code", "route"])
+  );
+  const filters = encodeURIComponent(JSON.stringify([["item_code", "=", query]]));
+  const searchRes = await erpFetch(
+    getErpUrl(`/api/resource/Website Item?filters=${filters}&fields=${searchFields}&limit_page_length=1`),
+    { headers: getErpHeaders() }
+  ).catch(() => null);
+  if (searchRes?.ok) {
+    const json: any = await searchRes.json().catch(() => null);
+    if (Array.isArray(json?.data) && json.data.length > 0) {
+      // 3) Fetch the full doc by its real `name` so image/standard_rate come through
+      const fullRes = await erpFetch(
+        getErpUrl(`/api/resource/Website Item/${encodeURIComponent(json.data[0].name)}?${fields}`),
+        { headers: getErpHeaders() }
+      ).catch(() => null);
+      if (fullRes?.ok) {
+        const full: any = await fullRes.json().catch(() => null);
+        if (full?.data) return full.data;
+      }
+      return json.data[0];
+    }
+  }
+
+  return null;
+}
+
 type BannerProduct = { productName: string; sortOrder: number };
 type Banner = {
   id: string;
@@ -65,14 +109,8 @@ router.get("/banners", async (_req: Request, res: Response) => {
                 "name", "item_name", "item_code", "image", "website_image",
                 "standard_rate", "route", "short_description",
               ]);
-              const params = new URLSearchParams({ fields });
-              const erpRes = await erpFetch(
-                getErpUrl(`/api/resource/Website Item/${encodeURIComponent(bp.productName)}?${params}`),
-                { headers: getErpHeaders() }
-              );
-              if (!erpRes.ok) return null;
-              const json: any = await erpRes.json().catch(() => null);
-              return json?.data || null;
+              const params = new URLSearchParams({ fields }).toString();
+              return await fetchWebsiteItem(bp.productName, params);
             } catch {
               return null;
             }
