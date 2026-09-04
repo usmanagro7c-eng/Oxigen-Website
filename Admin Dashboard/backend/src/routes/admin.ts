@@ -942,7 +942,7 @@ router.post(
           body: JSON.stringify({ doc: data.data }),
         });
         if (orderName) {
-          await ErpAdapter.createAndSubmitDeliveryNote(orderName, defaultWarehouse);
+          logger.info({ order: orderName }, "Sales Order submitted (Delivery Note skipped)");
         }
       } catch (submitErr) {
         logger.warn({ submitErr, order: orderName }, "Sales Order created in Draft, submit failed");
