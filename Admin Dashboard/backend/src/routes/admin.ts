@@ -1434,7 +1434,7 @@ router.delete(
           {
             method: "PUT",
             headers: getErpHeaders(),
-            body: JSON.stringify({ disabled: 1 }),
+            body: JSON.stringify({ disable: 1 }),
           }
         );
 
