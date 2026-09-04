@@ -25,12 +25,24 @@ const _erpAgent = new Agent({
 /**
  * Drop-in replacement for the global `fetch` that routes through the
  * connection pool. Use this for every ERPNext call instead of global fetch.
+ * 
+ * Strips the `Expect` header to prevent 417 Expectation Failed errors from
+ * ERPNext/Frappe, which don't support the `Expect: 100-continue` mechanism.
  */
 export function erpFetch(
   url: string,
   init?: Parameters<typeof undiciFetch>[1],
 ): ReturnType<typeof undiciFetch> {
-  return undiciFetch(url, { ...init, dispatcher: _erpAgent });
+  // Strip Expect header to prevent 417 errors from ERPNext
+  const headers = { ...(init?.headers || {}) };
+  delete (headers as any)['Expect'];
+  delete (headers as any)['expect'];
+  
+  return undiciFetch(url, { 
+    ...init, 
+    headers,
+    dispatcher: _erpAgent 
+  });
 }
 
 export function getErpUrl(path: string): string {
