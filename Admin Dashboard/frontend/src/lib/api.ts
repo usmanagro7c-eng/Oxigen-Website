@@ -720,7 +720,7 @@ export async function updateAdminDiscount(name: string, payload: any): Promise<{
   });
 }
 
-export async function deleteAdminDiscount(name: string): Promise<{ success: boolean; message: string }> {
+export async function deleteAdminDiscount(name: string): Promise<{ success: boolean; message: string; action?: "deleted" | "disabled"; reason?: string }> {
   const csrfToken = await getCsrfToken();
   return fetchApi(`/admin/discounts/${encodeURIComponent(name)}`, {
     method: "DELETE",
