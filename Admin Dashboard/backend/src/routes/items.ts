@@ -22,7 +22,7 @@ router.post("/items", async (req: Request, res: Response) => {
 router.put("/items/:name", async (req: Request, res: Response) => {
   try {
     const { name } = req.params;
-    const { item_name, item_group, standard_rate, description, image, stock_uom, status, images } = req.body;
+    const { item_name, item_group, standard_rate, description, image, stock_uom, status, images, short_description, web_long_description } = req.body;
 
     let itemCode = name;
     if (name.startsWith("WEB-ITM-")) {
@@ -74,7 +74,9 @@ router.put("/items/:name", async (req: Request, res: Response) => {
       const webItemPayload: Record<string, any> = {
         published: isPublished,
         ...(item_name ? { web_item_name: item_name } : {}),
-        ...(description ? { description, short_description: description } : {}),
+        ...(description ? { description } : {}),
+        ...(short_description !== undefined ? { short_description } : {}),
+        ...(web_long_description !== undefined ? { web_long_description } : {}),
         ...(finalImage ? { website_image: finalImage } : {}),
       };
 
@@ -136,8 +138,9 @@ router.put("/items/:name", async (req: Request, res: Response) => {
             web_item_name: item_name || name,
             published: 1,
             website_warehouse: onlineWarehouse,
-            short_description: description,
-            description,
+            short_description: short_description || description || "",
+            web_long_description: web_long_description || "",
+            description: description || "",
             on_backorder: isOutOfStock ? 0 : 1,
           }),
         });
