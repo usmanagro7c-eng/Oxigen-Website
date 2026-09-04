@@ -1,21 +1,58 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { heroBanners } from "@/lib/site-data";
+import { heroBanners, type HeroBannerItem } from "@/lib/site-data";
+import { API_BASE, getProductImage } from "@/lib/api";
+
+type ApiBanner = {
+  id: string;
+  title: string;
+  image: string;
+  isActive: boolean;
+  position: number;
+  products: Array<{
+    name: string;
+    item_name: string;
+    item_code: string;
+    image: string | null;
+    website_image: string | null;
+    standard_rate: number;
+    route: string;
+    short_description: string;
+  }>;
+};
 
 export function BannerCarousel() {
   const [i, setI] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
-  const n = heroBanners.length;
+  const [apiBanners, setApiBanners] = useState<ApiBanner[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/banners`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.data) && d.data.length > 0) {
+          setApiBanners(d.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const hasApiBanners = apiBanners.length > 0;
+  const n = hasApiBanners ? apiBanners.length : heroBanners.length;
 
   const go = useCallback((d: number) => setI((p) => (p + d + n) % n), [n]);
 
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || n === 0) return;
     const t = setInterval(() => setI((p) => (p + 1) % n), 6500);
     return () => clearInterval(t);
   }, [n, isPaused]);
+
+  useEffect(() => {
+    if (i >= n) setI(0);
+  }, [n, i]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -34,6 +71,24 @@ export function BannerCarousel() {
     setIsPaused(false);
   };
 
+  const banners = hasApiBanners
+    ? apiBanners.map((b) => ({
+        key: b.id,
+        image: getProductImage(b.image),
+        title: b.title,
+        href: b.products?.[0]?.route
+          ? `/product/${b.products[0].route.replace(/^\/product\//, "")}`
+          : "/shop",
+      }))
+    : heroBanners.map((b) => ({
+        key: b.id,
+        image: b.id === "nutri-cept" ? "/banners/banner-nutricept.jpg" : "/banners/banner-oxidop.jpg",
+        title: b.title,
+        href: `/product/${b.id}`,
+      }));
+
+  if (n === 0) return null;
+
   return (
     <section
       className="relative pt-24 sm:pt-28 lg:pt-32"
@@ -50,30 +105,22 @@ export function BannerCarousel() {
             className="flex transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{ transform: `translateX(-${i * 100}%)` }}
           >
-            {heroBanners.map((b, idx) => {
-              const bannerSrc =
-                b.id === "nutri-cept"
-                  ? "/banners/banner-nutricept.jpg"
-                  : "/banners/banner-oxidop.jpg";
-
-              return (
-                <Link
-                  key={b.id || idx}
-                  to="/product/$slug"
-                  params={{ slug: b.id }}
-                  className="relative block w-full shrink-0 overflow-hidden"
-                  aria-label={b.title}
-                >
-                  <img
-                    src={bannerSrc}
-                    alt={`${b.title} — ${b.sub}`}
-                    loading={idx === 0 ? "eager" : "lazy"}
-                    className="aspect-[4/3] w-full h-auto block object-cover object-center transition-transform duration-1000 ease-out group-hover:scale-[1.01] sm:aspect-[2.35/1]"
-                  />
-                  <span className="sr-only">{`${b.title} — ${b.sub}. ${b.cta}`}</span>
-                </Link>
-              );
-            })}
+            {banners.map((b, idx) => (
+              <Link
+                key={b.key || idx}
+                to={b.href}
+                className="relative block w-full shrink-0 overflow-hidden"
+                aria-label={b.title}
+              >
+                <img
+                  src={b.image}
+                  alt={b.title}
+                  loading={idx === 0 ? "eager" : "lazy"}
+                  className="aspect-[4/3] w-full h-auto block object-cover object-center transition-transform duration-1000 ease-out group-hover:scale-[1.01] sm:aspect-[2.35/1]"
+                />
+                <span className="sr-only">{b.title}</span>
+              </Link>
+            ))}
           </div>
 
           {/* Navigation Arrows */}
@@ -94,9 +141,9 @@ export function BannerCarousel() {
 
           {/* Bottom Indicators */}
           <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-2">
-            {heroBanners.map((b, idx) => (
+            {banners.map((b, idx) => (
               <button
-                key={b.id || idx}
+                key={b.key || idx}
                 onClick={() => setI(idx)}
                 aria-label={`Go to banner ${idx + 1}`}
                 className={`h-2 rounded-full transition-all duration-300 ${
