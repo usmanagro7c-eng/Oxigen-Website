@@ -1404,6 +1404,8 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const { name } = req.params;
+      
+      // Step 1: Try hard delete first
       const erpRes = await erpFetch(
         getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(name)}`),
         {
@@ -1412,13 +1414,50 @@ router.delete(
         }
       );
 
-      if (!erpRes.ok) {
-        res.status(erpRes.status).json({ error: "Failed to delete pricing rule." });
+      // Step 2: If successfully deleted
+      if (erpRes.ok) {
+        itemCache.clear();
+        res.json({ success: true, message: `Pricing rule ${name} deleted.`, action: "deleted" });
         return;
       }
 
-      itemCache.clear();
-      res.json({ success: true, message: `Pricing rule ${name} deleted.` });
+      // Step 3: Parse error to check if it's a "linked" error
+      const err = (await erpRes.json().catch(() => ({}))) as { _server_messages?: string; message?: string };
+      const errorMsg = parseErpError(err) || err.message || "";
+
+      // Step 4: If linked to orders (417 status or "linked" in error message), try soft delete
+      if (erpRes.status === 417 || errorMsg.toLowerCase().includes("linked")) {
+        logger.info({ name, errorMsg }, "[admin/discounts/:name.DELETE] Pricing rule linked, attempting soft delete");
+        
+        const updateRes = await erpFetch(
+          getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(name)}`),
+          {
+            method: "PUT",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ disabled: 1 }),
+          }
+        );
+
+        if (updateRes.ok) {
+          itemCache.clear();
+          res.json({
+            success: true,
+            message: `Pricing rule ${name} archived (linked to existing orders).`,
+            action: "disabled",
+            reason: errorMsg,
+          });
+          return;
+        }
+
+        // If soft delete also failed, return that error
+        const updateErr = (await updateRes.json().catch(() => ({}))) as { _server_messages?: string; message?: string };
+        const updateErrorMsg = parseErpError(updateErr) || updateErr.message || "Failed to disable pricing rule.";
+        res.status(updateRes.status).json({ error: updateErrorMsg });
+        return;
+      }
+
+      // Step 5: Other errors - return as-is
+      res.status(erpRes.status).json({ error: errorMsg || "Failed to delete pricing rule." });
     } catch (err: any) {
       logger.error({ err }, "[admin/discounts/:name.DELETE]");
       res.status(500).json({ error: err.message || "Internal server error." });
