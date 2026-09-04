@@ -30,7 +30,17 @@ export function erpFetch(
   url: string,
   init?: Parameters<typeof undiciFetch>[1],
 ): ReturnType<typeof undiciFetch> {
-  return undiciFetch(url, { ...init, dispatcher: _erpAgent });
+  const headers: Record<string, string> = {};
+  if (init?.headers) {
+    new Headers(init.headers as HeadersInit).forEach((v, k) => {
+      headers[k] = v;
+    });
+  }
+  // Strip `Expect: 100-continue` which some intermediaries / older ERPNext
+  // versions reject with HTTP 417, even on GET requests.
+  delete headers["expect"];
+  delete headers["Expect"];
+  return undiciFetch(url, { ...init, headers, dispatcher: _erpAgent });
 }
 
 export function getErpUrl(path: string): string {
