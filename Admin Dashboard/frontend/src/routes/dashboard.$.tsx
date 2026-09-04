@@ -36,7 +36,7 @@ export const Route = createFileRoute("/dashboard/$")({
 /* ============================================================
  * Toast system
  * ============================================================ */
-type Toast = { id: number; kind: "success" | "error" | "info"; text: string };
+type Toast = { id: number; kind: "success" | "error" | "info" | "warning"; text: string };
 let toastId = 0;
 const toastListeners = new Set<(t: Toast) => void>();
 function pushToast(kind: Toast["kind"], text: string) {
@@ -76,6 +76,7 @@ function ToastHost() {
             {t.kind === "success" && <Check className="h-3.5 w-3.5 text-emerald-300" />}
             {t.kind === "error" && <AlertCircle className="h-3.5 w-3.5 text-rose-300" />}
             {t.kind === "info" && <Sparkles className="h-3.5 w-3.5 text-primary" />}
+            {t.kind === "warning" && <AlertCircle className="h-3.5 w-3.5 text-amber-300" />}
             <span>{t.text}</span>
           </motion.div>
         ))}
@@ -201,7 +202,7 @@ const MODULE_META: Record<string, PageMeta> = {
   discounts: {
     subtitle: "Pricing rules for website discounts.",
     primaryAction: "Add pricing rule",
-    filters: ["All", "Active", "Expired", "Disabled"],
+    filters: ["All", "Active", "Expired", "Archived"],
     columns: [
       { key: "title", label: "Title" },
       { key: "item_code", label: "Item Code" },
@@ -242,6 +243,257 @@ const MODULE_META: Record<string, PageMeta> = {
     emptyDesc: "Define shipping carriers and warehouse zones.",
   },
 };
+
+/* ============================================================
+ * Filter Configuration - Maps filter buttons to actual field values
+ * ============================================================ */
+type FilterConfig = {
+  field: string;
+  mapping: Record<string, string>;
+};
+
+const FILTER_CONFIG: Record<string, FilterConfig> = {
+  products: {
+    field: "status",
+    mapping: {
+      "Enable": "Enable",
+      "Disable": "Disable",
+    }
+  },
+  orders: {
+    field: "status",
+    mapping: {
+      "To Deliver and Bill": "To Deliver and Bill",
+      "Draft": "Draft",
+      "Completed": "Completed",
+      "Cancelled": "Cancelled",
+    }
+  },
+  categories: {
+    field: "is_group_label",
+    mapping: {
+      "Parent Group": "Parent Group",
+      "Subcategory": "Subcategory",
+    }
+  },
+  collections: {
+    field: "is_group_label",
+    mapping: {
+      "Parent Group": "Parent Group",
+      "Subcategory": "Subcategory",
+    }
+  },
+  customers: {
+    field: "customer_group",
+    mapping: {
+      "Individual": "Individual",
+      "Commercial": "Commercial",
+    }
+  },
+  inventory: {
+    field: "status",
+    mapping: {
+      "In stock": "In stock",
+      "Out of stock": "Out of stock",
+    }
+  },
+  discounts: {
+    field: "status",
+    mapping: {
+      "Active": "Active",
+      "Expired": "Expired",
+      "Archived": "Archived",
+    }
+  },
+  team: {
+    field: "status",
+    mapping: {
+      "Enabled": "Enabled",
+      "Disabled": "Disabled",
+    }
+  },
+};
+
+/* ============================================================
+ * Advanced Filter System - Types & Configurations
+ * ============================================================ */
+type FilterFieldType = 
+  | "text"           // Text input (contains/equals)
+  | "select"         // Dropdown (single select)
+  | "number"         // Number input
+  | "range"          // Min/Max number range
+  | "daterange";     // Date range (from/to)
+
+type FilterOperator = 
+  | "equals" 
+  | "contains" 
+  | "startsWith" 
+  | "gt" | "gte" 
+  | "lt" | "lte" 
+  | "between";
+
+interface AdvancedFilterConfig {
+  field: string;
+  label: string;
+  type: FilterFieldType;
+  operator: FilterOperator;
+  options?: string[];      // For select fields
+  placeholder?: string;
+  hidden?: boolean;        // Don't show in advanced filters
+}
+
+interface FilterValue {
+  field: string;
+  operator: FilterOperator;
+  value: any;
+  value2?: any;           // For range filters (max value)
+}
+
+const ADVANCED_FILTER_CONFIGS: Record<string, AdvancedFilterConfig[]> = {
+  products: [
+    { field: "name", label: "Product Name", type: "text", operator: "contains", placeholder: "Search products..." },
+    { field: "sku", label: "Item Code / SKU", type: "text", operator: "contains", placeholder: "Search SKU..." },
+    { field: "item_group", label: "Category", type: "select", operator: "equals", options: [] }, // Dynamic from data
+    { field: "price", label: "Price Range", type: "range", operator: "between", placeholder: "Min-Max" },
+    { field: "stock", label: "Stock Range", type: "range", operator: "between", placeholder: "Min-Max" },
+    { field: "status", label: "Status", type: "select", operator: "equals", options: ["Enable", "Disable"] },
+  ],
+  
+  orders: [
+    { field: "id", label: "Order ID", type: "text", operator: "contains", placeholder: "Search order ID..." },
+    { field: "customer", label: "Customer", type: "text", operator: "contains", placeholder: "Search customer..." },
+    { field: "total", label: "Grand Total Range", type: "range", operator: "between", placeholder: "Min-Max" },
+    { field: "status", label: "Status", type: "select", operator: "equals", 
+      options: ["To Deliver and Bill", "Draft", "Completed", "Cancelled"] },
+    { field: "date", label: "Date Range", type: "daterange", operator: "between" },
+  ],
+  
+  categories: [
+    { field: "name", label: "Category Name", type: "text", operator: "contains", placeholder: "Search categories..." },
+    { field: "item_count", label: "Products Count", type: "range", operator: "between", placeholder: "Min-Max" },
+    { field: "parent", label: "Parent Category", type: "text", operator: "contains", placeholder: "Search parent..." },
+    { field: "is_group_label", label: "Type", type: "select", operator: "equals", options: ["Parent Group", "Subcategory"] },
+  ],
+  
+  collections: [
+    { field: "name", label: "Collection Name", type: "text", operator: "contains", placeholder: "Search collections..." },
+    { field: "item_count", label: "Products Count", type: "range", operator: "between", placeholder: "Min-Max" },
+    { field: "parent", label: "Parent Category", type: "text", operator: "contains", placeholder: "Search parent..." },
+    { field: "is_group_label", label: "Type", type: "select", operator: "equals", options: ["Parent Group", "Subcategory"] },
+  ],
+  
+  customers: [
+    { field: "customer_name", label: "Customer Name", type: "text", operator: "contains", placeholder: "Search customers..." },
+    { field: "email_id", label: "Email", type: "text", operator: "contains", placeholder: "Search email..." },
+    { field: "mobile_no", label: "Phone", type: "text", operator: "contains", placeholder: "Search phone..." },
+    { field: "customer_group", label: "Group", type: "select", operator: "equals", options: ["Individual", "Commercial"] },
+    { field: "territory", label: "Territory", type: "text", operator: "contains", placeholder: "Search territory..." },
+  ],
+  
+  inventory: [
+    { field: "sku", label: "Item Code", type: "text", operator: "contains", placeholder: "Search SKU..." },
+    { field: "name", label: "Item Name", type: "text", operator: "contains", placeholder: "Search items..." },
+    { field: "item_group", label: "Category", type: "select", operator: "equals", options: [] }, // Dynamic
+    { field: "warehouse", label: "Warehouse", type: "text", operator: "contains", placeholder: "Search warehouse..." },
+    { field: "actual_qty", label: "Actual Stock", type: "range", operator: "between", placeholder: "Min-Max" },
+    { field: "reserved_qty", label: "Reserved", type: "range", operator: "between", placeholder: "Min-Max" },
+    { field: "available_qty", label: "Available Stock", type: "range", operator: "between", placeholder: "Min-Max" },
+    { field: "status", label: "Status", type: "select", operator: "equals", options: ["In stock", "Out of stock"] },
+  ],
+  
+  discounts: [
+    { field: "title", label: "Title", type: "text", operator: "contains", placeholder: "Search titles..." },
+    { field: "item_code", label: "Item Code", type: "text", operator: "contains", placeholder: "Search item code..." },
+    { field: "type", label: "Type", type: "select", operator: "equals",
+      options: ["Discount Percentage", "Discount Amount", "Rate"] },
+    { field: "priority", label: "Priority", type: "number", operator: "equals", placeholder: "Priority number" },
+    { field: "valid_from", label: "Valid From", type: "daterange", operator: "between" },
+    { field: "valid_upto", label: "Valid To", type: "daterange", operator: "between" },
+    { field: "status", label: "Status", type: "select", operator: "equals",
+      options: ["Active", "Expired", "Archived"] },
+  ],
+  
+  team: [
+    { field: "full_name", label: "Full Name", type: "text", operator: "contains", placeholder: "Search names..." },
+    { field: "email", label: "Email", type: "text", operator: "contains", placeholder: "Search email..." },
+    { field: "user_type", label: "Role / Type", type: "text", operator: "contains", placeholder: "Search role..." },
+    { field: "status", label: "Status", type: "select", operator: "equals", options: ["Enabled", "Disabled"] },
+  ],
+  
+  shipping: [
+    { field: "name", label: "Name", type: "text", operator: "contains", placeholder: "Search shipping..." },
+    { field: "company", label: "Company", type: "text", operator: "contains", placeholder: "Search company..." },
+    { field: "status", label: "Status", type: "select", operator: "equals", options: ["Active", "Disabled"] },
+  ],
+};
+
+// Filter application utility function
+function applyFilter(data: Row[], filter: FilterValue): Row[] {
+  const { field, operator, value, value2 } = filter;
+  
+  // Skip if no value provided
+  if (value === undefined || value === null || value === "") return data;
+  
+  return data.filter((row) => {
+    const fieldValue = row[field];
+    
+    switch (operator) {
+      case "equals":
+        return String(fieldValue) === String(value);
+      
+      case "contains":
+        return String(fieldValue || "").toLowerCase().includes(String(value).toLowerCase());
+      
+      case "startsWith":
+        return String(fieldValue || "").toLowerCase().startsWith(String(value).toLowerCase());
+      
+      case "gt":
+        return Number(fieldValue) > Number(value);
+      
+      case "gte":
+        return Number(fieldValue) >= Number(value);
+      
+      case "lt":
+        return Number(fieldValue) < Number(value);
+      
+      case "lte":
+        return Number(fieldValue) <= Number(value);
+      
+      case "between": {
+        // For numeric ranges
+        if (typeof fieldValue === "number" || !isNaN(Number(fieldValue))) {
+          const num = Number(fieldValue);
+          const min = value !== "" && value !== undefined ? Number(value) : -Infinity;
+          const max = value2 !== "" && value2 !== undefined ? Number(value2) : Infinity;
+          return num >= min && num <= max;
+        }
+        // For date ranges
+        if (fieldValue && typeof fieldValue === "string") {
+          const date = fieldValue.slice(0, 10); // Get YYYY-MM-DD part
+          const min = value || "";
+          const max = value2 || "9999-12-31";
+          return date >= min && date <= max;
+        }
+        return true;
+      }
+      
+      default:
+        return true;
+    }
+  });
+}
+
+// Get unique values from data for dynamic select options
+function getUniqueValues(rows: Row[], field: string): string[] {
+  const values = new Set<string>();
+  rows.forEach(row => {
+    const val = row[field];
+    if (val !== undefined && val !== null && val !== "") {
+      values.add(String(val));
+    }
+  });
+  return Array.from(values).sort();
+}
 
 function orderDisplayName(o: { customer_name?: string; customer?: string; owner?: string; shipping?: { title?: string } | null }): string {
   const fallback = o.customer_name || o.customer || o.owner || "Customer";
@@ -365,12 +617,266 @@ function StatsRow({ stats }: { stats: Stat[] }) {
   );
 }
 
+function FilterField({
+  config, value, onChange, dynamicOptions,
+}: {
+  config: AdvancedFilterConfig;
+  value?: FilterValue;
+  onChange: (v: FilterValue | undefined) => void;
+  dynamicOptions?: string[];
+}) {
+  const options = config.options?.length ? config.options : dynamicOptions || [];
+  const currentValue = value?.value ?? "";
+  const currentValue2 = value?.value2 ?? "";
+
+  if (config.type === "text") {
+    return (
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{config.label}</label>
+        <input
+          type="text"
+          value={currentValue}
+          onChange={(e) => {
+            if (!e.target.value) { onChange(undefined); return; }
+            onChange({ field: config.field, operator: config.operator, value: e.target.value });
+          }}
+          placeholder={config.placeholder || `Filter by ${config.label.toLowerCase()}...`}
+          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+        />
+      </div>
+    );
+  }
+
+  if (config.type === "select" && options.length) {
+    return (
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{config.label}</label>
+        <select
+          value={currentValue}
+          onChange={(e) => {
+            if (!e.target.value) { onChange(undefined); return; }
+            onChange({ field: config.field, operator: config.operator, value: e.target.value });
+          }}
+          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition cursor-pointer"
+        >
+          <option value="" className="bg-card text-foreground">All</option>
+          {options.map((o) => (
+            <option key={o} value={o} className="bg-card text-foreground">{o}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  if (config.type === "number") {
+    return (
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{config.label}</label>
+        <input
+          type="number"
+          value={currentValue}
+          onChange={(e) => {
+            if (!e.target.value) { onChange(undefined); return; }
+            onChange({ field: config.field, operator: config.operator, value: e.target.value });
+          }}
+          placeholder={config.placeholder || "Enter number..."}
+          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+        />
+      </div>
+    );
+  }
+
+  if (config.type === "range") {
+    return (
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{config.label}</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={currentValue}
+            onChange={(e) => {
+              if (!e.target.value && !currentValue2) { onChange(undefined); return; }
+              onChange({ field: config.field, operator: "between", value: e.target.value, value2: currentValue2 });
+            }}
+            placeholder="Min"
+            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+          />
+          <span className="text-xs text-muted-foreground">–</span>
+          <input
+            type="number"
+            value={currentValue2}
+            onChange={(e) => {
+              if (!currentValue && !e.target.value) { onChange(undefined); return; }
+              onChange({ field: config.field, operator: "between", value: currentValue, value2: e.target.value });
+            }}
+            placeholder="Max"
+            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (config.type === "daterange") {
+    return (
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{config.label}</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={currentValue}
+            onChange={(e) => {
+              if (!e.target.value && !currentValue2) { onChange(undefined); return; }
+              onChange({ field: config.field, operator: "between", value: e.target.value, value2: currentValue2 });
+            }}
+            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+          />
+          <span className="text-xs text-muted-foreground">–</span>
+          <input
+            type="date"
+            value={currentValue2}
+            onChange={(e) => {
+              if (!currentValue && !e.target.value) { onChange(undefined); return; }
+              onChange({ field: config.field, operator: "between", value: currentValue, value2: e.target.value });
+            }}
+            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function ActiveFilterChips({
+  filters, config, onRemove,
+}: {
+  filters: FilterValue[];
+  config: AdvancedFilterConfig[];
+  onRemove: (field: string) => void;
+}) {
+  if (!filters.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {filters.map((f) => {
+        const cfg = config.find((c) => c.field === f.field);
+        const label = cfg?.label || f.field;
+        let display = "";
+        if (f.operator === "between" && f.value2 !== undefined && f.value2 !== "") {
+          display = `${f.value || "…"} – ${f.value2}`;
+        } else {
+          display = String(f.value);
+        }
+        return (
+          <span key={f.field}
+            className="inline-flex items-center gap-1 h-6 px-2.5 rounded-lg bg-primary/10 border border-primary/20 text-[11px] font-semibold text-primary">
+            <span className="text-muted-foreground">{label}:</span> {display}
+            <button onClick={() => onRemove(f.field)} className="ml-0.5 hover:text-foreground transition">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function AdvancedFilterPanel({
+  open, onClose, config, filters, onChange, dynamicData,
+}: {
+  open: boolean;
+  onClose: () => void;
+  config: AdvancedFilterConfig[];
+  filters: FilterValue[];
+  onChange: (f: FilterValue[]) => void;
+  dynamicData?: Row[];
+}) {
+  const [temp, setTemp] = useState<FilterValue[]>(filters);
+
+  const handleFieldChange = (field: string, val: FilterValue | undefined) => {
+    setTemp((prev) => {
+      if (!val) return prev.filter((f) => f.field !== field);
+      const existing = prev.findIndex((f) => f.field === field);
+      if (existing >= 0) { const n = [...prev]; n[existing] = val; return n; }
+      return [...prev, val];
+    });
+  };
+
+  const handleApply = () => { onChange(temp); onClose(); };
+  const handleClear = () => { setTemp([]); };
+  const activeCount = temp.length;
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.2 }}
+          className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-elegant p-5 z-50"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-foreground">Advanced Filters</h3>
+            <button onClick={onClose} className="inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {config.map((cfg) => {
+              if (cfg.type === "select" && (!cfg.options || cfg.options.length === 0) && dynamicData) {
+                const dynamicOpts = getUniqueValues(dynamicData, cfg.field);
+                return (
+                  <FilterField
+                    key={cfg.field}
+                    config={cfg}
+                    value={temp.find((f) => f.field === cfg.field)}
+                    onChange={(v) => handleFieldChange(cfg.field, v)}
+                    dynamicOptions={dynamicOpts}
+                  />
+                );
+              }
+              return (
+                <FilterField
+                  key={cfg.field}
+                  config={cfg}
+                  value={temp.find((f) => f.field === cfg.field)}
+                  onChange={(v) => handleFieldChange(cfg.field, v)}
+                />
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between mt-5 pt-4 border-t border-border">
+            <button onClick={handleClear}
+              className="h-9 px-4 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition">
+              Clear All
+            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={onClose}
+                className="h-9 px-4 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition">
+                Cancel
+              </button>
+              <button onClick={handleApply}
+                className="h-9 px-5 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-bold shadow-md shadow-primary/25 transition hover:opacity-95">
+                Apply{activeCount ? ` (${activeCount})` : ""}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function Toolbar({
   filters, active, onActive, query, onQuery, onFiltersToggle, filtersOpen,
+  advFilterCount = 0,
 }: {
   filters: string[]; active: string; onActive: (f: string) => void;
   query: string; onQuery: (q: string) => void;
   onFiltersToggle?: () => void; filtersOpen?: boolean;
+  advFilterCount?: number;
 }) {
   return (
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-2 flex-wrap">
@@ -395,10 +901,15 @@ function Toolbar({
         </div>
         <button onClick={onFiltersToggle}
           className={cn(
-            "inline-flex shrink-0 items-center justify-center gap-1.5 h-10 sm:h-9 px-3 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition shadow-sm",
+            "relative inline-flex shrink-0 items-center justify-center gap-1.5 h-10 sm:h-9 px-3 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition shadow-sm",
             filtersOpen && "bg-secondary text-foreground",
           )}>
           <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
+          {advFilterCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
+              {advFilterCount}
+            </span>
+          )}
         </button>
       </div>
     </div>
@@ -664,6 +1175,14 @@ function DetailDrawer({
                   </div>
                 </div>
               ))}
+              {slug === "discounts" && row.disabled && (
+                <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="text-xs font-semibold">This discount is archived and cannot be applied to new orders.</span>
+                  </div>
+                </div>
+              )}
               {slug === "orders" && (
                 <div className="rounded-xl bg-card border border-border p-3">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Shipping Details</div>
@@ -1584,6 +2103,8 @@ function LiveTablePage({
   const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const [advancedFilters, setAdvancedFilters] = useState<FilterValue[]>([]);
+  const filterPanelRef = useRef<HTMLDivElement>(null);
   const perPage = 10;
 
   const [drawer, setDrawer] = useState<{ open: boolean; row: Row | null; index: number }>({ open: false, row: null, index: -1 });
@@ -1705,9 +2226,9 @@ function LiveTablePage({
         const res = await getAdminDiscounts();
         const today = new Date().toISOString().slice(0, 10);
         const mapped = (res.data || []).map((d) => {
-          const isDisabled = d.disable === 1;
+          const isDisabled = d.disable === 1 || d.disabled === 1;
           const isExpired = d.valid_upto && d.valid_upto < today;
-          const status = isDisabled ? "Disabled" : isExpired ? "Expired" : "Active";
+          const status = isDisabled ? "Archived" : isExpired ? "Expired" : "Active";
           const type = d.rate_or_discount || "Discount Percentage";
           let value = "";
           if (type === "Discount Percentage") value = `${d.discount_percentage || 0}% OFF`;
@@ -1723,6 +2244,7 @@ function LiveTablePage({
             valid_from: d.valid_from || "—",
             valid_upto: d.valid_upto || "—",
             status,
+            disabled: isDisabled,
           };
         });
         setRows(mapped);
@@ -1763,6 +2285,18 @@ function LiveTablePage({
     loadData();
   }, [slug]);
 
+  // Close advanced filter panel when clicking outside
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+        setFiltersOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [filtersOpen]);
+
   // Derived statistics for the StatsRow
   const stats: Stat[] = useMemo(() => {
     const total = rows.length;
@@ -1781,20 +2315,40 @@ function LiveTablePage({
 
   const filtered = useMemo(() => {
     let out = rows;
+    
+    // Apply status/type filter based on FILTER_CONFIG
     if (active && active !== "All") {
-      out = out.filter((r) => Object.values(r).some((v) => String(v).toLowerCase().includes(active.toLowerCase())));
+      const config = FILTER_CONFIG[slug];
+      if (config) {
+        const targetValue = config.mapping[active];
+        if (targetValue) {
+          out = out.filter((r) => r[config.field] === targetValue);
+        }
+      } else {
+        out = out.filter((r) => Object.values(r).some((v) => String(v).toLowerCase().includes(active.toLowerCase())));
+      }
     }
+    
+    // Apply search query across all fields
     if (query) {
       const q = query.toLowerCase();
       out = out.filter((r) => Object.values(r).some((v) => String(v).toLowerCase().includes(q)));
     }
+    
+    // Apply legacy column filters
     for (const [k, v] of Object.entries(colFilters)) {
       if (!v) continue;
       const lv = v.toLowerCase();
       out = out.filter((r) => String(r[k] ?? "").toLowerCase().includes(lv));
     }
+    
+    // Apply advanced multi-field filters
+    for (const f of advancedFilters) {
+      out = applyFilter(out, f);
+    }
+    
     return out;
-  }, [rows, active, query, colFilters]);
+  }, [rows, active, query, colFilters, advancedFilters, slug]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
@@ -1849,7 +2403,15 @@ function LiveTablePage({
         } else if (slug === "customers") {
           await deleteAdminCustomer(recordName);
         } else if (slug === "discounts") {
-          await deleteAdminDiscount(recordName);
+          const result = await deleteAdminDiscount(recordName);
+          // Handle different actions for discounts
+          if (result.action === "disabled") {
+            pushToast("warning", result.message || `${singular} archived (linked to existing orders)`);
+          } else {
+            pushToast("success", result.message || `${singular} deleted`);
+          }
+          loadData();
+          return; // Early return to skip the generic success toast below
         } else if (slug === "team") {
           await deleteAdminUser(recordName);
         } else if (slug === "inventory") {
@@ -2065,11 +2627,43 @@ function LiveTablePage({
         onExport={() => { downloadCSV(slug, meta.columns, filtered); pushToast("info", `Exported ${filtered.length} rows`); }}
       />
       <StatsRow stats={stats} />
-      <Toolbar
-        filters={meta.filters} active={active} onActive={(f) => { setActive(f); setPage(1); }}
-        query={query} onQuery={(q) => { setQuery(q); setPage(1); }}
-        filtersOpen={filtersOpen} onFiltersToggle={() => setFiltersOpen((o) => !o)}
-      />
+      <div className="relative" ref={filterPanelRef}>
+        <Toolbar
+          filters={meta.filters} active={active} onActive={(f) => { setActive(f); setAdvancedFilters([]); setPage(1); }}
+          query={query} onQuery={(q) => { setQuery(q); setPage(1); }}
+          filtersOpen={filtersOpen} onFiltersToggle={() => setFiltersOpen((o) => !o)}
+          advFilterCount={advancedFilters.length}
+        />
+        <AdvancedFilterPanel
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          config={ADVANCED_FILTER_CONFIGS[slug] || []}
+          filters={advancedFilters}
+          onChange={(f) => { setAdvancedFilters(f); setPage(1); }}
+          dynamicData={rows}
+        />
+      </div>
+      {advancedFilters.length > 0 && (
+        <ActiveFilterChips
+          filters={advancedFilters}
+          config={ADVANCED_FILTER_CONFIGS[slug] || []}
+          onRemove={(field) => {
+            setAdvancedFilters((prev) => prev.filter((f) => f.field !== field));
+            setPage(1);
+          }}
+        />
+      )}
+      {(advancedFilters.length > 0 || (active && active !== "All")) && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Showing {filtered.length} of {rows.length} results</span>
+          <button
+            onClick={() => { setAdvancedFilters([]); setActive("All"); setQuery(""); setPage(1); }}
+            className="text-xs font-semibold text-primary hover:text-foreground transition"
+          >
+            Clear all filters
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="py-16 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
