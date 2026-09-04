@@ -2,6 +2,9 @@ import { timingSafeEqual, createHash } from "crypto";
 import { logger } from "../lib/logger.js";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import {
   getQueueStats,
   getCircuitState,
@@ -1857,6 +1860,133 @@ router.get("/admin/notifications/stream", (req: Request, res: Response) => {
     notificationService.off("notification", onNotification);
     notificationService.off("change", onChange);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Banner Management (JSON file storage)
+// ---------------------------------------------------------------------------
+type BannerProduct = { productName: string; sortOrder: number };
+type Banner = {
+  id: string;
+  title: string;
+  image: string;
+  isActive: boolean;
+  position: number;
+  products: BannerProduct[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+const __filename = fileURLToPath(import.meta.url);
+const BANNERS_DIR = join(dirname(dirname(dirname(__filename))), "data");
+const BANNERS_FILE = join(BANNERS_DIR, "banners.json");
+
+function ensureBannersFile(): void {
+  if (!existsSync(BANNERS_DIR)) mkdirSync(BANNERS_DIR, { recursive: true });
+  if (!existsSync(BANNERS_FILE)) writeFileSync(BANNERS_FILE, "[]", "utf-8");
+}
+
+function readBanners(): Banner[] {
+  ensureBannersFile();
+  try {
+    const raw = readFileSync(BANNERS_FILE, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function writeBanners(banners: Banner[]): void {
+  ensureBannersFile();
+  writeFileSync(BANNERS_FILE, JSON.stringify(banners, null, 2), "utf-8");
+}
+
+// GET /api/admin/banners
+router.get("/admin/banners", attachRequestId, async (_req: Request, res: Response) => {
+  try {
+    const banners = readBanners();
+    res.json({ data: banners });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/banners.GET]");
+    res.status(500).json({ error: err.message || "Internal server error." });
+  }
+});
+
+// POST /api/admin/banners
+router.post("/admin/banners", attachRequestId, async (req: Request, res: Response) => {
+  try {
+    const { title, image, isActive, position, products } = req.body;
+    if (!title || !image) {
+      res.status(400).json({ error: "Title and image are required." });
+      return;
+    }
+    const banners = readBanners();
+    const now = new Date().toISOString();
+    const id = `banner-${Date.now()}`;
+    const banner: Banner = {
+      id,
+      title,
+      image,
+      isActive: isActive !== false,
+      position: position ?? banners.length,
+      products: Array.isArray(products) ? products.slice(0, 5) : [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    banners.push(banner);
+    writeBanners(banners);
+    itemCache.clear();
+    res.status(201).json({ data: banner });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/banners.POST]");
+    res.status(500).json({ error: err.message || "Internal server error." });
+  }
+});
+
+// PUT /api/admin/banners/:id
+router.put("/admin/banners/:id", attachRequestId, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const banners = readBanners();
+    const idx = banners.findIndex((b) => b.id === id);
+    if (idx === -1) {
+      res.status(404).json({ error: "Banner not found." });
+      return;
+    }
+    const { title, image, isActive, position, products } = req.body;
+    if (title !== undefined) banners[idx].title = title;
+    if (image !== undefined) banners[idx].image = image;
+    if (isActive !== undefined) banners[idx].isActive = isActive;
+    if (position !== undefined) banners[idx].position = position;
+    if (Array.isArray(products)) banners[idx].products = products.slice(0, 5);
+    banners[idx].updatedAt = new Date().toISOString();
+    writeBanners(banners);
+    itemCache.clear();
+    res.json({ data: banners[idx] });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/banners.PUT]");
+    res.status(500).json({ error: err.message || "Internal server error." });
+  }
+});
+
+// DELETE /api/admin/banners/:id
+router.delete("/admin/banners/:id", attachRequestId, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const banners = readBanners();
+    const idx = banners.findIndex((b) => b.id === id);
+    if (idx === -1) {
+      res.status(404).json({ error: "Banner not found." });
+      return;
+    }
+    banners.splice(idx, 1);
+    writeBanners(banners);
+    itemCache.clear();
+    res.json({ success: true, message: "Banner deleted." });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/banners.DELETE]");
+    res.status(500).json({ error: err.message || "Internal server error." });
+  }
 });
 
 export default router;
