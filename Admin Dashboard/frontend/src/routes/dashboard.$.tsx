@@ -115,7 +115,8 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "status", label: "Status", type: "toggle", className: "text-right" },
       { key: "image", label: "Image", hidden: true },
       // { key: "imageUrl", label: "Image URL", hidden: true },
-      { key: "description", label: "Description", type: "textarea", hidden: true },
+      { key: "short_description", label: "Short Description", type: "textarea", hidden: true },
+      { key: "web_long_description", label: "Long Description (Website)", type: "textarea", hidden: true },
     ],
     emptyTitle: "No products found",
     emptyDesc: "Add your first product to sync it directly to the catalog.",
@@ -1370,7 +1371,8 @@ function RecordModal({
           { key: "stock", label: "Website Stock" },
           { key: "status", label: "Status" },
           { key: "image", label: "Image", hidden: true },
-          { key: "description", label: "Description", type: "textarea", hidden: true },
+          { key: "short_description", label: "Short Description", type: "textarea", hidden: true },
+          { key: "web_long_description", label: "Long Description (Website)", type: "textarea", hidden: true },
         ];
       } else {
         return [
@@ -2159,19 +2161,20 @@ function LiveTablePage({
 
           const statusVal = rawPublished === 0 || rawDisabled === 1 ? "Disable" : "Enable";
 
-          return {
-            rawKey: it.item_code || it.name,
-            name: it.item_name || it.item_code,
-            sku: it.item_code || it.name,
-            item_group: it.item_group || "General",
-            price: `PKR ${(it.standard_rate || it.valuation_rate || 0).toLocaleString()}`,
-            rawPrice: it.standard_rate || it.valuation_rate || 0,
-            stock: qty,
-            status: statusVal,
-            description: it.description || "",
-            image: it.image || it.website_image || "",
-            slideshow_images: (it as any).slideshow_images || [],
-          };
+      return {
+        rawKey: it.item_code || it.name,
+        name: it.item_name || it.item_code,
+        sku: it.item_code || it.name,
+        item_group: it.item_group || "General",
+        price: `PKR ${(it.standard_rate || it.valuation_rate || 0).toLocaleString()}`,
+        rawPrice: it.standard_rate || it.valuation_rate || 0,
+        stock: qty,
+        status: statusVal,
+        short_description: (it as any).short_description || "",
+        web_long_description: (it as any).web_long_description || "",
+        image: it.image || it.website_image || "",
+        slideshow_images: (it as any).slideshow_images || [],
+      };
         });
         setRows(mapped);
       } else if (slug === "orders") {
@@ -2467,6 +2470,8 @@ function LiveTablePage({
             stock_qty: Number(formData.stock) || 0,
             stock_uom: "Nos",
             description: formData.description || "",
+            short_description: formData.short_description || "",
+            web_long_description: formData.web_long_description || "",
             image: formData.image || undefined,
             imageUrl: formData.imageUrl || undefined,
             images: Array.isArray(formData.images) ? formData.images.filter(Boolean) : undefined,
@@ -2491,7 +2496,8 @@ function LiveTablePage({
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")) || 0,
             stock_qty: stockQty,
             stock_uom: "Nos",
-            description: formData.description || "",
+            short_description: formData.short_description || "",
+            web_long_description: formData.web_long_description || "",
             image: formData.image || undefined,
             imageUrl: formData.imageUrl || undefined,
             images: Array.isArray(formData.images) ? formData.images.filter(Boolean) : undefined,
@@ -2554,6 +2560,8 @@ function LiveTablePage({
             item_group: formData.item_group,
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")),
             description: formData.description,
+            short_description: formData.short_description || "",
+            web_long_description: formData.web_long_description || "",
             image: formData.image || undefined,
             imageUrl: formData.imageUrl || undefined,
             images: Array.isArray(formData.images) ? formData.images.filter(Boolean) : undefined,
