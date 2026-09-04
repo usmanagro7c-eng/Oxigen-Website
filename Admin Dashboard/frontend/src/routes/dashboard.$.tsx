@@ -13,6 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 import { findItem, NAV } from "@/components/dashboard/nav-config";
 import { cn } from "@/lib/utils";
 import {
@@ -89,7 +90,7 @@ function ToastHost() {
  * Page Configuration Types
  * ============================================================ */
 type Stat = { label: string; value: string; delta?: string; trend?: "up" | "down" };
-type Column = { key: string; label: string; className?: string; type?: "text" | "number" | "select" | "textarea" | "date"; hidden?: boolean };
+type Column = { key: string; label: string; className?: string; type?: "text" | "number" | "select" | "textarea" | "date" | "toggle"; hidden?: boolean };
 type Row = Record<string, any>;
 type PageMeta = {
   subtitle: string;
@@ -111,7 +112,7 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "item_group", label: "Category" },
       { key: "price", label: "Price" },
       { key: "stock", label: "Website Stock" },
-      { key: "status", label: "Status", className: "text-right" },
+      { key: "status", label: "Status", type: "toggle", className: "text-right" },
       { key: "image", label: "Image", hidden: true },
       // { key: "imageUrl", label: "Image URL", hidden: true },
       { key: "description", label: "Description", type: "textarea", hidden: true },
@@ -918,18 +919,31 @@ function Toolbar({
 }
 
 type RowAction = "view" | "edit" | "delete";
-function renderCellValue(c: Column, r: Row) {
+function renderCellValue(c: Column, r: Row, onToggle?: (key: string, row: Row, checked: boolean) => void) {
+  if (c.type === "toggle") {
+    const checked = String(r[c.key] ?? "") === "Enable";
+    return (
+      <span onClick={(e) => e.stopPropagation()}>
+        <Switch
+          checked={checked}
+          onCheckedChange={(newChecked) => onToggle?.(c.key, r, newChecked)}
+          className="data-[state=checked]:bg-green-500"
+        />
+      </span>
+    );
+  }
   if (c.key === "status" || c.key === "visible" || c.key === "is_group_label") {
     return <StatusPill label={String(r[c.key] ?? "Active")} />;
   }
   return String(r[c.key] ?? "—");
 }
 function DataTable({
-  columns, rows, onRowClick, onAction,
+  columns, rows, onRowClick, onAction, onToggle,
 }: {
   columns: Column[]; rows: Row[];
   onRowClick?: (r: Row, index: number) => void;
   onAction?: (a: RowAction, r: Row, index: number) => void;
+  onToggle?: (key: string, row: Row, checked: boolean) => void;
 }) {
   if (!rows.length) return null;
   const visibleColumns = columns.filter(c => !c.hidden);
@@ -958,7 +972,7 @@ function DataTable({
                   className="border-b border-border/60 hover:bg-secondary/40 transition-colors cursor-pointer">
                   {visibleColumns.map((c) => (
                     <td key={c.key} className={cn("px-4 py-3 text-[13px] font-medium text-foreground align-top", c.className)}>
-                      {renderCellValue(c, r)}
+                      {renderCellValue(c, r, onToggle)}
                     </td>
                   ))}
                   <td className="px-2 text-right align-top">
@@ -998,7 +1012,7 @@ function DataTable({
                       <div key={c.key} className="flex items-start justify-between gap-3 text-xs">
                         <span className="shrink-0 text-muted-foreground font-semibold">{c.label}</span>
                         <span className="text-right font-medium text-foreground break-words min-w-0">
-                          {renderCellValue(c, r)}
+                          {renderCellValue(c, r, onToggle)}
                         </span>
                       </div>
                     ))}
@@ -2617,6 +2631,22 @@ function LiveTablePage({
     }
   };
 
+  const handleToggle = async (key: string, row: Row, checked: boolean) => {
+    if (slug !== "products" || key !== "status") return;
+    const newStatus = checked ? "Enable" : "Disable";
+    const itemCode = row.rawKey || row.sku || row.name;
+
+    setRows((prev) => prev.map((r) => (r.rawKey === row.rawKey ? { ...r, status: newStatus } : r)));
+
+    try {
+      await updateItem(itemCode, { status: newStatus });
+      pushToast("success", `Product ${checked ? "enabled" : "disabled"} on website`);
+    } catch (err: any) {
+      setRows((prev) => prev.map((r) => (r.rawKey === row.rawKey ? { ...r, status: checked ? "Disable" : "Enable" } : r)));
+      pushToast("error", err.message || "Failed to update status");
+    }
+  };
+
   return (
     <div className="space-y-6" key={slug}>
       <ToastHost />
@@ -2677,6 +2707,7 @@ function LiveTablePage({
             columns={meta.columns} rows={paged}
             onRowClick={(r) => setDrawer({ open: true, row: r, index: rows.indexOf(r) })}
             onAction={handleAction}
+            onToggle={slug === "products" ? handleToggle : undefined}
           />
           <Pagination page={page} pages={pages} onPage={setPage} />
         </>
