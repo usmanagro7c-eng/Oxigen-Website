@@ -99,16 +99,16 @@ export function BannerCarousel() {
 
   return (
     <section
-      className="relative pt-24 sm:pt-28 lg:pt-32"
+      className="relative pt-16 sm:pt-28 lg:pt-32"
       aria-label="Featured offers"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="mx-auto max-w-6xl px-5">
+      <div className="mx-auto max-w-6xl px-3 sm:px-5">
         {/* Banner Frame */}
-        <div className="group relative overflow-hidden rounded-[2rem] border border-border/50 bg-muted shadow-2xl shadow-primary/15">
+        <div className="group relative overflow-hidden rounded-xl sm:rounded-[2rem] border border-border/50 bg-muted shadow-xl sm:shadow-2xl shadow-primary/15">
           <div
             className="flex transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{ transform: `translateX(-${i * 100}%)` }}
@@ -120,44 +120,48 @@ export function BannerCarousel() {
                 className="relative block w-full shrink-0 overflow-hidden"
                 aria-label={b.title}
               >
-                <img
-                  src={b.image}
-                  alt={b.title}
-                  loading={idx === 0 ? "eager" : "lazy"}
-                  className="aspect-[4/3] w-full h-auto block object-cover object-center transition-transform duration-1000 ease-out group-hover:scale-[1.01] sm:aspect-[2.35/1]"
+                <div
+                  role="img"
+                  aria-label={b.title}
+                  className="aspect-[2.35/1] w-full bg-cover bg-no-repeat transition-transform duration-1000 ease-out group-hover:scale-[1.01]"
+                  style={{
+                    backgroundImage: `url(${b.image})`,
+                    backgroundPosition: "center 25%",
+                    backgroundColor: "var(--color-muted)",
+                  }}
                 />
                 <span className="sr-only">{b.title}</span>
               </Link>
             ))}
           </div>
 
-          {/* Navigation Arrows */}
+          {/* Navigation Arrows — hidden on mobile (swipe handles it), shown on desktop */}
           <button
             onClick={() => go(-1)}
             aria-label="Previous banner"
-            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full glass p-3 text-ink shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white active:scale-95 sm:left-5 sm:opacity-0 sm:group-hover:opacity-100"
+            className="hidden sm:grid absolute left-5 top-1/2 -translate-y-1/2 place-items-center rounded-full glass p-3 text-ink shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white active:scale-95 sm:opacity-0 sm:group-hover:opacity-100"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
           <button
             onClick={() => go(1)}
             aria-label="Next banner"
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full glass p-3 text-ink shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white active:scale-95 sm:right-5 sm:opacity-0 sm:group-hover:opacity-100"
+            className="hidden sm:grid absolute right-5 top-1/2 -translate-y-1/2 place-items-center rounded-full glass p-3 text-ink shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white active:scale-95 sm:opacity-0 sm:group-hover:opacity-100"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
 
           {/* Bottom Indicators */}
-          <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-2">
+          <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-1.5 sm:bottom-4 sm:gap-2">
             {banners.map((b, idx) => (
               <button
                 key={b.key || idx}
                 onClick={() => setI(idx)}
                 aria-label={`Go to banner ${idx + 1}`}
-                className={`h-2 rounded-full transition-all duration-300 ${
+                className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
                   idx === i
-                    ? "w-9 bg-white shadow-md shadow-black/40"
-                    : "w-2.5 bg-white/60 hover:bg-white/90"
+                    ? "w-7 sm:w-9 bg-white shadow-md shadow-black/40"
+                    : "w-2 sm:w-2.5 bg-white/60 hover:bg-white/90"
                 }`}
               />
             ))}
