@@ -26,7 +26,8 @@ import {
   getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser,
   getAdminFiles, uploadAdminFile, deleteAdminFile,
   getErpResource, createErpDoc, updateErpDoc, deleteErpDoc,
-  getDashboardStats, getItemImageUrl, type DashboardStats, type ItemGroup,
+  getAdminBanners, createAdminBanner, updateAdminBanner, deleteAdminBanner,
+  getDashboardStats, getItemImageUrl, type DashboardStats, type ItemGroup, type Item, type Banner, type BannerProduct,
 } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -517,6 +518,7 @@ function DashboardCatchAll() {
 
   if (slug === "analytics") return <AnalyticsPage />;
   if (slug === "media")     return <MediaLibraryPage />;
+  if (slug === "banners")   return <BannersPage />;
 
   const meta = MODULE_META[slug] ?? {
     subtitle: `Manage ${slug}.`,
@@ -837,8 +839,8 @@ function AdvancedFilterPanel({
                     onChange={(v) => handleFieldChange(cfg.field, v)}
                     dynamicOptions={dynamicOpts}
                   />
-                );
-              }
+  );
+}
               return (
                 <FilterField
                   key={cfg.field}
@@ -1794,10 +1796,10 @@ function RecordModal({
                         >
                           <ImagePlus className="h-4 w-4" /> Pick from Media Library
                         </button>
-                      </div>
-                    );
-                  }
-                  
+    </div>
+  );
+}
+
                   if (mode === "edit" && (c.key === "id" || c.key === "rawKey" || c.key === "sku")) {
                     return (
                       <label key={c.key} className="block opacity-70">
@@ -3006,6 +3008,365 @@ function MediaLibraryPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * Banners Management
+ * ============================================================ */
+function BannersPage() {
+  const item = findItem("banners")!;
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
+
+  const loadBanners = () => {
+    setLoading(true);
+    getAdminBanners()
+      .then((res) => setBanners(res.data || []))
+      .catch(() => pushToast("error", "Failed to load banners"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadBanners(); }, []);
+
+  const handleDelete = async (b: Banner) => {
+    if (!window.confirm(`Delete banner "${b.title}"?`)) return;
+    try {
+      await deleteAdminBanner(b.id);
+      pushToast("success", "Banner deleted");
+      loadBanners();
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to delete banner");
+    }
+  };
+
+  const handleToggleActive = async (b: Banner) => {
+    try {
+      await updateAdminBanner(b.id, { isActive: !b.isActive });
+      setBanners((prev) => prev.map((x) => x.id === b.id ? { ...x, isActive: !x.isActive } : x));
+      pushToast("success", `Banner ${b.isActive ? "disabled" : "enabled"}`);
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to update banner");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <ToastHost />
+      <Breadcrumb label="Banners" />
+      <PageHeader
+        icon={item.icon}
+        title="Banners"
+        subtitle="Manage homepage carousel banners and linked products."
+        primaryAction="Create banner"
+        onPrimary={() => { setEditingBanner(null); setModalOpen(true); }}
+        onRefresh={loadBanners}
+        loading={loading}
+      />
+
+      {loading ? (
+        <div className="py-16 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+          <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+          <span>Loading banners...</span>
+        </div>
+      ) : banners.length === 0 ? (
+        <EmptyState
+          title="No banners yet"
+          desc="Create your first homepage banner to display on the website."
+          action="Create banner"
+          onAction={() => { setEditingBanner(null); setModalOpen(true); }}
+        />
+      ) : (
+        <div className="space-y-3">
+          {banners.sort((a, b) => a.position - b.position).map((b, i) => (
+            <motion.div
+              key={b.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03 }}
+              className="glass rounded-2xl border border-white/10 p-4 flex items-center gap-4"
+            >
+              <span className="text-xs text-muted-foreground font-mono w-6 text-center shrink-0">
+                #{b.position}
+              </span>
+              <div className="w-24 h-16 rounded-xl overflow-hidden bg-white/[0.04] shrink-0">
+                <img
+                  src={getItemImageUrl(b.image)}
+                  alt={b.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{b.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  {b.products.length} product{b.products.length !== 1 ? "s" : ""} linked
+                </p>
+              </div>
+              <button
+                onClick={() => handleToggleActive(b)}
+                className={`px-3 py-1 rounded-full text-[11px] font-medium border transition ${
+                  b.isActive
+                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+                    : "bg-white/5 border-white/10 text-muted-foreground"
+                }`}
+              >
+                {b.isActive ? "Active" : "Inactive"}
+              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => { setEditingBanner(b); setModalOpen(true); }}
+                  className="grid h-8 w-8 place-items-center rounded-lg hover:bg-white/10 text-muted-foreground hover:text-white transition"
+                  title="Edit"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(b)}
+                  className="grid h-8 w-8 place-items-center rounded-lg hover:bg-rose-500/15 text-muted-foreground hover:text-rose-300 transition"
+                  title="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {modalOpen && (
+        <BannerModal
+          banner={editingBanner}
+          onClose={() => { setModalOpen(false); setEditingBanner(null); }}
+          onSaved={() => { setModalOpen(false); setEditingBanner(null); loadBanners(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * Banner Create/Edit Modal
+ * ============================================================ */
+function BannerModal({
+  banner,
+  onClose,
+  onSaved,
+}: {
+  banner: Banner | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(banner?.title ?? "");
+  const [image, setImage] = useState(banner?.image ?? "");
+  const [isActive, setIsActive] = useState(banner?.isActive ?? true);
+  const [position, setPosition] = useState(banner?.position ?? 0);
+  const [selectedProducts, setSelectedProducts] = useState<BannerProduct[]>(banner?.products ?? []);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [productSearch, setProductSearch] = useState("");
+  const [productResults, setProductResults] = useState<Item[]>([]);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onProductSearch = (val: string) => {
+    setProductSearch(val);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (val.length < 2) { setProductResults([]); return; }
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await getItems({ search: val, limit: 20 });
+        setProductResults(res.data || []);
+      } catch { setProductResults([]); }
+    }, 400);
+  };
+
+  const addProduct = (p: Item) => {
+    if (selectedProducts.length >= 5) { pushToast("warning", "Maximum 5 products per banner"); return; }
+    if (selectedProducts.some((x) => x.productName === (p.item_code || p.name))) return;
+    setSelectedProducts((prev) => [...prev, { productName: p.item_code || p.name || "", sortOrder: prev.length }]);
+    setProductSearch("");
+    setProductResults([]);
+  };
+
+  const removeProduct = (name: string) => {
+    setSelectedProducts((prev) => prev.filter((x) => x.productName !== name));
+  };
+
+  const onFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await uploadAdminFile(file);
+      setImage(res.data?.file_url || res.data?.url || "");
+      pushToast("success", "Image uploaded");
+    } catch (err: any) {
+      pushToast("error", err.message || "Upload failed");
+    }
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) { pushToast("error", "Title is required"); return; }
+    if (!image) { pushToast("error", "Image is required"); return; }
+    setSaving(true);
+    try {
+      if (banner) {
+        await updateAdminBanner(banner.id, { title, image, isActive, position, products: selectedProducts });
+        pushToast("success", "Banner updated");
+      } else {
+        await createAdminBanner({ title, image, isActive, position, products: selectedProducts });
+        pushToast("success", "Banner created");
+      }
+      onSaved();
+    } catch (err: any) {
+      pushToast("error", err.message || "Failed to save banner");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="glass rounded-2xl border border-white/10 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{banner ? "Edit Banner" : "Create Banner"}</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-white transition"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Banner Image *</label>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileUpload} />
+          {image ? (
+            <div className="relative rounded-xl overflow-hidden border border-white/10">
+              <img src={getItemImageUrl(image)} alt="Banner" className="w-full h-40 object-cover" />
+              <button
+                onClick={() => setImage("")}
+                className="absolute top-2 right-2 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white hover:bg-rose-600/90 transition"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="w-full h-32 rounded-xl border-2 border-dashed border-white/10 hover:border-primary/50 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-white transition"
+            >
+              <ImagePlus className="h-6 w-6" />
+              <span className="text-xs">{uploading ? "Uploading..." : "Click to upload image"}</span>
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Title *</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Summer Sale 2026"
+            className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        <div className="flex gap-4">
+          <div className="flex-1 space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Position</label>
+            <input
+              type="number"
+              value={position}
+              onChange={(e) => setPosition(Number(e.target.value))}
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="flex items-end pb-1">
+            <button
+              onClick={() => setIsActive(!isActive)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium border transition ${
+                isActive
+                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+                  : "bg-white/5 border-white/10 text-muted-foreground"
+              }`}
+            >
+              {isActive ? "Active" : "Inactive"}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">
+            Linked Products ({selectedProducts.length}/5)
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              value={productSearch}
+              onChange={(e) => onProductSearch(e.target.value)}
+              placeholder="Search products to link..."
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] pl-9 pr-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            {productResults.length > 0 && (
+              <div className="absolute z-10 top-full mt-1 w-full rounded-xl border border-white/10 bg-black/90 backdrop-blur-xl shadow-xl max-h-48 overflow-y-auto">
+                {productResults.map((p) => (
+                  <button
+                    key={p.item_code || p.name}
+                    onClick={() => addProduct(p)}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/10 transition text-sm"
+                  >
+                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/[0.04] shrink-0">
+                      {p.image ? (
+                        <img src={getItemImageUrl(p.image)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="grid w-full h-full place-items-center text-muted-foreground text-xs">?</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-white text-xs truncate">{p.item_name || p.item_code}</p>
+                      <p className="text-muted-foreground text-[10px]">{p.item_code}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {selectedProducts.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {selectedProducts.map((bp) => (
+                <span
+                  key={bp.productName}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 border border-primary/25 px-3 py-1 text-xs text-primary"
+                >
+                  {bp.productName}
+                  <button onClick={() => removeProduct(bp.productName)} className="hover:text-white transition">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-white transition">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || uploading}
+            className="px-5 py-2 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary/90 transition disabled:opacity-50"
+          >
+            {saving ? "Saving..." : banner ? "Update Banner" : "Create Banner"}
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }
