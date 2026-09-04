@@ -208,6 +208,7 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "item_code", label: "Item Code" },
       { key: "type", label: "Type" },
       { key: "value", label: "Value" },
+      { key: "priority", label: "Priority" },
       { key: "valid_from", label: "Valid From" },
       { key: "valid_upto", label: "Valid To" },
       { key: "status", label: "Status", className: "text-right" },
