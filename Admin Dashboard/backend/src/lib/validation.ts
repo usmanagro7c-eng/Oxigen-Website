@@ -121,6 +121,7 @@ export const createItemSchema = z.object({
   publish: z.boolean().optional(),
   website_warehouse: z.string().max(255).optional(),
   short_description: z.string().max(1000).optional(),
+  web_long_description: z.string().max(50000).optional(),
 });
 
 // ── Admin: Settings Update ───────────────────────────────────────────────────
