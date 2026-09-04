@@ -230,6 +230,7 @@ export interface Item {
   website_image: string | null;
   description: string;
   short_description?: string;
+  web_long_description?: string;
   stock_qty: number;
   is_stock_item: number;
   is_published: number;
