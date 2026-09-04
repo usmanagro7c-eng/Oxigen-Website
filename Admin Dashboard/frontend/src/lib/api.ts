@@ -848,3 +848,62 @@ export interface MonitorResponse {
 export async function getAdminMonitor(): Promise<MonitorResponse> {
   return fetchApi("/admin/monitor");
 }
+
+// ─── Banners ──────────────────────────────────────────────────────────────
+export interface BannerProduct {
+  productName: string;
+  sortOrder: number;
+}
+
+export interface Banner {
+  id: string;
+  title: string;
+  image: string;
+  isActive: boolean;
+  position: number;
+  products: BannerProduct[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getAdminBanners(): Promise<{ data: Banner[] }> {
+  return fetchApi("/admin/banners");
+}
+
+export async function createAdminBanner(payload: {
+  title: string;
+  image: string;
+  isActive?: boolean;
+  position?: number;
+  products?: BannerProduct[];
+}): Promise<{ data: Banner }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi("/admin/banners", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminBanner(id: string, payload: {
+  title?: string;
+  image?: string;
+  isActive?: boolean;
+  position?: number;
+  products?: BannerProduct[];
+}): Promise<{ data: Banner }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/banners/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAdminBanner(id: string): Promise<{ success: boolean; message: string }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/banners/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
