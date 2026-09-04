@@ -419,6 +419,7 @@ export class ErpAdapter {
     publish?: boolean;
     website_warehouse?: string;
     short_description?: string;
+    web_long_description?: string;
     images?: string[];
   }): Promise<{ name: string; item_code: string } | null> {
     const defaultCompany = process.env.DEFAULT_COMPANY ?? "Oxigen";
@@ -476,8 +477,9 @@ export class ErpAdapter {
         web_item_name: payload.item_name,
         published: 1,
         website_warehouse: onlineWarehouse,
-        short_description: payload.short_description,
-        description: payload.description,
+        short_description: payload.short_description || "",
+        web_long_description: payload.web_long_description || "",
+        description: payload.description || "",
       };
 
       const websiteItemRes = await erpFetch(getErpUrl("/api/resource/Website Item"), {
