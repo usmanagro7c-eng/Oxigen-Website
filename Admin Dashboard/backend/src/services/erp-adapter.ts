@@ -1390,9 +1390,6 @@ export class ErpAdapter {
     const submitData = (await submitRes.json()) as any;
     const finalOrderName = submitData.message?.name ?? orderData.data.name;
 
-    // Automatically create & submit Delivery Note to physically deduct actual stock in ERPNext
-    await this.createAndSubmitDeliveryNote(finalOrderName, targetWarehouse);
-
     itemCache.clear();
     return finalOrderName;
   }
