@@ -606,6 +606,10 @@ export interface AdminOrder {
   delivery_date?: string;
   modified: string;
   owner: string;
+  docstatus?: number;
+  invoice_name?: string | null;
+  invoice_status?: string | null;
+  outstanding_amount?: number;
   shipping?: {
     title?: string;
     line1?: string;
@@ -649,6 +653,42 @@ export async function deleteAdminOrder(name: string): Promise<{ success: boolean
   const csrfToken = await getCsrfToken();
   return fetchApi(`/admin/orders/${encodeURIComponent(name)}`, {
     method: "DELETE",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export interface PaymentMode {
+  name: string;
+  type?: string | null;
+  default_account?: string | null;
+}
+
+export async function getPaymentModes(): Promise<{ data: PaymentMode[] }> {
+  return fetchApi("/admin/payment-modes");
+}
+
+export async function paymentAdminOrder(
+  name: string,
+  payload: {
+    mode_of_payment?: string;
+    amount?: number;
+    reference_no?: string;
+    posting_date?: string;
+    reference_date?: string;
+  }
+): Promise<{ success: boolean; paymentEntry?: string; invoice?: string; message: string }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/orders/${encodeURIComponent(name)}/payment`, {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function returnAdminOrder(name: string): Promise<{ success: boolean; message: string }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/orders/${encodeURIComponent(name)}/return`, {
+    method: "POST",
     headers: { "X-CSRF-Token": csrfToken },
   });
 }
