@@ -805,6 +805,202 @@ async function resolveShippingAddresses(orderDocs: { shipping_address_name?: str
   return map;
 }
 
+type LinkedInvoiceInfo = {
+  invoice_name?: string;
+  invoice_status?: string;
+  outstanding_amount?: number;
+  docstatus?: number;
+};
+
+async function findLinkedSalesInvoice(orderName: string, customerName?: string): Promise<string | null> {
+  const info = await resolveSalesInvoicesForOrders([{ name: orderName, customer: customerName }]);
+  return info.get(orderName)?.invoice_name ?? null;
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (idx < items.length) {
+      const cur = idx++;
+      results[cur] = await fn(items[cur]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+// The API key may lack read permission on the Sales Invoice Item child doctype
+// (403). These helpers try the fast child-table query first and otherwise fall
+// back to reading the customers' submitted Sales Invoices + their items child
+// rows via permitted parent-doc reads.
+async function resolveSalesInvoicesForOrders(
+  orders: Array<{ name: string; customer?: string }>
+): Promise<Map<string, LinkedInvoiceInfo | null>> {
+  const uniqueOrders = [...new Map(orders.map((o) => [o.name, o])).values()];
+  const uniqueNames = uniqueOrders.map((o) => o.name);
+  const customerOf = new Map<string, string>();
+  for (const o of uniqueOrders) if (o.customer) customerOf.set(o.name, o.customer);
+  const out = new Map<string, LinkedInvoiceInfo | null>();
+  if (!uniqueNames.length) return out;
+
+  const fetchInvoiceInfo = async (params: URLSearchParams): Promise<Map<string, LinkedInvoiceInfo>> => {
+    const infoBySiName = new Map<string, LinkedInvoiceInfo>();
+    const res = await erpFetch(getErpUrl(`/api/resource/Sales Invoice?${params.toString()}`), { headers: getErpHeaders() });
+    if (res.ok) {
+      const json = (await res.json()) as { data?: Array<any> };
+      for (const si of json.data ?? []) {
+        infoBySiName.set(si.name, {
+          invoice_name: si.name,
+          invoice_status: si.status,
+          outstanding_amount: si.outstanding_amount,
+          docstatus: si.docstatus,
+        });
+      }
+    }
+    return infoBySiName;
+  };
+
+  // ── Fast path: child-table query (needs read permission on Sales Invoice Item) ──
+  let childTableOk = true;
+  const bySo = new Map<string, string[]>();
+  const siNames = new Set<string>();
+  const CHUNK = 40;
+  try {
+    for (let i = 0; i < uniqueNames.length; i += CHUNK) {
+      const slice = uniqueNames.slice(i, i + CHUNK);
+      const params = new URLSearchParams({
+        filters: JSON.stringify([["sales_order", "in", slice]]),
+        fields: JSON.stringify(["parent", "sales_order"]),
+        limit_page_length: "1000",
+      });
+      const res = await erpFetch(
+        getErpUrl(`/api/resource/Sales Invoice Item?${params.toString()}`),
+        { headers: getErpHeaders() }
+      );
+      if (res.status === 403) {
+        childTableOk = false;
+        break;
+      }
+      if (res.ok) {
+        const json = (await res.json()) as { data?: Array<{ parent?: string; sales_order?: string }> };
+        for (const row of json.data ?? []) {
+          if (!row.parent || !row.sales_order) continue;
+          if (!bySo.has(row.sales_order)) bySo.set(row.sales_order, []);
+          bySo.get(row.sales_order)!.push(row.parent);
+          siNames.add(row.parent);
+        }
+      }
+    }
+    if (childTableOk && siNames.size > 0) {
+      const infoBySiName = await fetchInvoiceInfo(
+        new URLSearchParams({
+          filters: JSON.stringify([["name", "in", [...siNames]]]),
+          fields: JSON.stringify(["name", "status", "outstanding_amount", "docstatus"]),
+          limit_page_length: "1000",
+        })
+      );
+      for (const soName of uniqueNames) {
+        const names = (bySo.get(soName) ?? []).sort(
+          (a, b) => (infoBySiName.get(b)?.docstatus ?? 0) - (infoBySiName.get(a)?.docstatus ?? 0)
+        );
+        const first = names.map((n) => infoBySiName.get(n)).find((x): x is LinkedInvoiceInfo => Boolean(x));
+        out.set(soName, first ?? null);
+      }
+      return out;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // ── Fallback: read submitted Sales Invoices (per customer) + items child rows ──
+  logger.info({ reason: childTableOk ? "no-invoices" : "no-permission" }, "[admin resolveSi] using parent-doc fallback");
+  try {
+    const tasks: Array<{ customer: string; invoiceName: string }> = [];
+    const byCustomer = new Map<string, string[]>();
+    for (const soName of uniqueNames) {
+      const c = customerOf.get(soName);
+      if (!c) continue;
+      if (!byCustomer.has(c)) byCustomer.set(c, []);
+      byCustomer.get(c)!.push(soName);
+    }
+    for (const [customer, soNames] of byCustomer) {
+      const listRes = await erpFetch(
+        getErpUrl(
+          `/api/resource/Sales Invoice?${new URLSearchParams({
+            filters: JSON.stringify([["customer", "=", customer], ["docstatus", "=", 1]]),
+            fields: JSON.stringify(["name"]),
+            limit_page_length: "200",
+            order_by: "creation desc",
+          })}`
+        ),
+        { headers: getErpHeaders() }
+      );
+      if (!listRes.ok) continue;
+      const invoices = ((await listRes.json()) as { data?: Array<{ name: string }> }).data ?? [];
+      for (const inv of invoices) tasks.push({ customer, invoiceName: inv.name });
+      if (tasks.length >= 3000) break;
+    }
+
+    const infoBySo = new Map<string, LinkedInvoiceInfo>();
+    await mapWithConcurrency(tasks, 6, async (t) => {
+      try {
+        const fields = encodeURIComponent(JSON.stringify(["name", "customer", "status", "docstatus", "outstanding_amount", "items"]));
+        const docRes = await erpFetch(
+          getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(t.invoiceName)}?fields=${fields}`),
+          { headers: getErpHeaders() }
+        );
+        if (!docRes.ok) return;
+        const doc = ((await docRes.json()) as { data?: any }).data;
+        if (!doc?.items || !doc.status) return;
+        const soNames = (doc.items as Array<{ sales_order?: string }>)
+          .map((it) => it.sales_order)
+          .filter((x): x is string => Boolean(x));
+        const info: LinkedInvoiceInfo = {
+          invoice_name: doc.name,
+          invoice_status: doc.status,
+          outstanding_amount: doc.outstanding_amount,
+          docstatus: doc.docstatus,
+        };
+        for (const soName of soNames) {
+          if (customerOf.get(soName) && customerOf.get(soName) !== doc.customer) continue;
+          const existing = infoBySo.get(soName);
+          if (!existing || (info.docstatus ?? 0) > (existing.docstatus ?? 0)) {
+            infoBySo.set(soName, info);
+          }
+        }
+      } catch {
+        /* skip this invoice */
+      }
+    });
+
+    for (const soName of uniqueNames) {
+      out.set(soName, infoBySo.get(soName) ?? null);
+    }
+  } catch (err) {
+    logger.warn({ err }, "[admin resolveSi] fallback failed");
+  }
+  return out;
+}
+
+function computeOrderDisplayStatus(so: any, info: LinkedInvoiceInfo | null): string {
+  if (Number(so.docstatus) === 2) return "Cancelled";
+  if (info && info.invoice_status) {
+    const s = String(info.invoice_status).toLowerCase();
+    if (s === "paid") return "Completed";
+    if (
+      s === "unpaid" ||
+      s === "overdue" ||
+      s === "partly paid" ||
+      s === "partial" ||
+      s === "return" ||
+      s === "credit note issued" ||
+      s === "draft"
+    ) return "Unpaid";
+  }
+  return so.status || "To Deliver and Bill";
+}
+
 router.get(
   "/admin/orders",
   attachRequestId,
@@ -823,6 +1019,7 @@ router.get(
           "modified",
           "owner",
           "shipping_address_name",
+          "docstatus",
         ]),
         limit_page_length: "200",
         order_by: "transaction_date desc, modified desc",
@@ -841,10 +1038,18 @@ router.get(
       const data = (await erpRes.json()) as { data: any[] };
       const orders = data.data || [];
       const shippingMap = await resolveShippingAddresses(orders);
-      const withShipping = orders.map((o) => ({
-        ...o,
-        shipping: shippingMap.get(o.shipping_address_name) || null,
-      }));
+      const invoiceMap = await resolveSalesInvoicesForOrders(orders);
+      const withShipping = orders.map((o: any) => {
+        const info = invoiceMap.get(o.name) || null;
+        return {
+          ...o,
+          shipping: shippingMap.get(o.shipping_address_name) || null,
+          invoice_name: info?.invoice_name || null,
+          invoice_status: info?.invoice_status || null,
+          outstanding_amount: info?.outstanding_amount ?? o.grand_total ?? 0,
+          status: computeOrderDisplayStatus(o, info),
+        };
+      });
       res.json({ data: withShipping });
     } catch (err) {
       logger.error({ err }, "[admin/orders]");
@@ -870,7 +1075,34 @@ router.get(
       }
 
       const data: any = await erpRes.json();
-      res.json({ data: data.data });
+      const so = data.data;
+      let invoiceInfo: LinkedInvoiceInfo | null = null;
+      const invoiceName = await findLinkedSalesInvoice(so?.name, so?.customer);
+      if (invoiceName) {
+        const fields = encodeURIComponent(JSON.stringify(["name", "docstatus", "status", "outstanding_amount"]));
+        const siRes = await erpFetch(
+          getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(invoiceName)}?fields=${fields}`),
+          { headers: getErpHeaders() }
+        );
+        if (siRes.ok) {
+          const si = ((await siRes.json()) as { data?: any }).data;
+          invoiceInfo = {
+            invoice_name: si?.name,
+            invoice_status: si?.status,
+            outstanding_amount: si?.outstanding_amount,
+            docstatus: si?.docstatus,
+          };
+        }
+      }
+      res.json({
+        data: {
+          ...so,
+          invoice_name: invoiceInfo?.invoice_name ?? null,
+          invoice_status: invoiceInfo?.invoice_status ?? null,
+          outstanding_amount: invoiceInfo?.outstanding_amount ?? (Number(so?.grand_total) || 0),
+          display_status: computeOrderDisplayStatus(so, invoiceInfo),
+        },
+      });
     } catch (err: any) {
       logger.error({ err }, "[admin/orders/:name.GET]");
       res.status(500).json({ error: err.message || "Internal server error." });
@@ -935,17 +1167,38 @@ router.post(
 
       // Submit Sales Order in ERPNext to immediately reserve/deduct available inventory
       const orderName = data.data?.name;
+      let soSubmitted = false;
       try {
         await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
           method: "POST",
           headers: getErpHeaders(),
           body: JSON.stringify({ doc: data.data }),
         });
+        soSubmitted = true;
         if (orderName) {
-          logger.info({ order: orderName }, "Sales Order submitted (Delivery Note skipped)");
+          logger.info({ order: orderName }, "Sales Order submitted");
         }
       } catch (submitErr) {
         logger.warn({ submitErr, order: orderName }, "Sales Order created in Draft, submit failed");
+      }
+
+      // Create + submit the Sales Invoice so the order lands as "Unpaid" with stock deducted
+      if (soSubmitted && orderName) {
+        try {
+          await ErpAdapter.createAndSubmitSalesInvoice(orderName, defaultWarehouse);
+        } catch (invErr: any) {
+          try {
+            await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify({ doctype: "Sales Order", name: orderName }),
+            });
+          } catch {
+            /* best effort */
+          }
+          res.status(502).json({ error: invErr?.message || "Sales Order created but Sales Invoice creation failed." });
+          return;
+        }
       }
 
       itemCache.clear();
@@ -983,6 +1236,216 @@ router.put(
     } catch (err: any) {
       logger.error({ err }, "[admin/orders/:name.PUT]");
       res.status(500).json({ error: err.message || "Failed to update order." });
+    }
+  }
+);
+
+// GET /admin/payment-modes - available Mode of Payment records for the Payment form
+router.get(
+  "/admin/payment-modes",
+  attachRequestId,
+  async (_req: Request, res: Response) => {
+    try {
+      const params = new URLSearchParams({
+        fields: JSON.stringify(["name", "type", "accounts"]),
+        limit_page_length: "100",
+        order_by: "name asc",
+      });
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Mode of Payment?${params.toString()}`),
+        { headers: getErpHeaders() }
+      );
+      if (!erpRes.ok) {
+        res.status(502).json({ error: "Failed to fetch payment modes from ERPNext." });
+        return;
+      }
+      const data = (await erpRes.json()) as { data?: any[] };
+      res.json({
+        data: (data.data || []).map((m) => ({
+          name: m.name,
+          type: m.type || null,
+          default_account: (m.accounts || [])[0]?.default_account || null,
+        })),
+      });
+    } catch (err) {
+      logger.error({ err }, "[admin/payment-modes]");
+      res.status(500).json({ error: "Internal server error." });
+    }
+  }
+);
+
+// POST /admin/orders/:name/payment - create + submit a Payment Entry against the order's Sales Invoice
+router.post(
+  "/admin/orders/:name/payment",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const { mode_of_payment, amount, reference_no, posting_date, reference_date } = req.body as {
+        mode_of_payment?: string;
+        amount?: number;
+        reference_no?: string;
+        posting_date?: string;
+        reference_date?: string;
+      };
+
+      // 1) Load the Sales Order
+      const soRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+        { headers: getErpHeaders() }
+      );
+      if (!soRes.ok) {
+        res.status(404).json({ error: "Order not found." });
+        return;
+      }
+      const soData: any = ((await soRes.json()) as any).data;
+      if (Number(soData.docstatus) === 2) {
+        res.status(400).json({ error: "Cancelled orders cannot be paid." });
+        return;
+      }
+
+// 2) Resolve (or create) the linked Sales Invoice
+        let invoiceName = await findLinkedSalesInvoice(name, soData?.customer);
+      if (!invoiceName) {
+        try {
+          invoiceName = await ErpAdapter.createAndSubmitSalesInvoice(
+            name,
+            soData?.items?.[0]?.warehouse
+          );
+        } catch (err: any) {
+          res.status(502).json({ error: err?.message || "Failed to create Sales Invoice for this order." });
+          return;
+        }
+      }
+
+      // 3) Build the Payment Entry from the Sales Invoice
+      const peTemplateRes = await erpFetch(
+        getErpUrl("/api/method/erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry"),
+        {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({ dt: "Sales Invoice", dn: invoiceName }),
+        }
+      );
+      if (!peTemplateRes.ok) {
+        const err = (await peTemplateRes.json().catch(() => ({}))) as any;
+        res.status(502).json({ error: parseErpError(err) || "Failed to prepare Payment Entry." });
+        return;
+      }
+
+      const peTemplate: any = ((await peTemplateRes.json()) as any).message;
+      if (!peTemplate || !peTemplate.doctype) {
+        res.status(502).json({ error: "Payment Entry could not be prepared." });
+        return;
+      }
+
+      // 4) Patch with the admin's selection
+      const today = new Date().toISOString().split("T")[0];
+      const payAmount = Number(amount) > 0 ? Number(amount) : (Number(soData.grand_total) || 0);
+      peTemplate.mode_of_payment = mode_of_payment || "Cash";
+      peTemplate.paid_amount = payAmount;
+      peTemplate.received_amount = payAmount;
+      if (posting_date) peTemplate.posting_date = posting_date;
+      if (reference_date) peTemplate.reference_date = reference_date;
+      peTemplate.reference_no = reference_no || "";
+
+      // 5) Insert + submit the Payment Entry
+      const peInsRes = await erpFetch(getErpUrl("/api/resource/Payment Entry"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(peTemplate),
+      });
+      if (!peInsRes.ok) {
+        const err = (await peInsRes.json().catch(() => ({}))) as any;
+        res.status(502).json({ error: parseErpError(err) || "Failed to create Payment Entry." });
+        return;
+      }
+      const peData: any = await peInsRes.json();
+
+      const peSubRes = await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({ doc: peData.data }),
+      });
+      if (!peSubRes.ok) {
+        const err = (await peSubRes.json().catch(() => ({}))) as any;
+        res.status(502).json({ error: parseErpError(err) || "Payment Entry could not be submitted." });
+        return;
+      }
+      const peSubmitJson: any = await peSubRes.json();
+      const peName = peSubmitJson.message?.name ?? peData.data.name;
+
+      itemCache.clear();
+      res.json({
+        success: true,
+        paymentEntry: peName,
+        invoice: invoiceName,
+        message: `Payment recorded against ${invoiceName}.`,
+      });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/:name/payment]");
+      res.status(500).json({ error: err.message || "Failed to record payment." });
+    }
+  }
+);
+
+// POST /admin/orders/:name/return - cancel Sales Invoice + Sales Order, restore stock
+router.post(
+  "/admin/orders/:name/return",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+
+      const soRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+        { headers: getErpHeaders() }
+      );
+      if (!soRes.ok) {
+        res.status(404).json({ error: "Order not found." });
+        return;
+      }
+      const soData: any = ((await soRes.json()) as any).data;
+      if (Number(soData.docstatus) === 2) {
+        res.status(400).json({ error: "Order is already cancelled." });
+        return;
+      }
+
+// 1) Cancel the linked Sales Invoice first (restores physical stock when update_stock = 1)
+        const invoiceName = await findLinkedSalesInvoice(name, soData?.customer);
+      if (invoiceName) {
+        const siRes = await erpFetch(
+          getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(invoiceName)}`),
+          { headers: getErpHeaders() }
+        );
+        if (siRes.ok) {
+          const siDoc: any = ((await siRes.json()) as any).data;
+          if (Number(siDoc.docstatus) === 1) {
+            await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify({ doctype: "Sales Invoice", name: invoiceName }),
+            });
+            logger.info({ order: name, invoice: invoiceName }, "[return] Sales Invoice cancelled (stock restored)");
+          }
+        }
+      }
+
+      // 2) Cancel the Sales Order (restores reserved stock)
+      await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({ doctype: "Sales Order", name }),
+      });
+
+      itemCache.clear();
+      res.json({
+        success: true,
+        message: `Order ${name} cancelled. Stock restored.`,
+      });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/:name/return]");
+      res.status(500).json({ error: err.message || "Failed to cancel order." });
     }
   }
 );
