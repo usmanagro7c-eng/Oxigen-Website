@@ -15,11 +15,15 @@ export type Order = {
   total: number;
   item_summary?: string;
   items?: { name: string; image?: string; slug?: string; qty?: number; price?: number }[];
+  invoiceName?: string;
+  outstandingAmount?: number;
 };
 export type OrderPlaced = Order & {
   items?: { slug: string; name: string; qty: number; price: number }[];
   customer?: { name: string; email: string; phone: string; address: string; city: string };
 };
+
+export type PaymentModeOption = { name: string; type?: string | null };
 
 export type UserProfile = {
   name: string;
@@ -84,6 +88,11 @@ interface ErpOrderRecord {
   transaction_date: string;
   status: string;
   grand_total: number;
+  item_summary?: string;
+  items?: { name?: string; image?: string; slug?: string; qty?: number; price?: number }[];
+  invoice_name?: string | null;
+  invoice_status?: string | null;
+  outstanding_amount?: number | null;
 }
 
 interface ErpAddressRecord {
@@ -152,6 +161,13 @@ type StoreValue = {
   }) => Promise<OrderPlaced | null>;
   cancelOrder: (orderId: string) => Promise<boolean>;
   removeOrder: (orderId: string) => Promise<boolean>;
+  paymentModes: PaymentModeOption[];
+  fetchPaymentModes: () => Promise<void>;
+  paymentOrder: (
+    orderId: string,
+    payload: { mode_of_payment?: string; amount?: number; reference_no?: string },
+  ) => Promise<boolean>;
+  returnOrder: (orderId: string) => Promise<boolean>;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -303,6 +319,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [paymentModes, setPaymentModes] = useState<PaymentModeOption[]>([]);
 
   const fetchOrders = async (email: string) => {
     try {
@@ -317,14 +334,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             date: o.transaction_date,
             status: o.status,
             total: o.grand_total,
-            item_summary: (o as any).item_summary,
-            items: (o as any).items?.map((it: any) => ({
-              name: it.name,
-              image: it.image,
-              slug: it.slug,
-              qty: it.qty,
-              price: it.price,
-            })) || [],
+            item_summary: o.item_summary,
+            invoiceName: o.invoice_name || undefined,
+            outstandingAmount:
+              o.outstanding_amount !== undefined && o.outstanding_amount !== null
+                ? Number(o.outstanding_amount)
+                : undefined,
+            items:
+              o.items?.map((it) => ({
+                name: it.name ?? it.slug ?? "",
+                image: it.image,
+                slug: it.slug,
+                qty: it.qty,
+                price: it.price,
+              })) || [],
           })),
         );
       }
@@ -374,7 +397,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (res.data) {
         const p = res.data;
         setProfile({
-          name: p.full_name || p.username || `${p.first_name || ""} ${p.last_name || ""}`.trim() || "User",
+          name:
+            p.full_name ||
+            p.username ||
+            `${p.first_name || ""} ${p.last_name || ""}`.trim() ||
+            "User",
           email: p.email || email,
           phone: p.mobile_no || p.phone || "",
           gender: p.gender || "",
@@ -489,12 +516,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const forgotPassword = async (email: string) => {
     try {
       const token = await csrfToken();
-      const res: { message?: string; error?: string } = await fetch(`${API_BASE}/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
-        credentials: "include",
-        body: JSON.stringify({ email }),
-      }).then((r) => r.json());
+      const res: { message?: string; error?: string } = await fetch(
+        `${API_BASE}/auth/forgot-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
+          credentials: "include",
+          body: JSON.stringify({ email }),
+        },
+      ).then((r) => r.json());
 
       if (res.error) {
         toast.error(res.error);
@@ -546,7 +576,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.gender !== undefined) payload.gender = patch.gender;
       if (patch.dob !== undefined) payload.birth_date = patch.dob;
 
-      const res = await apiCall(`${API_BASE}/user/profile`, "PUT", payload as Record<string, unknown>) as ApiResponse<ErpProfileRecord>;
+      const res = (await apiCall(
+        `${API_BASE}/user/profile`,
+        "PUT",
+        payload as Record<string, unknown>,
+      )) as ApiResponse<ErpProfileRecord>;
 
       if (res.data) {
         fetchProfile(user.email);
@@ -617,12 +651,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         payload.is_shipping_address = addr.isDefault ? 1 : 0;
       }
 
-      const res: ApiResponse<ErpAddressRecord> = await fetch(`${API_BASE}/user/addresses/${encodeURIComponent(id)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      }).then((r) => r.json());
+      const res: ApiResponse<ErpAddressRecord> = await fetch(
+        `${API_BASE}/user/addresses/${encodeURIComponent(id)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        },
+      ).then((r) => r.json());
 
       if (res.data) {
         if (user) fetchAddresses(user.email);
@@ -640,11 +677,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const deleteAddress = async (id: string) => {
     try {
       const token = await csrfToken();
-      const res: { message?: string; error?: string } = await fetch(`${API_BASE}/user/addresses/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: { "X-CSRF-Token": token },
-        credentials: "include",
-      }).then((r) => r.json());
+      const res: { message?: string; error?: string } = await fetch(
+        `${API_BASE}/user/addresses/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          headers: { "X-CSRF-Token": token },
+          credentials: "include",
+        },
+      ).then((r) => r.json());
 
       if (res.message) {
         if (user) fetchAddresses(user.email);
@@ -662,11 +702,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const cancelOrder = async (orderId: string) => {
     try {
       const token = await csrfToken();
-      const res: { message?: string; error?: string } = await fetch(`${API_BASE}/user/orders/${encodeURIComponent(orderId)}`, {
-        method: "DELETE",
-        headers: { "X-CSRF-Token": token },
-        credentials: "include",
-      }).then((r) => r.json());
+      const res: { message?: string; error?: string } = await fetch(
+        `${API_BASE}/user/orders/${encodeURIComponent(orderId)}`,
+        {
+          method: "DELETE",
+          headers: { "X-CSRF-Token": token },
+          credentials: "include",
+        },
+      ).then((r) => r.json());
 
       if (res.message) {
         toast.success(res.message);
@@ -685,11 +728,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const removeOrder = async (orderId: string) => {
     try {
       const token = await csrfToken();
-      const res: { message?: string; error?: string } = await fetch(`${API_BASE}/user/orders/${encodeURIComponent(orderId)}/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
-        credentials: "include",
-      }).then((r) => r.json());
+      const res: { message?: string; error?: string } = await fetch(
+        `${API_BASE}/user/orders/${encodeURIComponent(orderId)}/delete`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
+          credentials: "include",
+        },
+      ).then((r) => r.json());
 
       if (res.message) {
         toast.success(res.message);
@@ -701,6 +747,74 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     } catch {
       toast.error("Failed to remove order.");
+      return false;
+    }
+  };
+
+  const fetchPaymentModes = async () => {
+    try {
+      const res: ApiResponse<PaymentModeOption[]> = await fetch(`${API_BASE}/user/payment-modes`, {
+        credentials: "include",
+      }).then((r) => r.json());
+      if (Array.isArray(res.data)) setPaymentModes(res.data);
+    } catch {
+      // network error — keep existing modes
+    }
+  };
+
+  const paymentOrder = async (
+    orderId: string,
+    payload: { mode_of_payment?: string; amount?: number; reference_no?: string },
+  ) => {
+    try {
+      const res: { success?: boolean; message?: string; error?: string } = await fetch(
+        `${API_BASE}/user/orders/${encodeURIComponent(orderId)}/payment`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": await csrfToken() },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        },
+      ).then((r) => r.json());
+
+      if (res.success || res.message) {
+        toast.success(res.message || "Payment recorded — order completed.");
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: "Completed" } : o)),
+        );
+        return true;
+      }
+      toast.error(res.error || "Failed to record payment.");
+      return false;
+    } catch {
+      toast.error("Failed to record payment.");
+      return false;
+    }
+  };
+
+  const returnOrder = async (orderId: string) => {
+    try {
+      const res: { success?: boolean; message?: string; error?: string } = await fetch(
+        `${API_BASE}/user/orders/${encodeURIComponent(orderId)}/return`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": await csrfToken() },
+          credentials: "include",
+          body: JSON.stringify({}),
+        },
+      ).then((r) => r.json());
+
+      if (res.success || res.message) {
+        toast.success(res.message || "Order cancelled. Stock restored.");
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: "Cancelled" } : o)),
+        );
+        return true;
+      }
+      toast.error(res.error || "Failed to return order.");
+      return false;
+    } catch {
+      toast.error("Failed to return order.");
       return false;
     }
   };
@@ -775,7 +889,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return new Promise((resolvePoll) => {
           const interval = setInterval(async () => {
             try {
-              const jobRes: JobStatusResponse = await fetch(`${API_BASE}/user/orders/job/${jobId}`, { credentials: "include" }).then((r) => r.json());
+              const jobRes: JobStatusResponse = await fetch(
+                `${API_BASE}/user/orders/job/${jobId}`,
+                { credentials: "include" },
+              ).then((r) => r.json());
               const job = jobRes.data;
               if (job) {
                 if (job.status === "completed") {
@@ -877,9 +994,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       cancelOrder,
       removeOrder,
       fetchOrders,
+      paymentModes,
+      fetchPaymentModes,
+      paymentOrder,
+      returnOrder,
     } as unknown as StoreValue;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, wishlist, user, orders, drawerOpen, profile, addresses, allCatalog]);
+  }, [cart, wishlist, user, orders, drawerOpen, profile, addresses, paymentModes, allCatalog]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
