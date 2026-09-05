@@ -1183,8 +1183,114 @@ export class ErpAdapter {
     const submitData = (await submitRes.json()) as any;
     const finalOrderName = submitData.message?.name ?? orderData.data.name;
 
+    try {
+      await this.createAndSubmitSalesInvoice(finalOrderName, targetWarehouse);
+    } catch (invErr) {
+      // Roll back the Sales Order so we don't leave an orphaned submitted order
+      // when the Sales Invoice could not be created.
+      try {
+        await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({ doctype: "Sales Order", name: finalOrderName }),
+        });
+      } catch {
+        /* best effort */
+      }
+      const message =
+        invErr instanceof Error ? invErr.message : String(invErr);
+      throw new Error(
+        `Sales Order ${finalOrderName} was created but Sales Invoice creation failed: ${message}`
+      );
+    }
+
     itemCache.clear();
     return finalOrderName;
+  }
+
+  /**
+   * Creates and submits a Sales Invoice from a submitted Sales Order.
+   * Uses `update_stock = 1` so submitting the invoice posts a Stock Entry that
+   * immediately deducts actual physical stock (replacing the Delivery Note flow).
+   * Subtracting the Sales Order reference keeps the SO item's delivered_qty in sync
+   * so the SO shows as fully delivered after the invoice is submitted.
+   */
+  static async createAndSubmitSalesInvoice(
+    orderName: string,
+    warehouse?: string
+  ): Promise<string> {
+    const targetWarehouse =
+      warehouse ||
+      process.env.ONLINE_WAREHOUSE ||
+      process.env.DEFAULT_WAREHOUSE ||
+      "Oxigen Warehouse - O";
+
+    const makeRes = await erpFetch(
+      getErpUrl(
+        "/api/method/erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice"
+      ),
+      {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({ source_name: orderName }),
+      }
+    );
+
+    if (!makeRes.ok) {
+      const err = (await makeRes.json().catch(() => ({}))) as any;
+      throw new Error(
+        parseErpError(err) || `Failed to prepare Sales Invoice for ${orderName}`
+      );
+    }
+
+    const makeJson = (await makeRes.json()) as any;
+    const siDoc = makeJson.message;
+    if (!siDoc || !siDoc.doctype) {
+      throw new Error(`No Sales Invoice returned for ${orderName}`);
+    }
+
+    siDoc.update_stock = 1;
+    if (Array.isArray(siDoc.items)) {
+      for (const item of siDoc.items) {
+        if (!item.warehouse) item.warehouse = targetWarehouse;
+      }
+    }
+
+    const insertRes = await erpFetch(getErpUrl("/api/resource/Sales Invoice"), {
+      method: "POST",
+      headers: getErpHeaders(),
+      body: JSON.stringify(siDoc),
+    });
+
+    if (!insertRes.ok) {
+      const err = (await insertRes.json().catch(() => ({}))) as any;
+      throw new Error(
+        parseErpError(err) || `Failed to create Sales Invoice for ${orderName}`
+      );
+    }
+
+    const insertData = (await insertRes.json()) as any;
+
+    const submitRes = await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+      method: "POST",
+      headers: getErpHeaders(),
+      body: JSON.stringify({ doc: insertData.data }),
+    });
+
+    if (!submitRes.ok) {
+      const err = (await submitRes.json().catch(() => ({}))) as any;
+      throw new Error(
+        parseErpError(err) || `Failed to submit Sales Invoice for ${orderName}`
+      );
+    }
+
+    const submitJson = (await submitRes.json()) as any;
+    const siName = submitJson.message?.name ?? insertData.data.name;
+    logger.info(
+      { orderName, siName },
+      "[ErpAdapter] Sales Invoice created & submitted (stock deducted)"
+    );
+    return siName;
   }
 
   /**
