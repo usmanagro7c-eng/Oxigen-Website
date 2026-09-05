@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRight, Search, SlidersHorizontal, Download, Plus, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, ChevronLeft, Sparkles, RefreshCw,
-  Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus,
+  Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus, AlertTriangle,
+  CreditCard, RotateCcw, Banknote,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -20,6 +21,7 @@ import {
   getItems, getItemDetail, createItem, updateItem, deleteItem,
   getItemGroups, createItemGroup, updateItemGroup, deleteItemGroup,
   getAdminOrders, getAdminOrderDetail, createAdminOrder, updateAdminOrder, deleteAdminOrder,
+  getPaymentModes, paymentAdminOrder, returnAdminOrder, type PaymentMode,
   getAdminCustomers, createAdminCustomer, updateAdminCustomer, deleteAdminCustomer,
   getAdminInventory, adjustAdminInventory,
   getAdminDiscounts, createAdminDiscount, updateAdminDiscount, deleteAdminDiscount,
@@ -126,7 +128,7 @@ const MODULE_META: Record<string, PageMeta> = {
   orders: {
     subtitle: "Manage and fulfill sales orders.",
     primaryAction: "",
-    filters: ["All", "To Deliver and Bill", "Draft", "Completed", "Cancelled"],
+    filters: ["All", "To Deliver and Bill", "Unpaid", "Draft", "Completed", "Cancelled"],
     columns: [
       { key: "id", label: "Order ID" },
       { key: "customer", label: "Customer" },
@@ -268,6 +270,7 @@ const FILTER_CONFIG: Record<string, FilterConfig> = {
     field: "status",
     mapping: {
       "To Deliver and Bill": "To Deliver and Bill",
+      "Unpaid": "Unpaid",
       "Draft": "Draft",
       "Completed": "Completed",
       "Cancelled": "Cancelled",
@@ -368,7 +371,7 @@ const ADVANCED_FILTER_CONFIGS: Record<string, AdvancedFilterConfig[]> = {
     { field: "customer", label: "Customer", type: "text", operator: "contains", placeholder: "Search customer..." },
     { field: "total", label: "Grand Total Range", type: "range", operator: "between", placeholder: "Min-Max" },
     { field: "status", label: "Status", type: "select", operator: "equals", 
-      options: ["To Deliver and Bill", "Draft", "Completed", "Cancelled"] },
+      options: ["Unpaid", "To Deliver and Bill", "Draft", "Completed", "Cancelled"] },
     { field: "date", label: "Date Range", type: "daterange", operator: "between" },
   ],
   
@@ -921,7 +924,7 @@ function Toolbar({
   );
 }
 
-type RowAction = "view" | "edit" | "delete";
+type RowAction = "view" | "edit" | "delete" | "payment" | "return";
 function renderCellValue(c: Column, r: Row, onToggle?: (key: string, row: Row, checked: boolean) => void) {
   if (c.type === "toggle") {
     const checked = String(r[c.key] ?? "") === "Enable";
@@ -941,12 +944,13 @@ function renderCellValue(c: Column, r: Row, onToggle?: (key: string, row: Row, c
   return String(r[c.key] ?? "—");
 }
 function DataTable({
-  columns, rows, onRowClick, onAction, onToggle,
+  columns, rows, onRowClick, onAction, onToggle, slug,
 }: {
   columns: Column[]; rows: Row[];
   onRowClick?: (r: Row, index: number) => void;
   onAction?: (a: RowAction, r: Row, index: number) => void;
   onToggle?: (key: string, row: Row, checked: boolean) => void;
+  slug?: string;
 }) {
   if (!rows.length) return null;
   const visibleColumns = columns.filter(c => !c.hidden);
@@ -979,7 +983,7 @@ function DataTable({
                     </td>
                   ))}
                   <td className="px-2 text-right align-top">
-                    <RowMenu onAction={(a) => onAction?.(a, r, i)} />
+                    <RowMenu onAction={(a) => onAction?.(a, r, i)} row={r} slug={slug} />
                   </td>
                 </motion.tr>
               ))}
@@ -1022,7 +1026,7 @@ function DataTable({
                   </div>
                 </div>
                 <span onClick={(e) => e.stopPropagation()}>
-                  <RowMenu onAction={(a) => onAction?.(a, r, i)} />
+                  <RowMenu onAction={(a) => onAction?.(a, r, i)} row={r} slug={slug} />
                 </span>
               </div>
             </motion.div>
@@ -1033,10 +1037,17 @@ function DataTable({
   );
 }
 
-function RowMenu({ onAction }: { onAction: (a: RowAction) => void }) {
+function RowMenu({ onAction, row, slug }: { onAction: (a: RowAction) => void; row?: Row | null; slug?: string }) {
+  const isUnpaidOrder = slug === "orders" && String(row?.status ?? "") === "Unpaid";
   const items: { key: RowAction; label: string; icon: LucideIcon; danger?: boolean }[] = [
     { key: "view", label: "View details", icon: Eye },
     { key: "edit", label: "Edit", icon: Pencil },
+    ...(isUnpaidOrder
+      ? [
+          { key: "payment" as RowAction, label: "Payment", icon: CreditCard },
+          { key: "return" as RowAction, label: "Return / Cancel", icon: RotateCcw, danger: true },
+        ]
+      : []),
     { key: "delete", label: "Delete", icon: Trash2, danger: true },
   ];
 
@@ -1094,7 +1105,7 @@ function StatusPill({ label }: { label: string }) {
   const l = label.toLowerCase();
   const tone =
     /paid|active|completed|success|in stock|enabled|enable|parent group/.test(l) ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
-    /to deliver|draft|pending|processing|subcategory/.test(l)            ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20" :
+    /to deliver|draft|pending|processing|unpaid|subcategory/.test(l)   ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20" :
     /refund|low/.test(l)                                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" :
     /fail|cancel|out|disabled|disable|closed/.test(l)                     ? "bg-destructive/10 text-destructive border-destructive/20" :
                                                                             "bg-secondary text-muted-foreground border-border";
@@ -2091,6 +2102,213 @@ function RecordModal({
   );
 }
 
+/* ============================================================
+ * Order Payment / Return Modal
+ * ============================================================ */
+function OrderActionModal({
+  open, mode, row, onClose, onDone,
+}: {
+  open: boolean;
+  mode: "payment" | "return";
+  row: Row | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [modes, setModes] = useState<PaymentMode[]>([]);
+  const [form, setForm] = useState<{ mode_of_payment: string; amount: string; reference_no: string; posting_date: string }>({
+    mode_of_payment: "Cash",
+    amount: "",
+    reference_no: "",
+    posting_date: new Date().toISOString().slice(0, 10),
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open || !row) return;
+    setError("");
+    setSaving(false);
+    const defaultAmount = String(row.outstandingAmount || row.rawTotal || "");
+    getPaymentModes()
+      .then((res) => {
+        const list = res.data || [];
+        setModes(list);
+        setForm((f) => ({
+          ...f,
+          mode_of_payment: list.find((m) => m.name === "Cash")?.name || list[0]?.name || f.mode_of_payment,
+          amount: defaultAmount,
+          posting_date: new Date().toISOString().slice(0, 10),
+        }));
+      })
+      .catch(() => setModes([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, row]);
+
+  const orderId = row?.rawId || String(row?.rawKey || "").replace(/^#/, "");
+
+  const handleSubmit = async () => {
+    if (!row || !orderId) return;
+    setSaving(true);
+    setError("");
+    try {
+      if (mode === "payment") {
+        await paymentAdminOrder(orderId, {
+          mode_of_payment: form.mode_of_payment || "Cash",
+          amount: Number(form.amount) > 0 ? Number(form.amount) : undefined,
+          reference_no: form.reference_no || undefined,
+          posting_date: form.posting_date || undefined,
+        });
+        pushToast("success", "Payment recorded — order completed");
+      } else {
+        await returnAdminOrder(orderId);
+        pushToast("warning", "Order cancelled — stock restored");
+      }
+      onDone();
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : (err?.message || "Action failed");
+      setError(msg);
+      pushToast("error", msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && row && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-md" />
+          <motion.div
+            initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-lg glass-strong border border-border rounded-t-2xl sm:rounded-2xl shadow-elegant overflow-hidden bg-card text-foreground max-h-[92vh] sm:max-h-[85vh] sm:overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Order action</div>
+                  <div className="font-display text-lg font-bold mt-0.5 text-foreground">
+                    {mode === "payment" ? "Record Payment" : "Return / Cancel Order"}
+                  </div>
+                </div>
+                <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="px-5 pt-4">
+                <div className="rounded-xl border border-border bg-secondary/30 px-4 py-3 space-y-1 text-xs">
+                  <div className="flex items-center justify-between font-semibold">
+                    <span className="text-muted-foreground">Order</span>
+                    <span className="font-mono text-foreground">{String(row.id || orderId)}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-semibold">
+                    <span className="text-muted-foreground">Customer</span>
+                    <span className="text-foreground">{String(row.customer || "—")}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span className="text-foreground">{String(row.total || "—")}</span>
+                  </div>
+                </div>
+              </div>
+
+              {mode === "payment" ? (
+                <div className="p-5 space-y-3.5 flex-1 overflow-y-auto min-h-0">
+                  <label className="block">
+                    <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Mode of Payment</span>
+                    <select
+                      value={form.mode_of_payment}
+                      onChange={(e) => setForm((f) => ({ ...f, mode_of_payment: e.target.value }))}
+                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                    >
+                      {modes.map((m) => (
+                        <option key={m.name} value={m.name} className="bg-card text-foreground py-1.5">{m.name}</option>
+                      ))}
+                      {modes.length === 0 && (
+                        <option value="Cash" className="bg-card text-foreground py-1.5">Cash</option>
+                      )}
+                    </select>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Amount (PKR)</span>
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={form.amount}
+                        onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        placeholder="Outstanding amount"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Posting Date</span>
+                      <input
+                        type="date"
+                        value={form.posting_date}
+                        onChange={(e) => setForm((f) => ({ ...f, posting_date: e.target.value }))}
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                      />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Reference No (optional)</span>
+                    <input
+                      value={form.reference_no}
+                      onChange={(e) => setForm((f) => ({ ...f, reference_no: e.target.value }))}
+                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                      placeholder="Transaction ID / Cheque / Voucher No"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="p-5 flex-1 overflow-y-auto min-h-0">
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-5 text-center">
+                    <AlertTriangle className="h-8 w-8 mx-auto text-destructive mb-2" />
+                    <div className="text-sm font-bold text-foreground">Cancel this order?</div>
+                    <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                      This will cancel the Sales Invoice and the Sales Order for{" "}
+                      <span className="font-semibold text-foreground">{String(row.id || orderId)}</span>.
+                      All deducted stock will be restored automatically.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="px-5 pb-1">
+                  <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-3 py-2 text-xs text-destructive font-semibold">{error}</div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-secondary/30 shrink-0">
+                <button onClick={onClose}
+                  className="flex-1 sm:flex-none h-10 sm:h-9 px-4 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold text-foreground transition">Cancel</button>
+                <button onClick={handleSubmit} disabled={saving}
+                  className={cn(
+                    "flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-4 rounded-xl text-white text-xs font-bold shadow-md transition hover:opacity-95 disabled:opacity-50",
+                    mode === "payment" ? "bg-gradient-to-r from-primary to-accent shadow-primary/25" : "bg-gradient-to-r from-destructive to-red-600 shadow-destructive/25"
+                  )}
+                >
+                  {saving ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : mode === "payment" ? (
+                    <CreditCard className="h-3.5 w-3.5" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
+                  {saving ? "Processing…" : mode === "payment" ? "Confirm Payment" : "Yes, Cancel & Restore Stock"}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function downloadCSV(name: string, columns: Column[], rows: Row[]) {
   const esc = (v: unknown) => {
     const s = String(v ?? "");
@@ -2127,7 +2345,7 @@ function LiveTablePage({
   const perPage = 10;
 
   const [drawer, setDrawer] = useState<{ open: boolean; row: Row | null; index: number }>({ open: false, row: null, index: -1 });
-  const [modal, setModal] = useState<{ open: boolean; mode: "create" | "edit"; row: Row | null; index: number }>({
+  const [modal, setModal] = useState<{ open: boolean; mode: "create" | "edit" | "payment" | "return"; row: Row | null; index: number }>({
     open: false, mode: "create", row: null, index: -1,
   });
 
@@ -2189,6 +2407,7 @@ function LiveTablePage({
           total: `PKR ${(Number(o.grand_total) || 0).toLocaleString()}`,
           rawTotal: Number(o.grand_total) || 0,
           status: o.status || "Draft",
+          outstandingAmount: Number(o.outstanding_amount) || 0,
           date: o.transaction_date || "—",
           shipping: o.shipping || null,
         }));
@@ -2405,6 +2624,14 @@ function LiveTablePage({
         }
       }
       setModal({ open: true, mode: "edit", row: r, index: idx });
+      return;
+    }
+    if (a === "payment" && slug === "orders") {
+      setModal({ open: true, mode: "payment", row: r, index: idx });
+      return;
+    }
+    if (a === "return" && slug === "orders") {
+      setModal({ open: true, mode: "return", row: r, index: idx });
       return;
     }
     if (a === "delete") {
@@ -2714,7 +2941,7 @@ function LiveTablePage({
       ) : paged.length ? (
         <>
           <DataTable
-            columns={meta.columns} rows={paged}
+            columns={meta.columns} rows={paged} slug={slug}
             onRowClick={(r) => setDrawer({ open: true, row: r, index: rows.indexOf(r) })}
             onAction={handleAction}
             onToggle={slug === "products" ? handleToggle : undefined}
@@ -2742,13 +2969,22 @@ function LiveTablePage({
       />
 
       <RecordModal
-        open={modal.open} mode={modal.mode}
+        open={modal.open && (modal.mode === "create" || modal.mode === "edit")}
+        mode={modal.mode === "edit" ? "edit" : "create"}
         onClose={() => setModal({ open: false, mode: "create", row: null, index: -1 })}
         title={singular} columns={meta.columns} initial={modal.row}
         onSave={handleSave}
         itemGroups={itemGroups}
         itemCodes={itemCodes}
         slug={slug}
+      />
+
+      <OrderActionModal
+        open={modal.open && (modal.mode === "payment" || modal.mode === "return")}
+        mode={modal.mode === "return" ? "return" : "payment"}
+        row={modal.row}
+        onClose={() => setModal({ open: false, mode: "create", row: null, index: -1 })}
+        onDone={() => { setModal({ open: false, mode: "create", row: null, index: -1 }); loadData(); }}
       />
     </div>
   );
