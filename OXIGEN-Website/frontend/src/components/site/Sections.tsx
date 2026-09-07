@@ -362,10 +362,8 @@ export function Results() {
           },
         ].map((r, i) => (
           <Reveal key={r.label} delay={i * 0.12}>
-            <div className="group relative overflow-hidden rounded-[2rem] glass p-3">
-              <span className="absolute left-6 top-6 z-10 rounded-full bg-ink/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-white backdrop-blur">
-                {r.label}
-              </span>
+            <div className="group relative overflow-hidden rounded-[2rem] glass p-2.5 sm:p-3 transition-all duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10">
+              <span className="sr-only">{r.label}</span>
               <img
                 src={r.img}
                 alt={`${r.label} using OxiGen supplements`}
@@ -375,7 +373,7 @@ export function Results() {
                     e.currentTarget.src = r.fallback;
                   }
                 }}
-                className="aspect-[4/3] w-full rounded-[1.5rem] object-cover transition-transform duration-700 group-hover:scale-105"
+                className="aspect-[3/2] w-full h-auto rounded-[1.5rem] object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.01]"
               />
             </div>
           </Reveal>
