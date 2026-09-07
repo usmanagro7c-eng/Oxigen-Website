@@ -3,7 +3,7 @@ import { quickLinks } from "@/lib/site-data";
 
 export function QuickLinks() {
   return (
-    <nav aria-label="Shop by collection" className="mx-auto max-w-[1400px] px-3 py-8 sm:px-5">
+    <nav aria-label="Shop by collection" className="mx-auto max-w-6xl px-3 py-8 sm:px-5">
       <ul className="no-scrollbar flex snap-x gap-5 overflow-x-auto pb-2 sm:justify-center sm:gap-9">
         {quickLinks.map((q) => (
           <li key={q.label} className="snap-start">

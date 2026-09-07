@@ -39,7 +39,7 @@ export function SaleTimer() {
   ];
 
   return (
-    <section className="mx-auto max-w-[1400px] px-3 sm:px-5 py-3 sm:py-4" aria-label="Flash Sale Countdown">
+    <section className="mx-auto max-w-6xl px-3 sm:px-5 py-3 sm:py-4" aria-label="Flash Sale Countdown">
       <Reveal>
         <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-primary via-royal to-accent p-4 sm:px-7 sm:py-4 text-white shadow-lg border border-white/10">
           <div className="pointer-events-none absolute -left-12 -top-12 h-44 w-44 rounded-full bg-white/15 blur-2xl" />
