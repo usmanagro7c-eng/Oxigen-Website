@@ -461,6 +461,20 @@ router.delete("/items/:name", async (req: Request, res: Response) => {
         return;
       }
 
+      // Delete failed (usually because the item is linked to orders / stock
+      // records). Fall back to archiving: disable the item + its Website Item
+      // so it disappears from the site while keeping its history intact.
+      const archiveResult = await disableItemForArchive(itemCode);
+      if (archiveResult.ok) {
+        itemCache.clear();
+        res.status(200).json({
+          success: true,
+          action: "disabled",
+          message: `Cannot delete "${itemCode}" (linked to orders/records). Item was archived and hidden from the website instead.`,
+        });
+        return;
+      }
+
       const err = (await erpRes.json().catch(() => ({}))) as any;
       res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to delete item from ERPNext." });
       return;
@@ -473,6 +487,48 @@ router.delete("/items/:name", async (req: Request, res: Response) => {
     res.status(500).json({ error: err.message || "Failed to delete item." });
   }
 });
+
+// Best-effort archive: disable the ERPNext Item so it is hidden everywhere
+// (including the Website Item) but its transactional history is preserved.
+async function disableItemForArchive(itemCode: string): Promise<{ ok: boolean }> {
+  let ok = true;
+  try {
+    const itemRes = await erpFetch(
+      getErpUrl(`/api/resource/Item/${encodeURIComponent(itemCode)}`),
+      { method: "PUT", headers: getErpHeaders(), body: JSON.stringify({ disabled: 1 }) }
+    );
+    if (!itemRes.ok) ok = false;
+  } catch {
+    ok = false;
+  }
+
+  try {
+    const webSearchRes = await erpFetch(
+      getErpUrl(`/api/resource/Website Item?${new URLSearchParams({
+        fields: JSON.stringify(["name", "item_code"]),
+        filters: JSON.stringify([["item_code", "=", itemCode]]),
+        limit_page_length: "20",
+      }).toString()}`),
+      { headers: getErpHeaders() }
+    );
+    if (webSearchRes.ok) {
+      const webJson = (await webSearchRes.json()) as { data?: { name?: string }[] };
+      for (const row of webJson.data || []) {
+        if (row?.name) {
+          await erpFetch(getErpUrl(`/api/resource/Website Item/${encodeURIComponent(row.name)}`), {
+            method: "PUT",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ published: 0 }),
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch {
+    // non-fatal — best effort
+  }
+
+  return { ok };
+}
 
 // ─── GET /api/items/version ───────────────────────────────────────────────────
 router.get("/items/version", (_req, res) => {
