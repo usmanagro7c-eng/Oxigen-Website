@@ -8,6 +8,7 @@ import adminRouter    from "./admin.js";
 import erpRouter      from "./erp.js";
 import contactRouter  from "./contact.js";
 import settingsRouter from "./settings.js";
+import contentRouter  from "./content.js";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(adminRouter);
 router.use(erpRouter);
 router.use(contactRouter);
 router.use(settingsRouter);
+router.use(contentRouter);
 
 export default router;
