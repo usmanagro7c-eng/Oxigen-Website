@@ -33,9 +33,7 @@ A modern, high-performance, and secure e-commerce application built with **React
 ```text
 OxiGen Website/
 ├── backend/               # Express backend application
-│   ├── src/               # TypeScript source files
-│   ├── data/              # Local data storage (e.g., tokens, queue) - [Ignored by Git]
-│   └── .env.example       # Example env configuration
+│   └── src/               # TypeScript source files (data/ storage is git-ignored)
 ├── frontend/              # Vite + React frontend application
 │   ├── src/               # React components, routes, and styles
 │   │   ├── components/    # Reusable UI (shadcn) and Site components
@@ -83,12 +81,25 @@ Make sure you have [Node.js](https://nodejs.org/) (v18+) installed.
 
 ### Backend Setup
 1. Navigate to the `backend/` directory.
-2. Copy `.env.example` to a new file named `.env`:
-   ```bash
-   cp .env.example .env
+2. Create a `.env` file (git-ignored) with your ERPNext credentials and service settings:
+   ```dotenv
+   NODE_ENV=development
+   PORT=3002
+
+   # ERPNext
+   ERPNEXT_URL=http://your-erpnext-host
+   ERPNEXT_API_KEY=your_api_key
+   ERPNEXT_API_SECRET=your_api_secret
+
+   FRONTEND_URL=http://localhost:3000,http://localhost:5173
+   FRONTEND_ORIGIN=http://localhost:3000,http://localhost:5173
+   WEBHOOK_SECRET=change-me
+   ADMIN_EMAIL=admin@example.com
+   DEFAULT_COMPANY=Oxigen
+   DEFAULT_WAREHOUSE=Oxigen Warehouse - O
+   ONLINE_WAREHOUSE=Oxigen Warehouse - O
    ```
-3. Update the values in `.env` with your ERPNext credentials, database tokens, and secret keys. (This file is ignored by Git to keep credentials secure).
-4. For production hosting on `testing.oxigen.com.pk`, set:
+3. For production hosting on `testing.oxigen.com.pk`, set:
    ```text
    NODE_ENV=production
    PORT=8080
@@ -102,7 +113,7 @@ Make sure you have [Node.js](https://nodejs.org/) (v18+) installed.
 2. Create a `.env` file (also ignored by Git).
 3. Set any required Vite-specific environment variables:
    ```text
-   VITE_API_URL=http://localhost:3000
+   VITE_API_URL=http://localhost:3002/api
    ```
 4. For production builds targeting the same domain as the backend, create `frontend/.env.production` with:
    ```text
@@ -118,7 +129,7 @@ From the `backend/` directory:
 ```bash
 npm run dev
 ```
-The backend server runs in watch mode at `http://localhost:3000`.
+The backend server runs in watch mode at `http://localhost:3002`.
 
 ### Start the Frontend
 From the `frontend/` directory:
