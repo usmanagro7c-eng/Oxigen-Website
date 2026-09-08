@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./router";
+import { SiteContentProvider } from "./lib/site-content";
 
 const router = getRouter();
 
@@ -16,7 +17,9 @@ if (rootElement) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>
-      <RouterProvider router={router} />
+      <SiteContentProvider>
+        <RouterProvider router={router} />
+      </SiteContentProvider>
     </React.StrictMode>,
   );
 }
