@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import {
   getItems, getItemDetail, createItem, updateItem, deleteItem,
   getItemGroups, createItemGroup, updateItemGroup, deleteItemGroup,
-  getAdminOrders, getAdminOrderDetail, createAdminOrder, updateAdminOrder, deleteAdminOrder,
+  getAdminOrders, getAdminOrderDetail, getAdminOrderItems, createAdminOrder, updateAdminOrder, deleteAdminOrder,
   getPaymentModes, paymentAdminOrder, returnAdminOrder, type PaymentMode,
   getAdminCustomers, createAdminCustomer, updateAdminCustomer, deleteAdminCustomer,
   getAdminInventory, adjustAdminInventory,
@@ -130,10 +130,11 @@ const MODULE_META: Record<string, PageMeta> = {
   orders: {
     subtitle: "Manage and fulfill sales orders.",
     primaryAction: "",
-    filters: ["All", "To Deliver and Bill", "Unpaid", "Draft", "Completed", "Cancelled"],
+    filters: ["All", "Unpaid", "Completed", "Cancelled"],
     columns: [
       { key: "id", label: "Order ID" },
       { key: "customer", label: "Customer" },
+      { key: "itemsLabel", label: "Items" },
       { key: "total", label: "Grand Total" },
       { key: "status", label: "Status" },
       { key: "date", label: "Date", className: "text-right" },
@@ -272,9 +273,7 @@ const FILTER_CONFIG: Record<string, FilterConfig> = {
   orders: {
     field: "status",
     mapping: {
-      "To Deliver and Bill": "To Deliver and Bill",
       "Unpaid": "Unpaid",
-      "Draft": "Draft",
       "Completed": "Completed",
       "Cancelled": "Cancelled",
     }
@@ -375,7 +374,7 @@ const ADVANCED_FILTER_CONFIGS: Record<string, AdvancedFilterConfig[]> = {
     { field: "customer", label: "Customer", type: "text", operator: "contains", placeholder: "Search customer..." },
     { field: "total", label: "Grand Total Range", type: "range", operator: "between", placeholder: "Min-Max" },
     { field: "status", label: "Status", type: "select", operator: "equals", 
-      options: ["Unpaid", "To Deliver and Bill", "Draft", "Completed", "Cancelled"] },
+      options: ["Unpaid", "Completed", "Cancelled"] },
     { field: "date", label: "Date Range", type: "daterange", operator: "between" },
   ],
   
@@ -1184,10 +1183,10 @@ const INVENTORY_STATUS_OPTIONS = [
 function StatusPill({ label }: { label: string }) {
   const l = label.toLowerCase();
   const tone =
-    /paid|active|completed|success|in stock|enabled|enable|parent group/.test(l) ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
-    /to deliver|draft|pending|processing|unpaid|subcategory/.test(l)   ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20" :
+    /\bpaid\b|active|completed|success|in stock|enabled|enable|parent group/.test(l) ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
+    /to deliver|draft|pending|processing|subcategory/.test(l)   ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20" :
     /refund|low/.test(l)                                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" :
-    /fail|cancel|out|disabled|disable|closed/.test(l)                     ? "bg-destructive/10 text-destructive border-destructive/20" :
+    /fail|cancel|out|disabled|disable|closed|unpaid/.test(l)                     ? "bg-destructive/10 text-destructive border-destructive/20" :
                                                                             "bg-secondary text-muted-foreground border-border";
   return <span className={cn("inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold uppercase tracking-wider border", tone)}>{label}</span>;
 }
@@ -1322,6 +1321,22 @@ function DetailDrawer({
                         {[row.shipping?.line1, row.shipping?.line2, [row.shipping?.city, row.shipping?.state].filter(Boolean).join(", "), row.shipping?.pincode, row.shipping?.country].filter(Boolean).join(", ") || "—"}
                       </span>
                     </li>
+                  </ul>
+                </div>
+              )}
+              {slug === "orders" && Array.isArray(row.items) && row.items.length > 0 && (
+                <div className="rounded-xl bg-card border border-border p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Products</div>
+                  <ul className="mt-2 space-y-2 text-xs text-muted-foreground font-medium">
+                    {row.items.map((it: any, i: number) => (
+                      <li key={i} className="flex items-start justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="font-bold text-foreground">{Number(it.qty) || 1}×</span>{" "}
+                          {it.item_name || it.item_code}
+                        </span>
+                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{it.item_code || "—"}</span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               )}
@@ -2480,18 +2495,25 @@ function LiveTablePage({
         setRows(mapped);
       } else if (slug === "orders") {
         const res = await getAdminOrders();
-        const mapped = (res.data || []).map((o) => ({
-          rawKey: o.name,
-          id: `#${o.name}`,
-          rawId: o.name,
-          customer: orderDisplayName(o),
-          total: `PKR ${(Number(o.grand_total) || 0).toLocaleString()}`,
-          rawTotal: Number(o.grand_total) || 0,
-          status: o.status || "Draft",
-          outstandingAmount: Number(o.outstanding_amount) || 0,
-          date: o.transaction_date || "—",
-          shipping: o.shipping || null,
-        }));
+        const mapped = (res.data || []).map((o) => {
+          const itemsRaw = Array.isArray(o.items) ? o.items : [];
+          const itemsLabel = itemsRaw.slice(0, 3).map((it) => `${Number(it.qty) || 1}× ${it.item_name || it.item_code}`).join(", ")
+            + (itemsRaw.length > 3 ? ` +${itemsRaw.length - 3} more` : "");
+          return {
+            rawKey: o.name,
+            id: `#${o.name}`,
+            rawId: o.name,
+            customer: orderDisplayName(o),
+            items: itemsRaw,
+            itemsLabel: itemsRaw.length ? itemsLabel : "—",
+            total: `PKR ${(Number(o.grand_total) || 0).toLocaleString()}`,
+            rawTotal: Number(o.grand_total) || 0,
+            status: o.status || "Draft",
+            outstandingAmount: Number(o.outstanding_amount) || 0,
+            date: o.transaction_date || "—",
+            shipping: o.shipping || null,
+          };
+        });
         setRows(mapped);
       } else if (slug === "categories" || slug === "collections") {
         const [groupsListRes, itemsRes] = await Promise.all([
@@ -2682,13 +2704,55 @@ function LiveTablePage({
 
   const archivedRows = useMemo(() => rows.filter((r) => r.archived), [rows]);
 
+  useEffect(() => {
+    if (slug !== "orders") return;
+    const missing = paged.filter((r) => !Array.isArray(r.items) || r.items.length === 0);
+    const ids = missing.map((r) => String(r.rawId || "").replace(/^#/, "")).filter(Boolean);
+    if (!ids.length) return;
+    let cancelled = false;
+    getAdminOrderItems(ids)
+      .then((res) => {
+        if (cancelled || !res.data) return;
+        setRows((prev) =>
+          prev.map((r) => {
+            const id = String(r.rawId || "").replace(/^#/, "");
+            const itemsRaw = res.data[id];
+            if (!Array.isArray(itemsRaw) || !itemsRaw.length) return r;
+            if (Array.isArray(r.items) && r.items.length) return r;
+            const itemsLabel = itemsRaw.slice(0, 3).map((it) => `${Number(it.qty) || 1}× ${it.item_name || it.item_code}`).join(", ")
+              + (itemsRaw.length > 3 ? ` +${itemsRaw.length - 3} more` : "");
+            return { ...r, items: itemsRaw, itemsLabel };
+          })
+        );
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [slug, page, query, active, rows]);
+
   const pages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
   const singular = (typeof title === "string" ? title : String(title)).replace(/s$/, "");
 
+  const openOrderDrawer = async (r: Row, idx: number) => {
+    if (slug === "orders" && (!Array.isArray(r.items) || r.items.length === 0) && r.rawId) {
+      try {
+        const detailRes = await getAdminOrderDetail(String(r.rawId).replace(/^#/, ""));
+        const detail = detailRes && detailRes.data;
+        const itemsRaw = Array.isArray(detail?.items) ? detail.items : [];
+        if (itemsRaw.length) {
+          const itemsLabel = itemsRaw.slice(0, 3).map((it: { item_code?: string; item_name?: string; qty?: number }) => `${Number(it.qty) || 1}× ${it.item_name || it.item_code}`).join(", ")
+            + (itemsRaw.length > 3 ? ` +${itemsRaw.length - 3} more` : "");
+          setDrawer({ open: true, row: { ...r, items: itemsRaw, itemsLabel }, index: idx });
+          return;
+        }
+      } catch { /* fall back to plain row */ }
+    }
+    setDrawer({ open: true, row: r, index: idx });
+  };
+
   const handleAction = async (a: RowAction, r: Row, idx: number) => {
     if (a === "view") {
-      setDrawer({ open: true, row: r, index: idx });
+      await openOrderDrawer(r, idx);
       return;
     }
     if (a === "edit") {
@@ -3071,7 +3135,7 @@ function LiveTablePage({
         <>
           <DataTable
             columns={meta.columns} rows={paged} slug={slug}
-            onRowClick={(r) => setDrawer({ open: true, row: r, index: rows.indexOf(r) })}
+            onRowClick={(r) => openOrderDrawer(r, rows.indexOf(r))}
             onAction={handleAction}
             onToggle={slug === "products" || slug === "inventory" ? handleToggle : undefined}
           />
@@ -3118,7 +3182,7 @@ function LiveTablePage({
                 <div className="p-2">
                   <DataTable
                     columns={meta.columns} rows={archivedRows} slug={slug}
-                    onRowClick={(r) => setDrawer({ open: true, row: r, index: rows.indexOf(r) })}
+                    onRowClick={(r) => openOrderDrawer(r, rows.indexOf(r))}
                     onAction={handleAction}
                     onToggle={handleToggle}
                   />
