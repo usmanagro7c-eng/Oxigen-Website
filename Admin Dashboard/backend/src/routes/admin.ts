@@ -228,7 +228,7 @@ router.get(
   async (_req: Request, res: Response) => {
     try {
       const itemParams = new URLSearchParams({
-        fields: JSON.stringify(["name", "item_code", "item_name", "item_group", "stock_uom", "image"]),
+        fields: JSON.stringify(["name", "item_code", "item_name", "item_group", "stock_uom", "image", "disabled"]),
         limit_page_length: "500",
         order_by: "item_name asc",
       });
@@ -246,7 +246,7 @@ router.get(
       }
 
       const itemJson = (await itemRes.json()) as {
-        data: { item_code?: string; name: string; item_name?: string; item_group?: string; stock_uom?: string; image?: string | null }[];
+        data: { item_code?: string; name: string; item_name?: string; item_group?: string; stock_uom?: string; image?: string | null; disabled?: number | boolean }[];
       };
 
       const items = itemJson.data || [];
@@ -307,6 +307,7 @@ router.get(
           stock_uom: item.stock_uom || "Nos",
           image: item.image || null,
           in_stock: available_qty > 0,
+          disabled: item.disabled === 1 || item.disabled === true,
         };
       });
 
