@@ -1,9 +1,11 @@
-import { Facebook, Instagram, Mail, Phone, MapPin } from "lucide-react";
+import { Facebook, Instagram, Mail, Phone } from "lucide-react";
 import oxigenLogo from "@/assets/oxigen-logo.png";
 import { Link } from "@tanstack/react-router";
-import { brand, nav, categories } from "@/lib/site-data";
+import { useBrand, useNav } from "@/lib/site-content";
 
 export function Footer() {
+  const brand = useBrand();
+  const nav = useNav();
   return (
     <footer className="relative mt-8 overflow-hidden px-3 pb-5 safe-pl safe-pr sm:px-5">
       <div className="mx-auto max-w-6xl rounded-3xl glass p-6 sm:p-8">
