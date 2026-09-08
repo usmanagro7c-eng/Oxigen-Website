@@ -131,6 +131,7 @@ export const settingsUpdateSchema = z.object({
       company_name: z.string().max(255).optional(),
       website_url: z.string().max(500).optional(),
       support_email: z.string().email().max(255).optional(),
+      company_logo: z.string().max(500).nullable().optional(),
     })
     .optional(),
   preferences: z

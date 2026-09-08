@@ -7,6 +7,7 @@ import customerRouter from "./customer.js";
 import adminRouter    from "./admin.js";
 import contactRouter  from "./contact.js";
 import bannersRouter  from "./banners.js";
+import siteContentRouter from "./site-content.js";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(customerRouter);
 router.use(adminRouter);
 router.use(contactRouter);
 router.use(bannersRouter);
+router.use(siteContentRouter);
 
 export default router;

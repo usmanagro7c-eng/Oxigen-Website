@@ -1,6 +1,7 @@
-import { announcements } from "@/lib/site-data";
+import { useAnnouncements } from "@/lib/site-content";
 
 export function AnnouncementBar() {
+  const announcements = useAnnouncements();
   // Duplicate the list so the marquee loops seamlessly.
   const items = [...announcements, ...announcements];
 

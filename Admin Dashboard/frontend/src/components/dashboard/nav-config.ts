@@ -1,9 +1,9 @@
 import {
   Home,
   ShoppingCart, Package, Tags, Boxes, BadgePercent,
-  Truck,
   Users,
-  BarChart3, Bell, Image as ImageIcon, ImageMinus,
+  BarChart3, Bell, Image as ImageIcon, ImageMinus, LayoutTemplate,
+  MessageSquareQuote, HelpCircle, Link2, Megaphone, FileText, PanelTop,
   Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -35,7 +35,6 @@ export const NAV: NavGroup[] = [
       { slug: "categories", label: "Categories", icon: Tags },
       { slug: "inventory", label: "Inventory", icon: Boxes },
       { slug: "discounts", label: "Discounts", icon: BadgePercent },
-      { slug: "shipping", label: "Shipping", icon: Truck },
     ],
   },
   {
@@ -49,6 +48,12 @@ export const NAV: NavGroup[] = [
     items: [
       { slug: "media", label: "Media Library", icon: ImageIcon },
       { slug: "banners", label: "Banners", icon: ImageMinus },
+      { slug: "homepage", label: "Homepage", icon: PanelTop },
+      { slug: "testimonials", label: "Testimonials", icon: MessageSquareQuote },
+      { slug: "faqs", label: "FAQs", icon: HelpCircle },
+      { slug: "quick-links", label: "Quick Links", icon: Link2 },
+      { slug: "brand-links", label: "Brand & Announcements", icon: Megaphone },
+      { slug: "pages", label: "Pages", icon: FileText },
     ],
   },
   {

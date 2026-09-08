@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { Reveal } from "@/components/site/Reveal";
+import { SliderCarousel } from "@/components/site/SliderCarousel";
 import { useStore } from "@/lib/store";
 import { getProduct, catalog, formatPKR, slugify, getProductReviews, getReviewStats, brand } from "@/lib/site-data";
 import { API_BASE, getProductImage } from "@/lib/api";
@@ -423,16 +424,14 @@ function ProductPage() {
                     <span className="text-3xl font-extrabold text-ink">
                       {formatPKR(product.price)}
                     </span>
-                    {product.was > 0 && (
+                    {product.was > 0 && product.was > product.price && (
                       <>
                         <span className="text-lg text-muted-foreground line-through">
                           {formatPKR(product.was)}
                         </span>
-                        {product.was > product.price && (
-                          <span className="inline-flex items-center rounded-full bg-gradient-to-r from-primary to-accent px-2.5 py-1 text-xs font-extrabold text-white">
-                            {Math.round(((product.was - product.price) / product.was) * 100)}% OFF
-                          </span>
-                        )}
+                        <span className="inline-flex items-center rounded-full bg-gradient-to-r from-primary to-accent px-2.5 py-1 text-xs font-extrabold text-white">
+                          {Math.round(((product.was - product.price) / product.was) * 100)}% OFF
+                        </span>
                       </>
                     )}
                   </>
@@ -472,7 +471,9 @@ function ProductPage() {
                 </ul>
               )}
 
-              {product.available && <StockTimer slug={product.slug} />}
+              {product.available && product.was > product.price && (
+                <StockTimer slug={product.slug} />
+              )}
 
               {product.available && (
                 <div className="mt-6 flex flex-wrap items-center gap-4">
@@ -608,9 +609,13 @@ function ProductPage() {
                 </div>
               </div>
 
-              <div className="mt-8 grid gap-5 sm:grid-cols-2">
-                {reviews.map((r, i) => (
-                  <Reveal key={`${r.name}-${i}`} delay={i * 0.05}>
+              <div className="mt-8">
+                <SliderCarousel
+                  items={reviews}
+                  keyFor={(r, i) => `${r.name}-${i}`}
+                  itemClassName="basis-full md:basis-1/2 h-full"
+                  ariaLabel="Customer reviews"
+                  renderItem={(r) => (
                     <div className="flex h-full flex-col rounded-2xl border border-border bg-background/60 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -634,8 +639,8 @@ function ProductPage() {
                         </span>
                       )}
                     </div>
-                  </Reveal>
-                ))}
+                  )}
+                />
               </div>
             </div>
           </Reveal>

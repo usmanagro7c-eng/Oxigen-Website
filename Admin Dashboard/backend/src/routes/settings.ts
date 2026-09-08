@@ -58,6 +58,20 @@ async function fetchCompany(): Promise<Record<string, unknown>> {
   return json.data ?? {};
 }
 
+async function fetchWebsiteSettings(): Promise<Record<string, unknown>> {
+  const res = await erpFetch(
+    getErpUrl(
+      `/api/resource/Website Settings/Website Settings?fields=${encodeURIComponent(
+        JSON.stringify(["app_logo"])
+      )}`
+    ),
+    { headers: getErpHeaders() }
+  ).catch(() => null);
+  if (!res?.ok) return {};
+  const json = (await res.json()) as { data?: Record<string, unknown> };
+  return json.data ?? {};
+}
+
 async function fetchGlobalDefaults(): Promise<Record<string, unknown>> {
   const res = await erpFetch(
     getErpUrl(
@@ -72,12 +86,13 @@ async function fetchGlobalDefaults(): Promise<Record<string, unknown>> {
   return json.data ?? {};
 }
 
-function buildSettings(sys: Record<string, unknown>, company: Record<string, unknown>, globals: Record<string, unknown>) {
+function buildSettings(sys: Record<string, unknown>, company: Record<string, unknown>, globals: Record<string, unknown>, website: Record<string, unknown> = {}) {
   return {
     organization: {
       company_name: (company["company_name"] as string) || (sys["company_name"] as string) || FALLBACK.company_name,
       website_url: (company["website"] as string) || (sys["website_url"] as string) || FALLBACK.website_url,
       support_email: (company["support_email"] as string) || (sys["support_email"] as string) || FALLBACK.support_email,
+      company_logo: (website["app_logo"] as string) || null,
     },
     preferences: {
       language: (sys["language"] as string) || FALLBACK.language,
@@ -102,13 +117,14 @@ function buildSettings(sys: Record<string, unknown>, company: Record<string, unk
 // ---------------------------------------------------------------------------
 router.get("/admin/settings", async (_req: Request, res: Response) => {
   try {
-    const [sys, company, globals] = await Promise.all([
+    const [sys, company, globals, website] = await Promise.all([
       fetchSystemSettings(),
       fetchCompany(),
       fetchGlobalDefaults(),
+      fetchWebsiteSettings(),
     ]);
 
-    res.json({ data: buildSettings(sys, company, globals) });
+    res.json({ data: buildSettings(sys, company, globals, website) });
   } catch (err: any) {
     logger.error({ err }, "[admin/settings.GET]");
     res.status(500).json({ error: err.message || "Internal server error." });
@@ -222,19 +238,42 @@ router.put("/admin/settings", validate(settingsUpdateSchema), async (req: Reques
       }
     }
 
+    // 4) Company logo → Website Settings.app_logo (the canonical ERPNext company logo field)
+    if (organization?.company_logo !== undefined) {
+      try {
+        const wssRes = await erpFetch(
+          getErpUrl("/api/resource/Website Settings/Website Settings"),
+          {
+            method: "PUT",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ app_logo: organization.company_logo || "" }),
+          }
+        );
+        if (!wssRes.ok) {
+          logger.warn(
+            { status: wssRes.status },
+            "[admin/settings.PUT] Website Settings app_logo update failed"
+          );
+        }
+      } catch (wssErr) {
+        logger.warn({ wssErr }, "[admin/settings.PUT] Website Settings update error");
+      }
+    }
+
     if (coreFailed) {
       res.status(502).json({ error: coreFailed });
       return;
     }
 
     // Re-fetch the updated settings to return the latest state
-    const [sys, company, globals] = await Promise.all([
+    const [sys, company, globals, website] = await Promise.all([
       fetchSystemSettings(),
       fetchCompany(),
       fetchGlobalDefaults(),
+      fetchWebsiteSettings(),
     ]);
 
-    const settings = buildSettings(sys, company, globals);
+    const settings = buildSettings(sys, company, globals, website);
     if (notifications) {
       settings.notifications = { ...settings.notifications, ...notifications };
     }

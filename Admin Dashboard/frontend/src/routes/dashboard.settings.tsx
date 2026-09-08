@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import {
   Settings as SettingsIcon, Building2, Sliders, Palette, BellRing, ShieldCheck,
   Sun, Moon, Monitor, KeyRound, Smartphone, Laptop2,
+  Upload, Loader2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Breadcrumb, Header, GlassCard, FieldGroup, Input, Select, SaveButton } from "@/components/dashboard/glass-form";
-import { getSettings, updateSettings, type SettingsData } from "@/lib/api";
+import { getSettings, updateSettings, uploadAdminFile, getItemImageUrl, type SettingsData } from "@/lib/api";
 
 export const Route = createFileRoute("/dashboard/settings")({
   head: () => ({ meta: [{ title: "Settings — OxiGen Admin" }] }),
@@ -29,6 +30,7 @@ const DEFAULTS = (partial?: Partial<SettingsData>): SettingsData => ({
     company_name: "OxiGen Healthcare",
     website_url: "https://oxigen.pk",
     support_email: "support@oxigen.pk",
+    company_logo: null,
     ...partial?.organization,
   },
   preferences: {
@@ -54,6 +56,33 @@ function SettingsPage() {
   const [settings, setSettings] = useState<SettingsData>(() => DEFAULTS());
   const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
   const [twofa, setTwofa] = useState(true);
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  const resolveLogo = (value: string | null | undefined): string | null => {
+    if (!value) return null;
+    if (/^(https?:)?\/\//.test(value)) return value;
+    if (value.startsWith("/files/") || value.startsWith("/private/files/")) return getItemImageUrl(value);
+    return value;
+  };
+
+  const handleLogoUpload = async (file: File | null) => {
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const res = await uploadAdminFile(file);
+      const url = res?.data?.file_url || res?.data?.url || "";
+      if (url) {
+        patchOrg("company_logo", url);
+        setError(null);
+      } else {
+        setError("Upload returned no file URL.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Logo upload failed.");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
 
   useEffect(() => {
     getSettings()
@@ -137,12 +166,50 @@ function SettingsPage() {
                 <FieldGroup label="Website"><Input type="url" value={settings.organization.website_url} onChange={(e) => patchOrg("website_url", e.target.value)} /></FieldGroup>
                 <FieldGroup label="Support email"><Input type="email" value={settings.organization.support_email} onChange={(e) => patchOrg("support_email", e.target.value)} /></FieldGroup>
                 <FieldGroup label="Company logo">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent shadow-sm" />
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="h-12 w-12 rounded-xl overflow-hidden bg-gradient-to-br from-primary/10 to-accent/10 border border-border grid place-items-center">
+                      {resolveLogo(settings.organization.company_logo) ? (
+                        <img
+                          src={resolveLogo(settings.organization.company_logo) ?? undefined}
+                          alt="Company logo"
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <Building2 className="h-5 w-5 text-muted-foreground/60" />
+                      )}
+                    </div>
                     <label className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl bg-card border border-border hover:bg-secondary text-xs font-semibold cursor-pointer transition-colors">
-                      Upload logo <input type="file" className="hidden" />
+                      {logoUploading ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Uploading…
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-3.5 w-3.5" />
+                          Upload logo
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => { handleLogoUpload(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                      />
                     </label>
+                    {settings.organization.company_logo && (
+                      <button
+                        type="button"
+                        onClick={() => patchOrg("company_logo", "")}
+                        className="inline-flex items-center gap-1 h-10 px-3 rounded-xl bg-card border border-border hover:bg-destructive/10 hover:text-destructive text-xs font-semibold transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" /> Remove
+                      </button>
+                    )}
                   </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground/70">
+                    Uploaded logos are stored in ERPNext and shown across OxiGen.
+                  </p>
                 </FieldGroup>
               </div>
             </GlassCard>

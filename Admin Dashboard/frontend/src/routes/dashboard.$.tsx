@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ChevronRight, Search, SlidersHorizontal, Download, Plus, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, ChevronLeft, Sparkles, RefreshCw,
   Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus, AlertTriangle,
   CreditCard, RotateCcw, Banknote,
+  PanelTop, MessageSquareQuote, HelpCircle, Link2, Megaphone, FileText,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -32,6 +33,7 @@ import {
   getDashboardStats, getItemImageUrl, type DashboardStats, type ItemGroup, type Item, type Banner, type BannerProduct,
 } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { ContentHub } from "@/components/dashboard/content-editor";
 
 export const Route = createFileRoute("/dashboard/$")({
   component: DashboardCatchAll,
@@ -522,6 +524,68 @@ function DashboardCatchAll() {
   if (slug === "analytics") return <AnalyticsPage />;
   if (slug === "media")     return <MediaLibraryPage />;
   if (slug === "banners")   return <BannersPage />;
+
+  const contentSections: Record<
+    string,
+    { title: string; subtitle: string; icon: ReactNode; sections: (string | [string, string])[] }
+  > = {
+    homepage: {
+      title: "Homepage Content",
+      subtitle: "Promo banners, perks and before/after results shown across the homepage.",
+      icon: <PanelTop className="h-5 w-5" />,
+      sections: ["promoBanners", "perks", ["pages/reviews", "Before & After Results"]],
+    },
+    testimonials: {
+      title: "Testimonials",
+      subtitle: "Customer reviews shown on the homepage and Reviews page.",
+      icon: <MessageSquareQuote className="h-5 w-5" />,
+      sections: ["testimonials"],
+    },
+    faqs: {
+      title: "FAQs",
+      subtitle: "Frequently asked questions across the site, including FAQ schema.",
+      icon: <HelpCircle className="h-5 w-5" />,
+      sections: ["faqs"],
+    },
+    "quick-links": {
+      title: "Quick Links",
+      subtitle: "Circular shop-by-collection links under the hero.",
+      icon: <Link2 className="h-5 w-5" />,
+      sections: ["quickLinks"],
+    },
+    "brand-links": {
+      title: "Brand & Announcements",
+      subtitle: "Brand info, social links and the announcement bar.",
+      icon: <Megaphone className="h-5 w-5" />,
+      sections: ["brand", "announcements"],
+    },
+    pages: {
+      title: "Website Pages",
+      subtitle: "About, Reviews and legal page copy (Terms, Privacy, Shipping, Refund).",
+      icon: <FileText className="h-5 w-5" />,
+      sections: [
+        "pages",
+        ["pages/about", "About Page"],
+        ["pages/reviews", "Reviews Page"],
+        ["pages/legal/terms", "Terms & Conditions"],
+        ["pages/legal/privacy", "Privacy Policy"],
+        ["pages/legal/shipping", "Shipping Policy"],
+        ["pages/legal/refund", "Refund Policy"],
+      ],
+    },
+  };
+
+  if (contentSections[slug]) {
+    const sec = contentSections[slug];
+    return (
+      <ContentHub
+        sections={sec.sections}
+        icon={sec.icon}
+        title={sec.title}
+        subtitle={sec.subtitle}
+      />
+    );
+  }
 
   const meta = MODULE_META[slug] ?? {
     subtitle: `Manage ${slug}.`,

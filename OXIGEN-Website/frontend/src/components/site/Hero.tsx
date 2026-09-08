@@ -2,9 +2,11 @@ import { useRef } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles, ShieldCheck, Truck, ChevronDown } from "lucide-react";
-import { brand, products } from "@/lib/site-data";
+import { useBrand, useProducts } from "@/lib/site-content";
 
 export function Hero() {
+  const brand = useBrand();
+  const products = useProducts();
   const ref = useRef<HTMLDivElement>(null);
   const mx = useMotionValue(0);
   const my = useMotionValue(0);

@@ -91,8 +91,8 @@ function Index() {
       <TrendingGrid />
       <PromoBanners />
       <Stats />
-      <Why />
       <Results />
+      <Why />
     </SiteLayout>
   );
 }

@@ -27,17 +27,21 @@ import {
 import { Link } from "@tanstack/react-router";
 import {
   CDN,
-  brand,
-  perks,
-  testimonials,
-  faqs,
   slugify,
   formatPKR,
   parsePrice,
 } from "@/lib/site-data";
+import {
+  useBrand,
+  usePerks,
+  useTestimonials,
+  useFaqs,
+  usePageText,
+} from "@/lib/site-content";
 import { useStore } from "@/lib/store";
 import { API_BASE, getProductImage } from "@/lib/api";
 import { Reveal } from "./Reveal";
+import { SliderCarousel } from "./SliderCarousel";
 
 function Heading({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
@@ -265,14 +269,21 @@ export function Products() {
 }
 
 export function Mission() {
+  const about = usePageText<{
+    mission: {
+      eyebrow: string; title: string; lead: string; body: string;
+      image: string; imageAlt: string; ctaLabel: string; ctaTo: string;
+    };
+  }>("about");
+  const { mission } = about;
   return (
     <section id="about" className="mx-auto max-w-6xl px-5 py-24">
       <div className="grid items-center gap-10 lg:grid-cols-2">
         <Reveal>
           <div className="relative overflow-hidden rounded-[2.5rem] glass p-3">
             <img
-              src="/banners/banner-nutricept.jpg"
-              alt="OxiGen Premium Nutritional Supplements Pakistan"
+              src={mission.image}
+              alt={mission.imageAlt}
               loading="lazy"
               className="h-full w-full rounded-[2rem] object-cover"
             />
@@ -280,26 +291,22 @@ export function Mission() {
         </Reveal>
         <Reveal delay={0.1}>
           <span className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-emerald">
-            <Sparkles className="h-3.5 w-3.5" /> Our Mission — Wellness for Life
+            <Sparkles className="h-3.5 w-3.5" /> {mission.eyebrow}
           </span>
           <h2 className="mt-4 font-display text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
-            Exploring the goodness of nature with innovation
+            {mission.title}
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
-            At OxiGen we aim to explore the goodness of nature with innovation. We are dedicated to
-            playing our role in building a happy & healthy community.
+            {mission.lead}
           </p>
           <p className="mt-4 leading-relaxed text-muted-foreground">
-            Quality and transparency are at the heart of everything we do. We carefully select
-            ingredients and formulate products with a focus on safety, quality, and everyday
-            wellness support — helping you make informed choices about your health through trusted
-            nutritional solutions.
+            {mission.body}
           </p>
           <Link
-            to="/about"
+            to={mission.ctaTo}
             className="mt-7 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-transform hover:scale-105"
           >
-            Learn More <ArrowUpRight className="h-4 w-4" />
+            {mission.ctaLabel} <ArrowUpRight className="h-4 w-4" />
           </Link>
         </Reveal>
       </div>
@@ -310,28 +317,50 @@ export function Mission() {
 const perkIcons = [Truck, ShieldCheck, RotateCcw];
 
 export function Why() {
+  const perks = usePerks();
+  const about = usePageText<{
+    whyHeading: { eyebrow: string; title: string; sub?: string };
+  }>("about");
+  const { whyHeading } = about;
+
+  const renderPerk = (p: { title: string; desc?: string }, i: number) => {
+    const Icon = perkIcons[i % perkIcons.length];
+    return (
+      <div className="group h-full rounded-3xl glass p-8 transition-all duration-500 hover:-translate-y-2">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg transition-transform duration-500 group-hover:scale-110">
+          <Icon className="h-7 w-7" />
+        </span>
+        <h3 className="mt-6 font-display text-xl font-bold text-ink">{p.title}</h3>
+        {p.desc && <p className="mt-3 leading-relaxed text-muted-foreground">{p.desc}</p>}
+      </div>
+    );
+  };
+
   return (
     <section id="why" className="relative overflow-hidden py-14 sm:py-24">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-secondary/60 to-transparent" />
       <div className="mx-auto max-w-6xl px-5">
         <Reveal>
-          <Heading eyebrow="Why Choose Us" title="A wellness experience you can trust" />
+          <Heading eyebrow={whyHeading.eyebrow} title={whyHeading.title} />
         </Reveal>
-        <div className="mt-8 grid gap-6 md:grid-cols-3 sm:mt-14">
-          {perks.map((p, i) => {
-            const Icon = perkIcons[i];
-            return (
-              <Reveal key={p.title} delay={i * 0.1}>
-                <div className="group h-full rounded-3xl glass p-8 transition-all duration-500 hover:-translate-y-2">
-                  <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg transition-transform duration-500 group-hover:scale-110">
-                    <Icon className="h-7 w-7" />
-                  </span>
-                  <h3 className="mt-6 font-display text-xl font-bold text-ink">{p.title}</h3>
-                  <p className="mt-3 leading-relaxed text-muted-foreground">{p.desc}</p>
-                </div>
-              </Reveal>
-            );
-          })}
+        <div className="mt-8 sm:mt-14">
+          {perks.length <= 3 ? (
+            <div className="grid gap-6 md:grid-cols-3">
+              {perks.map((p, i) => (
+                <Reveal key={p.title || i} delay={i * 0.1}>
+                  {renderPerk(p, i)}
+                </Reveal>
+              ))}
+            </div>
+          ) : (
+            <SliderCarousel
+              items={perks}
+              keyFor={(p, i) => p.title || i}
+              itemClassName="basis-full md:basis-1/2 lg:basis-1/3"
+              ariaLabel="Perks"
+              renderItem={renderPerk}
+            />
+          )}
         </div>
       </div>
     </section>
@@ -339,28 +368,22 @@ export function Why() {
 }
 
 export function Results() {
+  const reviews = usePageText<{
+    results: { eyebrow: string; title: string; sub?: string };
+    resultsImages: { img: string; fallback: string; label: string }[];
+  }>("reviews");
+  const { results, resultsImages } = reviews;
   return (
     <section id="results" className="mx-auto max-w-6xl px-5 py-14 sm:py-24">
       <Reveal>
         <Heading
-          eyebrow="Real Results"
-          title="Visible transformation"
-          sub="See the difference consistent, quality nutrition can make."
+          eyebrow={results.eyebrow}
+          title={results.title}
+          sub={results.sub}
         />
       </Reveal>
       <div className="mt-8 grid gap-6 sm:mt-14 sm:grid-cols-2">
-        {[
-          {
-            img: "/before_2.webp",
-            fallback: `${CDN}/before_2.webp?v=1780588913&width=1200`,
-            label: "Before",
-          },
-          {
-            img: "/after_oxigen.png",
-            fallback: `${CDN}/after_oxigen.png?v=1780590184&width=1200`,
-            label: "After",
-          },
-        ].map((r, i) => (
+        {(resultsImages ?? [{ img: "/before_2.webp", fallback: `${CDN}/before_2.webp?v=1780588913&width=1200`, label: "Before" }, { img: "/after_oxigen.png", fallback: `${CDN}/after_oxigen.png?v=1780590184&width=1200`, label: "After" }]).map((r, i) => (
           <Reveal key={r.label} delay={i * 0.12}>
             <div className="group relative overflow-hidden rounded-[2rem] glass p-2.5 sm:p-3 transition-all duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10">
               <span className="sr-only">{r.label}</span>
@@ -384,6 +407,10 @@ export function Results() {
 }
 
 export function Testimonials({ showHeading = true }: { showHeading?: boolean }) {
+  const testimonials = useTestimonials();
+  const reviews = usePageText<{
+    eyebrow: string; title: string; sub: string;
+  }>("reviews");
   return (
     <section id="reviews" className="relative overflow-hidden py-24">
       <div className="pointer-events-none absolute right-0 top-1/4 -z-10 h-80 w-80 rounded-full bg-accent/15 blur-3xl" />
@@ -391,9 +418,9 @@ export function Testimonials({ showHeading = true }: { showHeading?: boolean }) 
         {showHeading && (
           <Reveal>
             <Heading
-              eyebrow="Let customers speak for us"
-              title="Loved across Pakistan"
-              sub="from 18 reviews"
+              eyebrow={reviews.eyebrow}
+              title={reviews.title}
+              sub={reviews.sub}
             />
           </Reveal>
         )}
@@ -429,6 +456,7 @@ export function Testimonials({ showHeading = true }: { showHeading?: boolean }) 
 }
 
 export function FAQ({ showHeading = true }: { showHeading?: boolean }) {
+  const faqs = useFaqs();
   const [open, setOpen] = useState<number | null>(0);
   return (
     <section id="faq" className="mx-auto max-w-3xl px-5 py-24">
@@ -473,6 +501,7 @@ const inputClass =
   "w-full rounded-xl border border-white/60 bg-white/60 px-4 py-3 text-sm text-ink shadow-inner outline-none backdrop-blur transition-all focus:border-primary/50 focus:ring-2 focus:ring-primary/30";
 
 export function Contact() {
+  const brand = useBrand();
   const [form, setForm] = useState({ name: "", email: "", phone: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
 

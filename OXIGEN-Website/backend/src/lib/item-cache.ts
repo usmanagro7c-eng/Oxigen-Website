@@ -31,8 +31,11 @@ export const itemCache = {
     return entry.data;
   },
 
-  set(key: string, data: unknown): void {
-    store.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+  set(key: string, data: unknown, ttlMs?: number): void {
+    store.set(key, {
+      data,
+      expiresAt: Date.now() + (ttlMs ?? CACHE_TTL_MS),
+    });
   },
 
   delete(key: string): void {

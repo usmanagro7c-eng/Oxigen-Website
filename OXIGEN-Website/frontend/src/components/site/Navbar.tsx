@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Link } from "@tanstack/react-router";
 import { Menu, X, ShoppingBag, Heart, User as UserIcon, ShoppingCart } from "lucide-react";
-import { nav } from "@/lib/site-data";
+import { useNav } from "@/lib/site-content";
 import { useStore } from "@/lib/store";
 import oxigenLogo from "@/assets/oxigen-logo.png";
 
 export function Navbar() {
+  const nav = useNav();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const { cartCount, wishlist, user, setDrawerOpen } = useStore();
