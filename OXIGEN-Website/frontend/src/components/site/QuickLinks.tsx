@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { quickLinks } from "@/lib/site-data";
+import { useQuickLinks } from "@/lib/site-content";
 
 export function QuickLinks() {
+  const quickLinks = useQuickLinks();
   return (
     <nav aria-label="Shop by collection" className="mx-auto max-w-6xl px-3 py-8 sm:px-5">
       <ul className="no-scrollbar flex snap-x gap-5 overflow-x-auto pb-2 sm:justify-center sm:gap-9">
