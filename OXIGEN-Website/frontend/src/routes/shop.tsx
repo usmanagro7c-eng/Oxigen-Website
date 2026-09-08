@@ -4,11 +4,10 @@ import { ArrowUpRight, Truck, ShieldCheck, RotateCcw, ShoppingCart, Heart } from
 import { SiteLayout, PageHeader } from "@/components/site/SiteLayout";
 import { Reveal } from "@/components/site/Reveal";
 import {
-  brand,
-  perks,
   slugify,
   formatPKR,
 } from "@/lib/site-data";
+import { useBrand, usePerks } from "@/lib/site-content";
 import { useStore } from "@/lib/store";
 import { API_BASE, getProductImage } from "@/lib/api";
 
@@ -19,6 +18,8 @@ export const Route = createFileRoute("/shop")({
 const perkIcons = [Truck, ShieldCheck, RotateCcw];
 
 function Shop() {
+  const brand = useBrand();
+  const perks = usePerks();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
@@ -175,9 +176,9 @@ function Shop() {
       <section className="mx-auto max-w-6xl px-5 py-10">
         <div className="grid gap-6 md:grid-cols-3">
           {perks.map((p, i) => {
-            const Icon = perkIcons[i];
+            const Icon = perkIcons[i % perkIcons.length];
             return (
-              <Reveal key={p.title} delay={i * 0.08}>
+              <Reveal key={p.title || i} delay={i * 0.08}>
                 <div className="flex items-start gap-4 rounded-3xl glass p-6">
                   <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white">
                     <Icon className="h-6 w-6" />
