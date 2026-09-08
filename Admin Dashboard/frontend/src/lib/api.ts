@@ -622,6 +622,14 @@ export interface AdminOrder {
     phone?: string;
     email?: string;
   } | null;
+  items?: {
+    item_code?: string;
+    item_name?: string;
+    qty?: number;
+    rate?: number;
+    amount?: number;
+    uom?: string;
+  }[];
 }
 
 export async function getAdminOrders(): Promise<{ data: AdminOrder[] }> {
@@ -630,6 +638,14 @@ export async function getAdminOrders(): Promise<{ data: AdminOrder[] }> {
 
 export async function getAdminOrderDetail(name: string): Promise<{ data: any }> {
   return fetchApi(`/admin/orders/${encodeURIComponent(name)}`);
+}
+
+export async function getAdminOrderItems(
+  names: string[]
+): Promise<{ data: Record<string, Array<{ item_code?: string; item_name?: string; qty?: number; rate?: number; amount?: number; uom?: string }>> }> {
+  if (!names.length) return { data: {} };
+  const params = new URLSearchParams({ names: JSON.stringify(names.slice(0, 50)) });
+  return fetchApi(`/admin/orders/items?${params.toString()}`);
 }
 
 export async function createAdminOrder(payload: any): Promise<{ data: any }> {
