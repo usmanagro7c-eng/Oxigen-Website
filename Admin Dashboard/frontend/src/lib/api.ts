@@ -283,7 +283,7 @@ export async function updateItem(name: string, payload: any): Promise<{ data: It
   });
 }
 
-export async function deleteItem(name: string): Promise<{ success: boolean; message: string }> {
+export async function deleteItem(name: string): Promise<{ success: boolean; message: string; action?: string }> {
   const csrfToken = await getCsrfToken();
   return fetchApi(`/items/${encodeURIComponent(name)}`, {
     method: "DELETE",
