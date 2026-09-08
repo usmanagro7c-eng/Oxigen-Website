@@ -566,6 +566,7 @@ export interface SettingsData {
     company_name: string;
     website_url: string;
     support_email: string;
+    company_logo: string | null;
   };
   preferences: {
     language: string;
@@ -945,5 +946,49 @@ export async function deleteAdminBanner(id: string): Promise<{ success: boolean;
   return fetchApi(`/admin/banners/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+// ─── Website Content ──────────────────────────────────────────────────────
+// The admin backend manages every presentational section of the website via a
+// single JSON content document (see backend/src/routes/content.ts).
+
+export async function getAdminContent(): Promise<{ data: any }> {
+  return fetchApi("/admin/content");
+}
+
+export async function getAdminContentSection(section: string): Promise<{ data: any }> {
+  return fetchApi(`/admin/content/${encodePathSegments(section)}`);
+}
+
+/** Encode each path segment so nested page paths (pages/legal/terms) keep their slashes. */
+function encodePathSegments(path: string): string {
+  return path
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+}
+
+export async function updateAdminContentSection(
+  section: string,
+  value: any,
+): Promise<{ data: any }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/content/${encodePathSegments(section)}`, {
+    method: "PUT",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(value),
+  });
+}
+
+export async function updateAdminContentPage(
+  path: string,
+  value: any,
+): Promise<{ data: any }> {
+  const csrfToken = await getCsrfToken();
+  return fetchApi(`/admin/content/pages/${encodePathSegments(path)}`, {
+    method: "PUT",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(value),
   });
 }
