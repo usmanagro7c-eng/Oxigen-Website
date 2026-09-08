@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ChevronRight, Search, SlidersHorizontal, Download, Plus, MoreHorizontal,
-  ArrowUpRight, ArrowDownRight, ChevronLeft, Sparkles, RefreshCw,
+  ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronDown, Sparkles, RefreshCw,
   Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus, AlertTriangle,
   CreditCard, RotateCcw, Banknote,
   PanelTop, MessageSquareQuote, HelpCircle, Link2, Megaphone, FileText,
@@ -190,7 +190,7 @@ const MODULE_META: Record<string, PageMeta> = {
   inventory: {
     subtitle: "Main Stores & Oxigen Warehouse inventory levels, reserved stock, and available units.",
     primaryAction: "Add product",
-    filters: ["All", "In stock", "Out of stock"],
+    filters: ["All", "In stock", "Out of stock", "Disabled"],
     columns: [
       { key: "sku", label: "Item Code" },
       { key: "name", label: "Item Name" },
@@ -201,6 +201,7 @@ const MODULE_META: Record<string, PageMeta> = {
       { key: "available_qty", label: "Website Stock" },
       { key: "stock_uom", label: "UOM" },
       { key: "status", label: "Status", className: "text-right" },
+      { key: "nonActive", label: "Non Active", type: "toggle", className: "text-right" },
     ],
     emptyTitle: "No inventory records in Oxigen Warehouse",
     emptyDesc: "Stock records will show up automatically when Items and Bins are active.",
@@ -304,6 +305,7 @@ const FILTER_CONFIG: Record<string, FilterConfig> = {
     mapping: {
       "In stock": "In stock",
       "Out of stock": "Out of stock",
+      "Disabled": "Disabled",
     }
   },
   discounts: {
@@ -407,7 +409,7 @@ const ADVANCED_FILTER_CONFIGS: Record<string, AdvancedFilterConfig[]> = {
     { field: "actual_qty", label: "Actual Stock", type: "range", operator: "between", placeholder: "Min-Max" },
     { field: "reserved_qty", label: "Reserved", type: "range", operator: "between", placeholder: "Min-Max" },
     { field: "available_qty", label: "Available Stock", type: "range", operator: "between", placeholder: "Min-Max" },
-    { field: "status", label: "Status", type: "select", operator: "equals", options: ["In stock", "Out of stock"] },
+    { field: "status", label: "Status", type: "select", operator: "equals", options: ["In stock", "Out of stock", "Disabled"] },
   ],
   
   discounts: [
@@ -989,8 +991,22 @@ function Toolbar({
 }
 
 type RowAction = "view" | "edit" | "delete" | "payment" | "return";
-function renderCellValue(c: Column, r: Row, onToggle?: (key: string, row: Row, checked: boolean) => void) {
+function renderCellValue(c: Column, r: Row, onToggle?: (key: string, row: Row, checked: boolean) => void, slug?: string) {
   if (c.type === "toggle") {
+    if (slug === "inventory" && c.key === "nonActive") {
+      const showToggle = r.status === "Out of stock" || r.archived;
+      if (!showToggle) return <span className="text-muted-foreground/50">—</span>;
+      const checked = !!r.archived;
+      return (
+        <span onClick={(e) => e.stopPropagation()}>
+          <Switch
+            checked={checked}
+            onCheckedChange={(newChecked) => onToggle?.(c.key, r, newChecked)}
+            className={checked ? "data-[state=checked]:bg-destructive" : "data-[state=checked]:bg-green-500"}
+          />
+        </span>
+      );
+    }
     const checked = String(r[c.key] ?? "") === "Enable";
     return (
       <span onClick={(e) => e.stopPropagation()}>
@@ -1043,7 +1059,7 @@ function DataTable({
                   className="border-b border-border/60 hover:bg-secondary/40 transition-colors cursor-pointer">
                   {visibleColumns.map((c) => (
                     <td key={c.key} className={cn("px-4 py-3 text-[13px] font-medium text-foreground align-top", c.className)}>
-                      {renderCellValue(c, r, onToggle)}
+                      {renderCellValue(c, r, onToggle, slug)}
                     </td>
                   ))}
                   <td className="px-2 text-right align-top">
@@ -1083,7 +1099,7 @@ function DataTable({
                       <div key={c.key} className="flex items-start justify-between gap-3 text-xs">
                         <span className="shrink-0 text-muted-foreground font-semibold">{c.label}</span>
                         <span className="text-right font-medium text-foreground break-words min-w-0">
-                          {renderCellValue(c, r, onToggle)}
+                          {renderCellValue(c, r, onToggle, slug)}
                         </span>
                       </div>
                     ))}
@@ -2408,6 +2424,7 @@ function LiveTablePage({
   const filterPanelRef = useRef<HTMLDivElement>(null);
   const perPage = 10;
 
+  const [archivedOpen, setArchivedOpen] = useState(true);
   const [drawer, setDrawer] = useState<{ open: boolean; row: Row | null; index: number }>({ open: false, row: null, index: -1 });
   const [modal, setModal] = useState<{ open: boolean; mode: "create" | "edit" | "payment" | "return"; row: Row | null; index: number }>({
     open: false, mode: "create", row: null, index: -1,
@@ -2512,18 +2529,23 @@ function LiveTablePage({
         setRows(mapped);
       } else if (slug === "inventory") {
         const res = await getAdminInventory();
-        const mapped = (res.data || []).map((inv: any) => ({
-          rawKey: `${inv.item_code}-${inv.warehouse}`,
-          sku: inv.item_code,
-          name: inv.item_name || inv.item_code,
-          item_group: inv.item_group || "General",
-          warehouse: inv.warehouse || "Oxigen Warehouse - O",
-          actual_qty: inv.actual_qty ?? 0,
-          reserved_qty: inv.reserved_qty ?? 0,
-          available_qty: inv.available_qty ?? 0,
-          stock_uom: inv.stock_uom || "Nos",
-          status: inv.in_stock ? "In stock" : "Out of stock",
-        }));
+        const mapped = (res.data || []).map((inv: any) => {
+          const archived = inv.disabled === 1 || inv.disabled === true;
+          return {
+            rawKey: `${inv.item_code}-${inv.warehouse}`,
+            sku: inv.item_code,
+            name: inv.item_name || inv.item_code,
+            item_group: inv.item_group || "General",
+            warehouse: inv.warehouse || "Oxigen Warehouse - O",
+            actual_qty: inv.actual_qty ?? 0,
+            reserved_qty: inv.reserved_qty ?? 0,
+            available_qty: inv.available_qty ?? 0,
+            stock_uom: inv.stock_uom || "Nos",
+            archived,
+            disabled: archived,
+            status: archived ? "Disabled" : inv.in_stock ? "In stock" : "Out of stock",
+          };
+        });
         setRows(mapped);
       } else if (slug === "discounts") {
         const res = await getAdminDiscounts();
@@ -2618,6 +2640,11 @@ function LiveTablePage({
 
   const filtered = useMemo(() => {
     let out = rows;
+
+    // Inventory: keep archived / non-active rows out of the main table by default
+    if (slug === "inventory" && (!active || active === "All")) {
+      out = out.filter((r) => !r.archived);
+    }
     
     // Apply status/type filter based on FILTER_CONFIG
     if (active && active !== "All") {
@@ -2652,6 +2679,8 @@ function LiveTablePage({
     
     return out;
   }, [rows, active, query, colFilters, advancedFilters, slug]);
+
+  const archivedRows = useMemo(() => rows.filter((r) => r.archived), [rows]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
@@ -2702,7 +2731,12 @@ function LiveTablePage({
       const recordName = r.rawKey || r.name || r.id || r.rawId;
       try {
         if (slug === "products") {
-          await deleteItem(recordName);
+          const result = await deleteItem(recordName);
+          if (result.action === "disabled") {
+            pushToast("warning", result.message || `${singular} archived (linked to orders)`);
+            loadData();
+            return;
+          }
           setRows((prev) => prev.filter((row) => {
             const candidate = row.rawKey || row.name || row.id || row.rawId;
             return candidate !== recordName;
@@ -2727,7 +2761,12 @@ function LiveTablePage({
           await deleteAdminUser(recordName);
         } else if (slug === "inventory") {
           const itemCode = r.sku || r.item_code || r.name || recordName;
-          await deleteItem(itemCode);
+          const result = await deleteItem(itemCode);
+          if (result.action === "disabled") {
+            pushToast("warning", result.message || `${singular} archived (linked to orders)`);
+            loadData();
+            return;
+          }
           setRows((prev) => prev.filter((row) => {
             const candidate = row.sku || row.item_code || row.name || row.rawKey;
             return candidate !== itemCode && row.rawKey !== r.rawKey;
@@ -2933,6 +2972,32 @@ function LiveTablePage({
   };
 
   const handleToggle = async (key: string, row: Row, checked: boolean) => {
+    if (key === "nonActive" && slug === "inventory") {
+      const itemCode = row.sku || row.item_code || row.name || row.rawKey;
+      const status = checked ? "Disable" : "Enable";
+      const nextStatus = checked
+        ? "Disabled"
+        : Number(row.available_qty ?? 0) > 0 ? "In stock" : "Out of stock";
+
+      setRows((prev) => prev.map((r) =>
+        r.rawKey === row.rawKey ? { ...r, archived: checked, disabled: checked, status: nextStatus } : r
+      ));
+
+      try {
+        await updateItem(itemCode, { status });
+        pushToast(checked ? "info" : "success",
+          checked ? "Product archived — hidden from website & stock" : "Product restored — active again");
+      } catch (err: any) {
+        setRows((prev) => prev.map((r) =>
+          r.rawKey === row.rawKey
+            ? { ...r, archived: !checked, disabled: !checked, status: !checked ? "Disabled" : Number(r.available_qty ?? 0) > 0 ? "In stock" : "Out of stock" }
+            : r
+        ));
+        pushToast("error", err.message || "Failed to update status");
+      }
+      return;
+    }
+
     if (slug !== "products" || key !== "status") return;
     const newStatus = checked ? "Enable" : "Disable";
     const itemCode = row.rawKey || row.sku || row.name;
@@ -3008,7 +3073,7 @@ function LiveTablePage({
             columns={meta.columns} rows={paged} slug={slug}
             onRowClick={(r) => setDrawer({ open: true, row: r, index: rows.indexOf(r) })}
             onAction={handleAction}
-            onToggle={slug === "products" ? handleToggle : undefined}
+            onToggle={slug === "products" || slug === "inventory" ? handleToggle : undefined}
           />
           <Pagination page={page} pages={pages} onPage={setPage} />
         </>
@@ -3019,6 +3084,49 @@ function LiveTablePage({
           action={slug === "orders" || slug === "products" ? "" : meta.primaryAction}
           onAction={slug === "orders" || slug === "products" ? undefined : () => setModal({ open: true, mode: "create", row: null, index: -1 })}
         />
+      )}
+
+      {slug === "inventory" && archivedRows.length > 0 && (
+        <section className="rounded-2xl glass-strong border border-border shadow-sm overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setArchivedOpen((o) => !o)}
+            className="w-full flex items-center justify-between gap-3 border-b border-border bg-secondary/50 px-4 py-3 text-left hover:bg-secondary/70 transition-colors"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", archivedOpen ? "rotate-180" : "")} />
+              <span className="font-bold text-foreground text-sm">Disabled</span>
+              <span className="shrink-0 inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                {archivedRows.length} item{archivedRows.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          </button>
+          <AnimatePresence initial={false}>
+            {archivedOpen && (
+              <motion.div
+                key="archived-list"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border/60">
+                  These products can't be deleted because they're linked to orders or records — they are disabled and hidden from the
+                  website. Use the toggle to restore them.
+                </p>
+                <div className="p-2">
+                  <DataTable
+                    columns={meta.columns} rows={archivedRows} slug={slug}
+                    onRowClick={(r) => setDrawer({ open: true, row: r, index: rows.indexOf(r) })}
+                    onAction={handleAction}
+                    onToggle={handleToggle}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
       )}
 
       <DetailDrawer
