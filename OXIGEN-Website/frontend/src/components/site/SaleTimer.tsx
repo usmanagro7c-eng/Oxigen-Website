@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Flame, ArrowRight } from "lucide-react";
 import { Reveal } from "@/components/site/Reveal";
-import { brand } from "@/lib/site-data";
+import { useBrand } from "@/lib/site-content";
 
 function getMsLeft() {
   // Countdown resets to the end of the current day (midnight local time).
@@ -17,6 +17,7 @@ function pad(n: number) {
 }
 
 export function SaleTimer() {
+  const brand = useBrand();
   const [ms, setMs] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
 
