@@ -806,6 +806,75 @@ async function resolveShippingAddresses(orderDocs: { shipping_address_name?: str
   return map;
 }
 
+type LinkedOrderItem = {
+  item_code?: string;
+  item_name?: string;
+  qty?: number;
+  rate?: number;
+  amount?: number;
+  uom?: string;
+};
+
+async function fetchOrderItems(name: string): Promise<LinkedOrderItem[]> {
+  const res = await erpFetch(
+    getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+    { headers: getErpHeaders() }
+  );
+  if (!res.ok) return [];
+  const json = (await res.json()) as { data?: { items?: Array<any> } };
+  return (json.data?.items ?? []).map((it) => ({
+    item_code: it.item_code,
+    item_name: it.item_name || it.item_code,
+    qty: it.qty,
+    rate: it.rate,
+    amount: it.amount,
+    uom: it.uom,
+  }));
+}
+
+// GET /admin/orders/items?names=["SO-1","SO-2",...] — batch items for a set of
+// orders (used to populate the "Items" column for the visible page).
+// The child-table list API (Sales Order Item) is not permissioned for this key,
+// so we read each Sales Order parent doc (which carries its items child rows).
+router.get(
+  "/admin/orders/items",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      let names: string[] = [];
+      try {
+        const raw = req.query.names;
+        const parsed = typeof raw === "string" ? (JSON.parse(raw) as unknown) : null;
+        if (Array.isArray(parsed)) names = parsed.map(String);
+      } catch {
+        names = [];
+      }
+      names = [...new Set(names)].slice(0, 50);
+
+      const out: Record<string, LinkedOrderItem[]> = {};
+      const queue = [...names];
+      const CONCURRENCY = 6;
+      const worker = async () => {
+        while (queue.length) {
+          const name = queue.shift();
+          if (!name) continue;
+          try {
+            const items = await fetchOrderItems(name);
+            if (items.length) out[name] = items;
+          } catch {
+            /* skip — drawer falls back to per-order detail */
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+      res.json({ data: out });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/items.GET]");
+      res.status(500).json({ error: err.message || "Failed to load order items." });
+    }
+  }
+);
+
 type LinkedInvoiceInfo = {
   invoice_name?: string;
   invoice_status?: string;
