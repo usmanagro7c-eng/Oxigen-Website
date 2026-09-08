@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { heroBanners, type HeroBannerItem } from "@/lib/site-data";
+import { useHeroBanners } from "@/lib/site-content";
 import { API_BASE, getProductImage } from "@/lib/api";
 
 type ApiBanner = {
@@ -23,6 +23,7 @@ type ApiBanner = {
 };
 
 export function BannerCarousel() {
+  const heroBanners = useHeroBanners();
   const [i, setI] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
