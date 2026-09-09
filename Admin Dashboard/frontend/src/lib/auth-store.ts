@@ -13,8 +13,10 @@ type MeUser = { email: string; name: string };
 type AuthState = {
   user: AuthUser | null;
   loading: boolean;
+  hydrated: boolean;
   fetchSession: () => Promise<AuthUser | null>;
   setUser: (u: AuthUser | null) => void;
+  setHydrated: (v: boolean) => void;
   logout: () => Promise<void>;
 };
 
@@ -23,6 +25,7 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       loading: false,
+      hydrated: false,
 
       fetchSession: async () => {
         const me = await getMe();
@@ -33,6 +36,8 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setUser: (u) => set({ user: u }),
+
+      setHydrated: (v) => set({ hydrated: v }),
 
       logout: async () => {
         try {
@@ -46,6 +51,9 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "aether.auth.v1",
       partialize: (s) => ({ user: s.user }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
+      },
     },
   ),
 );
