@@ -2,26 +2,75 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopNav } from "@/components/dashboard/topnav";
-
 import { Toaster } from "@/components/ui/sonner";
+
+import { useNavigate } from "@tanstack/react-router";
+import { useAuthStore, type AuthUser } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
       { title: "Dashboard — OxiGen Admin" },
-      { name: "description", content: "OxiGen Admin — manage orders, products, customers and growth." },
+      {
+        name: "description",
+        content: "OxiGen Admin — manage orders, products, customers and growth.",
+      },
     ],
   }),
   component: DashboardLayout,
 });
 
 function DashboardLayout() {
+  const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkAccess = async () => {
+      if (!user) {
+        // Not logged in, redirect to home
+        navigate({ to: "/" });
+        return;
+      }
+
+      let currentUser: AuthUser | null = user;
+
+      // Stale persisted sessions (from before user_type was tracked) may lack
+      // user_type. Re-validate against the backend before denying access.
+      if (!currentUser.user_type) {
+        currentUser = await useAuthStore.getState().fetchSession();
+        if (cancelled) return;
+        if (!currentUser) {
+          navigate({ to: "/" });
+          return;
+        }
+      }
+
+      // Only System Users can access admin dashboard
+      if (currentUser.user_type !== "System User") {
+        navigate({ to: "/access-denied" });
+        return;
+      }
+
+      // System User - allow access
+    };
+
+    checkAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, navigate]);
+
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Close mobile drawer on route change (best-effort via resize/escape)
   useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileOpen(false); };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
   }, []);
@@ -41,7 +90,7 @@ function DashboardLayout() {
         <div className="flex">
           <Sidebar
             collapsed={collapsed}
-            onToggle={() => setCollapsed(c => !c)}
+            onToggle={() => setCollapsed((c) => !c)}
             mobileOpen={mobileOpen}
             onMobileClose={() => setMobileOpen(false)}
           />

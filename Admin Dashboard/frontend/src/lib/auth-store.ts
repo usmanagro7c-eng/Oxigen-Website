@@ -2,9 +2,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { getMe, logout as apiLogout } from "@/lib/api";
 
-type AuthUser = {
+export type AuthUser = {
   email: string;
   full_name: string;
+  user_type?: "System User" | "Website User"; // ← add user_type
 };
 
 type MeUser = { email: string; name: string };
@@ -25,8 +26,10 @@ export const useAuthStore = create<AuthState>()(
 
       fetchSession: async () => {
         const me = await getMe();
-        if (me) set({ user: { email: me.email, full_name: me.name } });
-        return me ? { email: me.email, full_name: me.name } : null;
+        if (me) {
+          set({ user: { email: me.email, full_name: me.name, user_type: me.user_type } });
+        }
+        return me ? { email: me.email, full_name: me.name, user_type: me.user_type } : null;
       },
 
       setUser: (u) => set({ user: u }),

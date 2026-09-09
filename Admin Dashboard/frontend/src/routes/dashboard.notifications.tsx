@@ -117,7 +117,6 @@ function NotificationsPage() {
   };
 
   useEffect(() => {
-
     let cancelled = false;
 
     const hydrate = async () => {
@@ -125,7 +124,9 @@ function NotificationsPage() {
         const res = await fetch(`${API_BASE}/admin/notifications`, { credentials: "include" });
         if (!res.ok) return;
         const data = await res.json();
-        const next = (data.data ?? []).map((n: ApiNotification) => normalizeNotification({ ...n, when: formatRelativeWhen(n.timestamp) }));
+        const next = (data.data ?? []).map((n: ApiNotification) =>
+          normalizeNotification({ ...n, when: formatRelativeWhen(n.timestamp) }),
+        );
         if (!cancelled) setItems(next);
       } catch {
         // Ignore fetch errors; the SSE stream will recover when backend is reachable.
@@ -134,10 +135,14 @@ function NotificationsPage() {
 
     hydrate();
 
-    const source = new EventSource(`${API_BASE}/admin/notifications/stream`);
+    const source = new EventSource(`${API_BASE}/admin/notifications/stream`, {
+      withCredentials: true,
+    });
     source.addEventListener("init", (event) => {
       const payload = JSON.parse((event as MessageEvent).data || "{}");
-      const next = (payload.notifications ?? []).map((n: ApiNotification) => normalizeNotification({ ...n, when: formatRelativeWhen(n.timestamp) }));
+      const next = (payload.notifications ?? []).map((n: ApiNotification) =>
+        normalizeNotification({ ...n, when: formatRelativeWhen(n.timestamp) }),
+      );
       setItems(next);
     });
     source.addEventListener("notification", (event) => {
@@ -156,7 +161,9 @@ function NotificationsPage() {
     });
     source.addEventListener("change", (event) => {
       const payload = JSON.parse((event as MessageEvent).data || "{}");
-      const next = (payload.notifications ?? []).map((n: ApiNotification) => normalizeNotification({ ...n, when: formatRelativeWhen(n.timestamp) }));
+      const next = (payload.notifications ?? []).map((n: ApiNotification) =>
+        normalizeNotification({ ...n, when: formatRelativeWhen(n.timestamp) }),
+      );
       setItems(next);
     });
 
@@ -177,14 +184,22 @@ function NotificationsPage() {
     <div className="space-y-6">
       <Breadcrumb label="Notifications" />
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <Header icon={Bell} title="Notifications" subtitle={`${unread} unread · Everything happening in your workspace`} />
+        <Header
+          icon={Bell}
+          title="Notifications"
+          subtitle={`${unread} unread · Everything happening in your workspace`}
+        />
         <div className="flex items-center gap-2">
-          <button onClick={() => markRead()}
-            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass hover:bg-white/10 text-xs transition">
+          <button
+            onClick={() => markRead()}
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass hover:bg-white/10 text-xs transition"
+          >
             <Check className="h-3.5 w-3.5" /> Mark all read
           </button>
-          <button onClick={clearAll}
-            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass hover:bg-white/10 text-xs transition">
+          <button
+            onClick={clearAll}
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass hover:bg-white/10 text-xs transition"
+          >
             <Trash2 className="h-3.5 w-3.5" /> Clear all
           </button>
         </div>
@@ -192,10 +207,17 @@ function NotificationsPage() {
 
       <div className="flex flex-wrap gap-2">
         {CATS.map((c) => (
-          <button key={c.key} onClick={() => setCat(c.key)}
+          <button
+            key={c.key}
+            onClick={() => setCat(c.key)}
             className={`h-8 px-3 rounded-lg text-xs transition ${
-              cat === c.key ? "bg-primary-gradient text-primary-foreground shadow-glow" : "glass border border-white/10 hover:bg-white/10"
-            }`}>{c.label}</button>
+              cat === c.key
+                ? "bg-primary-gradient text-primary-foreground shadow-glow"
+                : "glass border border-white/10 hover:bg-white/10"
+            }`}
+          >
+            {c.label}
+          </button>
         ))}
       </div>
 
@@ -208,30 +230,44 @@ function NotificationsPage() {
                 <motion.li
                   key={n.id}
                   layout
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
                   transition={{ delay: i * 0.03, duration: 0.3 }}
                 >
                   <div
                     className={`group w-full flex items-start gap-3 p-4 border-b border-white/[0.04] transition text-left ${
-                      isUnread ? "bg-primary/[0.03] hover:bg-primary/[0.06]" : "hover:bg-white/[0.03]"
+                      isUnread
+                        ? "bg-primary/[0.03] hover:bg-primary/[0.06]"
+                        : "hover:bg-white/[0.03]"
                     }`}
                     onClick={() => isUnread && markRead(n.id)}
                   >
-                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${n.tone} text-white shadow-glow`}>
+                    <span
+                      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${n.tone} text-white shadow-glow`}
+                    >
                       <n.icon className="h-4 w-4" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm ${isUnread ? "font-semibold" : ""}`}>{n.title}</span>
-                        {isUnread && <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />}
+                        <span className={`text-sm ${isUnread ? "font-semibold" : ""}`}>
+                          {n.title}
+                        </span>
+                        {isUnread && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
+                        )}
                         <span className="ml-auto text-[11px] text-muted-foreground">{n.when}</span>
                       </div>
                       <div className="text-[12.5px] text-muted-foreground mt-0.5">{n.body}</div>
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); deleteOne(n.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteOne(n.id);
+                      }}
                       className="grid h-7 w-7 shrink-0 place-items-center rounded-lg opacity-0 transition group-hover:opacity-100 hover:bg-white/5 text-muted-foreground hover:text-rose-300"
-                      aria-label="Delete notification" title="Delete"
+                      aria-label="Delete notification"
+                      title="Delete"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>

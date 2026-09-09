@@ -544,9 +544,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setUser(null);
     toast("Signed out.");
     try {
+      const token = await csrfToken();
       await fetch(`${API_BASE}/auth/logout`, {
         method: "POST",
         credentials: "include",
+        headers: { "X-CSRF-Token": token },
       });
     } catch {
       // Network error is non-fatal — local state is already cleared.

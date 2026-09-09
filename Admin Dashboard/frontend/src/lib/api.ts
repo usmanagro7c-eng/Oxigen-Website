@@ -40,6 +40,7 @@ export interface SignupPayload {
 export interface AuthUser {
   email: string;
   name: string;
+  user_type?: "System User" | "Website User";
 }
 
 export interface AuthResponse {

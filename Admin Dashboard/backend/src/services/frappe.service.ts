@@ -382,13 +382,17 @@ export const frappeService = {
   },
 
   async uploadProfileImage(email: string, filename: string, fileBuffer: Buffer): Promise<{ error?: string; status?: number; data?: { image: string } }> {
+    // Upload to Customer when one exists (website users). For System Users
+    // (e.g. admins) there is no Customer record — attach to the User doctype
+    // instead so they can still set an avatar.
     const customerName = await this.findCustomerByEmail(email);
-    if (!customerName) return { error: "Customer not found.", status: 404 };
+    const doctype = customerName ? "Customer" : "User";
+    const docname = customerName || email;
 
     const { body, contentType } = buildMultipartBody([
       { name: "file", value: fileBuffer, filename },
-      { name: "doctype", value: "Customer" },
-      { name: "docname", value: customerName },
+      { name: "doctype", value: doctype },
+      { name: "docname", value: docname },
       { name: "is_private", value: "0" },
       { name: "folder", value: "Home/Attachments" },
     ]);
@@ -410,13 +414,15 @@ export const frappeService = {
       return { error: "Failed to upload profile image: No file URL returned." };
     }
 
-    // Update Customer profile
-    const updateRes = await this.updateCustomerProfile(email, { image: fileUrl });
-    if (updateRes.error) {
-      return updateRes;
+    // Update the source doctype (Customer when available, otherwise User)
+    if (customerName) {
+      const updateRes = await this.updateCustomerProfile(email, { image: fileUrl });
+      if (updateRes.error) {
+        return updateRes;
+      }
     }
 
-    // Try to sync with User document as well
+    // Keep the User document avatar in sync
     try {
       await erpFetch(getErpUrl(`/api/resource/User/${encodeURIComponent(email)}`), {
         method: "PUT",
