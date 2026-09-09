@@ -8,6 +8,7 @@ import { sendMail } from "../lib/mailer.js";
 import { enqueueSignup } from "../lib/order-queue.js";
 import { pingErpNext } from "../lib/erpnext-client.js";
 import { createHash } from "crypto";
+import { buildSessionCookie, clearSessionCookie, parseSessionEmail } from "../lib/session-signer.js";
 
 /**
  * Redact sensitive fields before logging request bodies / user objects.
@@ -166,6 +167,11 @@ export const authController = {
         res.setHeader("Set-Cookie", result.cookie);
       }
 
+      // Set our own signed session cookie so /api/auth/me keeps working even
+      // though ERPNext's `frappe.auth.get_logged_user` is not whitelisted in
+      // this build.
+      res.append("Set-Cookie", buildSessionCookie(usr));
+
       // Fetch user's full name and user type in parallel
       const [fullName, userType] = await Promise.all([
         authService.getUserFullName(usr),
@@ -193,6 +199,7 @@ export const authController = {
     await authService.logout(req.headers.cookie);
     const isSecure = (process.env["FRONTEND_ORIGIN"] ?? "").startsWith("https://");
     res.setHeader("Set-Cookie", `sid=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${isSecure ? "; Secure" : ""}`);
+    res.append("Set-Cookie", clearSessionCookie());
     res.json({ message: "Logged out successfully." });
   },
 
@@ -202,22 +209,26 @@ export const authController = {
     try {
       const email = await authService.getLoggedInEmail(req.headers.cookie);
 
-      if (!email) {
+      // ERPNext may not be able to resolve the session (get_logged_user is not
+      // whitelisted in this build) — fall back to our signed session cookie.
+      const resolvedEmail = email ?? parseSessionEmail(req.headers.cookie);
+
+      if (!resolvedEmail) {
         res.json({ success: false, user: null });
         return;
       }
 
       // Fetch user's full name and user type in parallel
       const [fullName, userType] = await Promise.all([
-        authService.getUserFullName(email),
-        authService.getUserType(email),
+        authService.getUserFullName(resolvedEmail),
+        authService.getUserType(resolvedEmail),
       ]);
 
       res.json({
         success: true,
         user: {
-          email,
-          name: fullName || email,
+          email: resolvedEmail,
+          name: fullName || resolvedEmail,
           user_type: userType,
         },
       });
