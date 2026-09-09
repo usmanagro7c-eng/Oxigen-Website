@@ -18,12 +18,12 @@ export const Route = createFileRoute("/account")({
 });
 
 function AccountPage() {
-  const { user, orders, wishlistItems, signOut } = useStore();
+  const { user, hydrated, orders, wishlistItems, signOut } = useStore();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!user) navigate({ to: "/signin" });
-  }, [user, navigate]);
+    if (hydrated && !user) navigate({ to: "/signin" });
+  }, [user, hydrated, navigate]);
 
   if (!user) return null;
 
