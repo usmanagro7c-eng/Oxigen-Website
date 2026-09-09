@@ -5,6 +5,9 @@ import multer from "multer";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { requireAdmin } from "../middlewares/requireAdmin.js";
+
 import {
   getQueueStats,
   getCircuitState,
@@ -106,6 +109,11 @@ async function fetchRecentSalesOrders(): Promise<SalesOrderSummary[]> {
 }
 
 const router: IRouter = Router();
+
+// Apply authentication and System User check to all admin routes
+router.use(requireAuth);
+router.use(requireAdmin);
+
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/monitor
