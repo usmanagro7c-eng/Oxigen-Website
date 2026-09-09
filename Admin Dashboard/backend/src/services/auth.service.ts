@@ -210,4 +210,30 @@ export const authService = {
       return false;
     }
   },
+
+  // ── User Type Check ────────────────────────────────────────────────────────
+
+  async getUserType(email: string): Promise<"System User" | "Website User" | null> {
+    try {
+      const userRes = await erpFetch(
+        getErpUrl(
+          `/api/resource/User/${encodeURIComponent(email)}?fields=${encodeURIComponent(JSON.stringify(["user_type"]))}`,
+        ),
+        { headers: getErpHeaders() },
+      );
+      if (userRes.ok) {
+        const userData = (await userRes.json()) as {
+          data?: { user_type?: string };
+        };
+        const userType = userData.data?.user_type;
+        if (userType === "System User" || userType === "Website User") {
+          return userType;
+        }
+      }
+      return null;
+    } catch (err) {
+      logger.error({ err }, "[authService.getUserType]");
+      return null;
+    }
+  },
 };
