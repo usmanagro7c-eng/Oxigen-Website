@@ -6,6 +6,7 @@ import { authService } from "./auth.service.js";
 import { authTokenService } from "./auth-token.service.js";
 import emailService from "./email.service.js";
 import { notifyAdminOfOrder } from "../lib/admin-notify.js";
+import { getFrontendBaseUrl } from "../lib/frontend-url.js";
 
 /**
  * Interface representing the queue storage and management.
@@ -151,7 +152,7 @@ export class QueueProcessor<T extends ProcessorJob> {
       const rawToken = authTokenService.generateToken(p.email, 24 * 60 * 60 * 1000);
       if (!rawToken) throw new Error("Failed to generate password token.");
 
-      const frontendUrl = (process.env["FRONTEND_URL"] ?? "http://localhost:5173").replace(/\/$/, "");
+      const frontendUrl = getFrontendBaseUrl();
       const setPasswordUrl = `${frontendUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(p.email)}`;
       const fullName = p.fullName ?? [p.firstName, p.lastName].filter(Boolean).join(" ");
       await emailService.sendSetPasswordEmail(p.email, fullName || p.firstName, setPasswordUrl);
