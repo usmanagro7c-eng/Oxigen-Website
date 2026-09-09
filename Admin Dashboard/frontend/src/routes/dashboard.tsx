@@ -22,6 +22,7 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardLayout() {
   const user = useAuthStore((s) => s.user);
+  const hydrated = useAuthStore((s) => s.hydrated);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,22 +30,24 @@ function DashboardLayout() {
 
     const checkAccess = async () => {
       if (!user) {
-        // Not logged in, redirect to home
+        // Not hydrated yet (or genuinely logged out) — wait for hydration to finish
+        if (!hydrated) return;
         navigate({ to: "/" });
         return;
       }
 
-      let currentUser: AuthUser | null = user;
+      let currentUser: AuthUser = user;
 
       // Stale persisted sessions (from before user_type was tracked) may lack
       // user_type. Re-validate against the backend before denying access.
       if (!currentUser.user_type) {
-        currentUser = await useAuthStore.getState().fetchSession();
+        const fresh = await useAuthStore.getState().fetchSession();
         if (cancelled) return;
-        if (!currentUser) {
+        if (!fresh) {
           navigate({ to: "/" });
           return;
         }
+        currentUser = fresh;
       }
 
       // Only System Users can access admin dashboard
@@ -61,7 +64,7 @@ function DashboardLayout() {
     return () => {
       cancelled = true;
     };
-  }, [user, navigate]);
+  }, [user, hydrated, navigate]);
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
