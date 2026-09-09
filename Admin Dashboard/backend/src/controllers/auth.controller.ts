@@ -166,8 +166,11 @@ export const authController = {
         res.setHeader("Set-Cookie", result.cookie);
       }
 
-      // Fetch user's full name for the response
-      const fullName = await authService.getUserFullName(usr);
+      // Fetch user's full name and user type in parallel
+      const [fullName, userType] = await Promise.all([
+        authService.getUserFullName(usr),
+        authService.getUserType(usr),
+      ]);
 
       res.json({
         success: true,
@@ -175,6 +178,7 @@ export const authController = {
         user: {
           email: usr,
           name: fullName || usr,
+          user_type: userType,
         },
       });
     } catch (err) {
@@ -203,14 +207,18 @@ export const authController = {
         return;
       }
 
-      // Fetch user's full name
-      const fullName = await authService.getUserFullName(email);
+      // Fetch user's full name and user type in parallel
+      const [fullName, userType] = await Promise.all([
+        authService.getUserFullName(email),
+        authService.getUserType(email),
+      ]);
 
       res.json({
         success: true,
         user: {
           email,
           name: fullName || email,
+          user_type: userType,
         },
       });
     } catch (err) {
