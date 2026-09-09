@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 import { logger } from "./logger.js";
 import { sendMail } from "./mailer.js";
 import { QueueProcessor, IQueueStore } from "../services/queue-processor.js";
+import { getFrontendBaseUrl } from "./frontend-url.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -185,7 +186,7 @@ class OrderQueueStore implements IQueueStore<OrderJob> {
     if (!adminEmail) return;
 
     const capPercent = Math.round((pending / MAX_QUEUE_SIZE) * 100);
-    const frontendUrl = (process.env["FRONTEND_URL"] ?? "http://localhost:5173").replace(/\/$/, "");
+    const frontendUrl = getFrontendBaseUrl();
     const monitorUrl = `${frontendUrl}/admin/monitor`;
 
     const html = `
