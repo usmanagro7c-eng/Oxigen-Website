@@ -3,18 +3,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect, useId } from "react";
 import {
   Lock,
-  Mail,
   User,
   Eye,
   EyeOff,
   ArrowRight,
   ShieldCheck,
-  Check,
   Loader2,
   AlertCircle,
-  KeyRound,
-  ArrowLeft,
-  Shield,
   CheckCircle2,
 } from "lucide-react";
 import { login } from "@/lib/api";
@@ -37,20 +32,15 @@ function AdminLoginPage() {
 
   const emailId = useId();
   const passwordId = useId();
-  const resetEmailId = useId();
 
   // Form states — supports any ERPNext username (e.g., 'Administrator', 'user@company.com')
-  const [email, setEmail] = useState("Administrator");
-  const [password, setPassword] = useState("admin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  // View state: 'login' | 'forgot'
-  const [mode, setMode] = useState<"login" | "forgot">("login");
-  const [resetSent, setResetSent] = useState(false);
 
   // Auto-login / session check
   useEffect(() => {
@@ -74,14 +64,16 @@ function AdminLoginPage() {
     try {
       // 1. Attempt authentication with ERPNext / Express backend
       const res = await login(usernameOrEmail, password);
-      
+
       if (res && res.success) {
         const displayName = res.user?.name || usernameOrEmail.split("@")[0] || usernameOrEmail;
-        const userEmail = res.user?.email || (usernameOrEmail.includes("@") ? usernameOrEmail : `${usernameOrEmail}@oxigen.local`);
-        
-        setUser({ email: userEmail, full_name: displayName });
+        const userEmail =
+          res.user?.email ||
+          (usernameOrEmail.includes("@") ? usernameOrEmail : `${usernameOrEmail}@oxigen.local`);
+
+        setUser({ email: userEmail, full_name: displayName, user_type: res.user?.user_type });
         setSuccessMsg(`Welcome, ${displayName}! Opening dashboard...`);
-        
+
         setTimeout(() => {
           navigate({ to: "/dashboard" });
         }, 600);
@@ -93,59 +85,15 @@ function AdminLoginPage() {
       const message = err instanceof Error ? err.message : String(err);
       console.warn("ERP Login attempt info:", message);
 
-      // If backend explicitly rejected credentials (401 Unauthorized / Invalid Password)
-      if (message.includes("401") || message.toLowerCase().includes("invalid") || message.toLowerCase().includes("incorrect")) {
-        setErrorMsg("Invalid credentials. Please check your username and password.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Fallback for local/offline dev mode: allow login for any ERP user to test dashboard
-      const displayName = usernameOrEmail.includes("@") ? usernameOrEmail.split("@")[0] : usernameOrEmail;
-      const userEmail = usernameOrEmail.includes("@") ? usernameOrEmail : `${usernameOrEmail}@oxigen.local`;
-
-      setUser({ email: userEmail, full_name: displayName });
-      setSuccessMsg(`Authenticated as ${displayName}. Redirecting to dashboard...`);
-      
-      setTimeout(() => {
-        navigate({ to: "/dashboard" });
-      }, 600);
+      // Backend could not be reached or credentials were rejected.
+      // Session is never granted without a verified backend response — no offline fallback.
+      setErrorMsg("Could not reach the server. Please check your connection and try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDemoLogin = (role: "administrator" | "manager") => {
-    setErrorMsg(null);
-    setIsSubmitting(true);
-    const demoUser = role === "administrator" ? "Administrator" : "Manager";
-    const demoEmail = role === "administrator" ? "admin@oxigen.local" : "manager@oxigen.local";
-
-    setEmail(demoUser);
-    setPassword("••••••••");
-
-    setTimeout(() => {
-      setUser({ email: demoEmail, full_name: demoUser });
-      setSuccessMsg(`Welcome, ${demoUser}! Opening dashboard...`);
-      setTimeout(() => {
-        navigate({ to: "/dashboard" });
-      }, 500);
-    }, 300);
-  };
-
-  const handleForgotPassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) {
-      setErrorMsg("Please enter your username or email address.");
-      return;
-    }
-    setErrorMsg(null);
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setResetSent(true);
-    }, 800);
-  };
+  // Demo and Forgot Password functions removed - users must login manually
 
   return (
     <div className="relative min-h-screen w-full bg-gradient-to-br from-secondary/70 via-background to-secondary/50 text-foreground flex flex-col justify-between overflow-hidden selection:bg-primary/20">
@@ -156,12 +104,8 @@ function AdminLoginPage() {
           animate={{ opacity: [0.18, 0.28, 0.18] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         />
-        <div
-          className="absolute top-1/4 -right-20 h-[460px] w-[460px] rounded-full blur-[140px] opacity-20 bg-accent"
-        />
-        <div
-          className="absolute -bottom-20 left-10 h-[480px] w-[480px] rounded-full blur-[150px] opacity-15 bg-emerald-400"
-        />
+        <div className="absolute top-1/4 -right-20 h-[460px] w-[460px] rounded-full blur-[140px] opacity-20 bg-accent" />
+        <div className="absolute -bottom-20 left-10 h-[480px] w-[480px] rounded-full blur-[150px] opacity-15 bg-emerald-400" />
         {/* Grid pattern overlay */}
         <div className="absolute inset-0 grid-pattern opacity-30" />
       </div>
@@ -194,285 +138,140 @@ function AdminLoginPage() {
           {/* Top card shimmer border */}
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-primary to-transparent" />
 
-          {/* Mode: LOGIN */}
-          {mode === "login" && (
-            <div>
-              {/* Card Header */}
-              <div className="text-center mb-7">
-                <div className="inline-flex items-center justify-center mb-3">
-                  <img src={oxigenLogo} alt="OxiGen" className="h-10 w-auto object-contain" />
-                </div>
-                <h1 className="text-2xl font-bold font-display tracking-tight text-foreground">
-                  Admin Portal Login
-                </h1>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Sign in with Administrator or Store Manager credentials
-                </p>
+          <div>
+            {/* Card Header */}
+            <div className="text-center mb-7">
+              <div className="inline-flex items-center justify-center mb-3">
+                <img src={oxigenLogo} alt="OxiGen" className="h-10 w-auto object-contain" />
               </div>
+              <h1 className="text-2xl font-bold font-display tracking-tight text-foreground">
+                Admin Portal Login
+              </h1>
+              <p className="text-xs text-muted-foreground mt-1">
+                Sign in with your ERPNext credentials
+              </p>
+            </div>
 
-              {/* Alert Feedback Messages */}
-              <AnimatePresence mode="wait">
-                {errorMsg && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10, height: 0 }}
-                    animate={{ opacity: 1, y: 0, height: "auto" }}
-                    exit={{ opacity: 0, y: -10, height: 0 }}
-                    className="mb-5 p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2.5"
-                  >
-                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>{errorMsg}</span>
-                  </motion.div>
-                )}
-
-                {successMsg && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10, height: 0 }}
-                    animate={{ opacity: 1, y: 0, height: "auto" }}
-                    exit={{ opacity: 0, y: -10, height: 0 }}
-                    className="mb-5 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2.5"
-                  >
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span>{successMsg}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Login Form */}
-              <form onSubmit={handleLogin} className="space-y-4">
-                {/* Username/Email Field */}
-                <div>
-                  <label
-                    htmlFor={emailId}
-                    className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5"
-                  >
-                    Username or Email
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                      <User className="h-4 w-4" />
-                    </div>
-                    <input
-                      id={emailId}
-                      type="text"
-                      required
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Administrator or user@company.com"
-                      className="w-full rounded-xl bg-background border border-border pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Password Field */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label
-                      htmlFor={passwordId}
-                      className="block text-xs font-bold text-muted-foreground uppercase tracking-wider"
-                    >
-                      Password
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setErrorMsg(null);
-                        setMode("forgot");
-                      }}
-                      className="text-xs font-medium text-primary hover:underline transition-colors"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                      <Lock className="h-4 w-4" />
-                    </div>
-                    <input
-                      id={passwordId}
-                      type={showPassword ? "text" : "password"}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full rounded-xl bg-background border border-border pl-10 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-muted-foreground hover:text-foreground transition-colors"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Remember Me */}
-                <div className="flex items-center justify-between pt-1">
-                  <label className="flex items-center gap-2.5 cursor-pointer text-xs text-muted-foreground select-none">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="rounded border-border text-primary focus:ring-primary/20 h-4 w-4 accent-primary"
-                    />
-                    <span>Keep me signed in</span>
-                  </label>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-5 py-3 text-sm font-bold text-white shadow-md shadow-primary/25 hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            {/* Alert Feedback Messages */}
+            <AnimatePresence mode="wait">
+              {errorMsg && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: "auto" }}
+                  exit={{ opacity: 0, y: -10, height: 0 }}
+                  className="mb-5 p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2.5"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Authenticating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Sign In to Dashboard</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {/* Demo / Preset ERP Users Divider & Buttons */}
-              <div className="mt-8 pt-6 border-t border-border">
-                <p className="text-xs text-center text-muted-foreground mb-3 font-semibold uppercase tracking-wider">
-                  Quick Select Preset User
-                </p>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => handleDemoLogin("administrator")}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-secondary hover:bg-primary/10 border border-border text-xs font-semibold text-foreground hover:text-primary transition-all hover:scale-[1.02]"
-                  >
-                    <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                    <span>Administrator</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDemoLogin("manager")}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-secondary hover:bg-accent/10 border border-border text-xs font-semibold text-foreground hover:text-accent transition-all hover:scale-[1.02]"
-                  >
-                    <Shield className="h-3.5 w-3.5 text-accent" />
-                    <span>Store Manager</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Mode: FORGOT PASSWORD */}
-          {mode === "forgot" && (
-            <div>
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMsg(null);
-                  setResetSent(false);
-                  setMode("login");
-                }}
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-6 font-medium"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Back to Login</span>
-              </button>
-
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary mb-3">
-                  <KeyRound className="h-6 w-6" />
-                </div>
-                <h2 className="text-xl font-bold font-display text-foreground">
-                  Password Recovery
-                </h2>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Enter your username or email address to request a reset link.
-                </p>
-              </div>
-
-              {resetSent ? (
-                <div className="text-center py-4 space-y-4">
-                  <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm space-y-1">
-                    <p className="font-semibold flex items-center justify-center gap-2">
-                      <Check className="h-4 w-4" /> Reset Request Sent
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Reset instructions sent for user{" "}
-                      <span className="text-foreground font-medium">{email}</span>.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResetSent(false);
-                      setMode("login");
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-secondary hover:bg-secondary/80 text-xs font-semibold text-foreground transition-colors"
-                  >
-                    Return to Login
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleForgotPassword} className="space-y-4">
-                  {errorMsg && (
-                    <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span>{errorMsg}</span>
-                    </div>
-                  )}
-
-                  <div>
-                    <label
-                      htmlFor={resetEmailId}
-                      className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5"
-                    >
-                      User / Email
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted-foreground">
-                        <Mail className="h-4 w-4" />
-                      </div>
-                      <input
-                        id={resetEmailId}
-                        type="text"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Administrator or user@company.com"
-                        className="w-full rounded-xl bg-background border border-border pl-10 pr-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-primary/25 hover:opacity-95 transition-all disabled:opacity-50"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Sending Instructions...</span>
-                      </>
-                    ) : (
-                      <span>Send Recovery Link</span>
-                    )}
-                  </button>
-                </form>
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{errorMsg}</span>
+                </motion.div>
               )}
-            </div>
-          )}
+
+              {successMsg && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: "auto" }}
+                  exit={{ opacity: 0, y: -10, height: 0 }}
+                  className="mb-5 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2.5"
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{successMsg}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Login Form */}
+            <form onSubmit={handleLogin} className="space-y-4">
+              {/* Username/Email Field */}
+              <div>
+                <label
+                  htmlFor={emailId}
+                  className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5"
+                >
+                  Username or Email
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
+                    <User className="h-4 w-4" />
+                  </div>
+                  <input
+                    id={emailId}
+                    type="text"
+                    required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="user@company.com"
+                    className="w-full rounded-xl bg-background border border-border pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label
+                  htmlFor={passwordId}
+                  className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5"
+                >
+                  Password
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                  <input
+                    id={passwordId}
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-xl bg-background border border-border pl-10 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember Me */}
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2.5 cursor-pointer text-xs text-muted-foreground select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-primary/20 h-4 w-4 accent-primary"
+                  />
+                  <span>Keep me signed in</span>
+                </label>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-5 py-3 text-sm font-bold text-white shadow-md shadow-primary/25 hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Authenticating...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In to Dashboard</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
         </motion.div>
       </main>
 
