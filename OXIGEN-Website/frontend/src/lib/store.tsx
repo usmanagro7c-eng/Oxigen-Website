@@ -140,6 +140,7 @@ type StoreValue = {
   toggleWishlist: (slug: string) => boolean;
   inWishlist: (slug: string) => boolean;
   user: User | null;
+  hydrated: boolean;
   signIn: (usr: string, pwd: string) => Promise<boolean>;
   signUp: (email: string, full_name: string) => Promise<boolean>;
   signOut: () => Promise<boolean>;
@@ -228,7 +229,7 @@ async function apiCall<TBody extends Record<string, unknown>>(
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => load<User | null>("oxi_user", null));
   const [orders, setOrders] = useState<Order[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -979,6 +980,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleWishlist,
       inWishlist,
       user,
+      hydrated,
       signIn,
       signUp,
       signOut,
@@ -1002,7 +1004,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       returnOrder,
     } as unknown as StoreValue;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, wishlist, user, orders, drawerOpen, profile, addresses, paymentModes, allCatalog]);
+  }, [cart, wishlist, user, hydrated, orders, drawerOpen, profile, addresses, paymentModes, allCatalog]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
