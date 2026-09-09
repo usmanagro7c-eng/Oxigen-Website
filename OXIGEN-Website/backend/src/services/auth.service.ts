@@ -41,9 +41,23 @@ export const authService = {
       const data = (await erpRes.json()) as {
         message?: string;
         full_name?: string;
+        exception?: unknown;
+        _server_messages?: unknown;
       };
 
       if (!erpRes.ok) {
+        logger.warn(
+          {
+            status: erpRes.status,
+            message: data?.message,
+            exception:
+              typeof data?.exception === "string"
+                ? data.exception.split("\n").slice(0, 3).join(" | ")
+                : undefined,
+            serverMessages: data?._server_messages,
+          },
+          "[authService.login] ERPNext rejected login attempt",
+        );
         return { success: false, error: "Invalid email or password." };
       }
 
@@ -195,7 +209,10 @@ export const authService = {
     );
   },
 
-  async setUserPassword(email: string, newPassword: string): Promise<boolean> {
+  async setUserPassword(
+    email: string,
+    newPassword: string,
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       const updateRes = await erpFetch(
         getErpUrl(`/api/resource/User/${encodeURIComponent(email)}`),
@@ -205,9 +222,31 @@ export const authService = {
           body: JSON.stringify({ new_password: newPassword }),
         },
       );
-      return updateRes.ok;
-    } catch {
-      return false;
+
+      if (!updateRes.ok) {
+        const errData = (await updateRes.json().catch(() => ({}))) as { _server_messages?: unknown };
+        logger.warn(
+          { email, status: updateRes.status, serverMessages: errData._server_messages },
+          "[authService.setUserPassword] ERPNext rejected password save",
+        );
+        return { success: false, error: "Could not save the password on the server." };
+      }
+
+      // Self-verify: confirm the password really took effect by logging in with it.
+      // An OK PUT can silently fail to persist the hash on some ERPNext builds.
+      const verification = await this.login(email, newPassword);
+      if (!verification.success) {
+        logger.warn(
+          { email },
+          "[authService.setUserPassword] Password save returned OK but login self-verify failed",
+        );
+        return { success: false, error: "Password was not applied by the server." };
+      }
+
+      return { success: true };
+    } catch (err) {
+      logger.error({ err }, "[authService.setUserPassword]");
+      return { success: false, error: "Internal server error." };
     }
   },
 };
