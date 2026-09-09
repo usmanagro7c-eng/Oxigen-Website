@@ -8,6 +8,8 @@ import { sendMail } from "../lib/mailer.js";
 import { enqueueSignup } from "../lib/order-queue.js";
 import { pingErpNext } from "../lib/erpnext-client.js";
 import { createHash } from "crypto";
+import { getFrontendBaseUrl } from "../lib/frontend-url.js";
+import { buildSessionCookie, clearSessionCookie, parseSessionEmail } from "../lib/session-signer.js";
 
 /**
  * Redact sensitive fields before logging request bodies / user objects.
@@ -114,7 +116,7 @@ export const authController = {
       }
 
       // 5) Send set-password email
-      const frontendUrl = (process.env["FRONTEND_URL"] ?? "http://localhost:5173").replace(/\/$/, "");
+      const frontendUrl = getFrontendBaseUrl();
       const setPasswordUrl = `${frontendUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
 
       try {
@@ -166,6 +168,10 @@ export const authController = {
         res.setHeader("Set-Cookie", result.cookie);
       }
 
+      // Set our own signed session cookie so /api/auth/me works even though
+      // ERPNext's `frappe.auth.get_logged_user` is not whitelisted in this build.
+      res.append("Set-Cookie", buildSessionCookie(usr));
+
       // Fetch user's full name for the response
       const fullName = await authService.getUserFullName(usr);
 
@@ -189,6 +195,7 @@ export const authController = {
     await authService.logout(req.headers.cookie);
     const isSecure = (process.env["FRONTEND_ORIGIN"] ?? "").startsWith("https://");
     res.setHeader("Set-Cookie", `sid=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${isSecure ? "; Secure" : ""}`);
+    res.append("Set-Cookie", clearSessionCookie());
     res.json({ message: "Logged out successfully." });
   },
 
@@ -196,7 +203,11 @@ export const authController = {
 
   async me(req: Request, res: Response): Promise<void> {
     try {
-      const email = await authService.getLoggedInEmail(req.headers.cookie);
+      let email = await authService.getLoggedInEmail(req.headers.cookie);
+
+      // ERPNext may not be able to resolve the session (get_logged_user is not
+      // whitelisted in this build) — fall back to our signed session cookie.
+      if (!email) email = parseSessionEmail(req.headers.cookie);
 
       if (!email) {
         res.json({ success: false, user: null });
@@ -246,14 +257,14 @@ export const authController = {
     }
 
     try {
-      const success = await authService.setUserPassword(email, password);
-      if (!success) {
-        res.status(400).json({ error: "Failed to set password." });
+      const result = await authService.setUserPassword(email, password);
+      if (!result.success) {
+        res.status(400).json({ error: result.error || "Failed to set password." });
         return;
       }
 
       // Send confirmation email
-      const frontendUrl = (process.env["FRONTEND_URL"] ?? "http://localhost:5173").replace(/\/$/, "");
+      const frontendUrl = getFrontendBaseUrl();
       const loginUrl = `${frontendUrl}/login`;
 
       let fullName = email.split("@")[0];
@@ -325,7 +336,7 @@ export const authController = {
         return;
       }
 
-      const frontendUrl = (process.env["FRONTEND_URL"] ?? "http://localhost:5173").replace(/\/$/, "");
+      const frontendUrl = getFrontendBaseUrl();
       const setPasswordUrl = `${frontendUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
 
       let fullName = email.split("@")[0];
