@@ -103,6 +103,54 @@ export const contactSchema = z.object({
   message: z.string().min(1, "Message is required.").max(2000),
 });
 
+// ── Admin: Create Item ────────────────────────────────────────────────────────
+export const createItemSchema = z.object({
+  item_name: z.string().min(1, "Item name is required.").max(255),
+  item_group: z.string().min(1, "Item group is required.").max(255),
+  stock_uom: z.string().min(1, "Unit of measure is required.").max(255),
+  description: z.string().max(5000).optional(),
+  standard_rate: z.number().min(0).optional(),
+  stock_qty: z.number().int().min(0).optional(),
+  image: z.string().optional(),
+  imageUrl: z.string().optional(),
+  sku: z.string().max(255).optional(),
+  item_code: z.string().max(255).optional(),
+  // Website Item fields
+  publish: z.boolean().optional(),
+  website_warehouse: z.string().max(255).optional(),
+  short_description: z.string().max(1000).optional(),
+  web_long_description: z.string().max(50000).optional(),
+});
+
+// ── Admin: Settings Update ───────────────────────────────────────────────────
+export const settingsUpdateSchema = z.object({
+  organization: z
+    .object({
+      company_name: z.string().max(255).optional(),
+      website_url: z.string().max(500).optional(),
+      support_email: z.string().email().max(255).optional(),
+      company_logo: z.string().max(500).nullable().optional(),
+    })
+    .optional(),
+  preferences: z
+    .object({
+      language: z.string().max(10).optional(),
+      time_zone: z.string().max(50).optional(),
+      date_format: z.string().max(20).optional(),
+      currency: z.string().max(10).optional(),
+      country: z.string().max(100).optional(),
+      number_format: z.string().max(20).optional(),
+    })
+    .optional(),
+  notifications: z
+    .object({
+      email: z.boolean().optional(),
+      push: z.boolean().optional(),
+      marketing: z.boolean().optional(),
+    })
+    .optional(),
+});
+
 /**
  * Wraps Zod validation as Express middleware.
  * Returns 400 with structured errors on failure.
