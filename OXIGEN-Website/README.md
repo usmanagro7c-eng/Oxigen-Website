@@ -2,6 +2,11 @@
 
 A modern, high-performance, and secure e-commerce application built with **React**, **Vite**, **TypeScript**, and **Express**. The platform features dynamic product browsing, a rich and responsive user interface, and integration with an ERPNext backend.
 
+> This single application now also hosts the **Admin Dashboard** in the same SPA —
+> the management console lives at `/admin` (routes `src/routes/admin.*.tsx`), signed
+> in with an ERPNext System User. See the [root README](../README.md) for the merged
+> architecture and how the former standalone `Admin Dashboard/` project was folded in.
+
 ---
 
 ## 🚀 Technology Stack
@@ -37,8 +42,11 @@ OxiGen Website/
 ├── frontend/              # Vite + React frontend application
 │   ├── src/               # React components, routes, and styles
 │   │   ├── components/    # Reusable UI (shadcn) and Site components
-│   │   ├── routes/        # Page routes (Tanstack Router)
-│   │   └── lib/           # Stores, utilities, and error-handling
+│   │   │   ├── admin/         # Admin console UI (sidebar, topnav, forms…)
+│   │   │   ├── admin-site/    # Admin site-section editors (hero, testimonials…)
+│   │   │   └── admin-templates/ # Admin template previews
+│   │   ├── routes/        # Page routes (Tanstack Router) incl. admin.*.tsx (admin console)
+│   │   └── lib/           # Stores (admin-auth-store, site-store), admin-api, utilities
 │   ├── public/            # Static assets (favicons, robots.txt)
 │   └── .gitignore         # Frontend-level git ignores
 ├── tests/                 # Playwright test specifications
