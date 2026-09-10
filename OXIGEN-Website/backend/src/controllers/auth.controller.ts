@@ -9,7 +9,7 @@ import { enqueueSignup } from "../lib/order-queue.js";
 import { pingErpNext } from "../lib/erpnext-client.js";
 import { createHash } from "crypto";
 import { getFrontendBaseUrl } from "../lib/frontend-url.js";
-import { buildSessionCookie, clearSessionCookie, parseSessionEmail } from "../lib/session-signer.js";
+import { buildSessionCookie, buildAdminSessionCookie, clearSessionCookie, clearAdminSessionCookie, parseSessionEmail } from "../lib/session-signer.js";
 
 /**
  * Redact sensitive fields before logging request bodies / user objects.
@@ -172,8 +172,16 @@ export const authController = {
       // ERPNext's `frappe.auth.get_logged_user` is not whitelisted in this build.
       res.append("Set-Cookie", buildSessionCookie(usr));
 
-      // Fetch user's full name for the response
-      const fullName = await authService.getUserFullName(usr);
+      // Fetch user's full name + user type for the response. System Users also
+      // get the signed admin session cookie (used by merged admin routes).
+      const [fullName, userType] = await Promise.all([
+        authService.getUserFullName(usr),
+        authService.getUserType(usr),
+      ]);
+
+      if (userType === "System User") {
+        res.append("Set-Cookie", buildAdminSessionCookie(usr));
+      }
 
       res.json({
         success: true,
@@ -181,6 +189,7 @@ export const authController = {
         user: {
           email: usr,
           name: fullName || usr,
+          user_type: userType,
         },
       });
     } catch (err) {
@@ -196,6 +205,7 @@ export const authController = {
     const isSecure = (process.env["FRONTEND_ORIGIN"] ?? "").startsWith("https://");
     res.setHeader("Set-Cookie", `sid=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${isSecure ? "; Secure" : ""}`);
     res.append("Set-Cookie", clearSessionCookie());
+    res.append("Set-Cookie", clearAdminSessionCookie());
     res.json({ message: "Logged out successfully." });
   },
 
@@ -214,14 +224,18 @@ export const authController = {
         return;
       }
 
-      // Fetch user's full name
-      const fullName = await authService.getUserFullName(email);
+      // Fetch user's full name + user type
+      const [fullName, userType] = await Promise.all([
+        authService.getUserFullName(email),
+        authService.getUserType(email),
+      ]);
 
       res.json({
         success: true,
         user: {
           email,
           name: fullName || email,
+          user_type: userType,
         },
       });
     } catch (err) {
