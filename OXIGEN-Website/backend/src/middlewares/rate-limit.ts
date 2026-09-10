@@ -77,7 +77,13 @@ export function createRateLimiter(type: keyof typeof LIMITS) {
 // General rate limiter — applied globally except SSE endpoint
 export const rateLimitMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   // SSE connections are long-lived — do not apply rate limiting
-  if (req.path === "/webhooks/events") {
+  if (
+    req.path === "/webhooks/events" ||
+    req.path.startsWith("/webhooks/events") ||
+    req.path.startsWith("/api/webhooks/events") ||
+    req.path.startsWith("/admin/notifications/stream") ||
+    req.path.startsWith("/api/admin/notifications/stream")
+  ) {
     next();
     return;
   }
