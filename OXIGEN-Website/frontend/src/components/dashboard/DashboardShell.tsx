@@ -51,14 +51,14 @@ export function DashboardShell({ children }: { children?: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isActive = useActive();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
-  const { signOut, user, profile } = useStore();
+  const { signOut, user, profile, hydrated } = useStore();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!user) {
+    if (hydrated && !user) {
       navigate({ to: "/signin" });
     }
-  }, [user, navigate]);
+  }, [user, hydrated, navigate]);
 
   if (!user) return null;
 

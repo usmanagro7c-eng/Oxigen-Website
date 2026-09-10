@@ -1,6 +1,7 @@
 import { logger } from "../lib/logger.js";
 import type { Request, Response, NextFunction } from "express";
 import { getErpUrl, erpFetch} from "../lib/erpnext-client.js";
+import { parseSessionEmail } from "../lib/session-signer.js";
 
 // Add loggedInEmail field to the Express Request type
 declare global {
@@ -22,6 +23,9 @@ export async function requireAuth(
   next: NextFunction,
 ): Promise<void> {
   try {
+    let email: string | null = null;
+
+    // Primary: resolve the ERPNext session (works when get_logged_user is whitelisted).
     const erpRes = await erpFetch(
       getErpUrl("/api/method/frappe.auth.get_logged_user"),
       {
@@ -32,15 +36,16 @@ export async function requireAuth(
       },
     );
 
-    if (!erpRes.ok) {
-      res.status(401).json({ error: "Login required." });
-      return;
+    if (erpRes.ok) {
+      const data = (await erpRes.json()) as { message?: string };
+      if (data.message && data.message !== "Guest") email = data.message;
     }
 
-    const data = (await erpRes.json()) as { message?: string };
-    const email = data.message;
+    // Fallback: our signed session cookie — this ERPNext build does not whitelist
+    // frappe.auth.get_logged_user, so the ERPNext lookup always fails here.
+    if (!email) email = parseSessionEmail(req.headers.cookie);
 
-    if (!email || email === "Guest") {
+    if (!email) {
       res.status(401).json({ error: "Login required." });
       return;
     }
@@ -48,6 +53,13 @@ export async function requireAuth(
     req.loggedInEmail = email;
     next();
   } catch (err) {
+    // Even on ERPNext errors, accept a valid local session cookie.
+    const localEmail = parseSessionEmail(req.headers.cookie);
+    if (localEmail) {
+      req.loggedInEmail = localEmail;
+      next();
+      return;
+    }
     logger.error({ err: err }, "[requireAuth]");
     res.status(401).json({ error: "Authentication failed." });
   }

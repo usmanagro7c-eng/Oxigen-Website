@@ -97,27 +97,50 @@ export const frappeService = {
   },
 
   async createCustomerForEmail(email: string, fullName: string): Promise<string> {
-    const customerPayload = {
-      customer_name: fullName,
-      customer_type: "Individual",
-      email_id: email,
-      customer_group: process.env["DEFAULT_CUSTOMER_GROUP"] ?? "Individual",
-      territory: process.env["DEFAULT_TERRITORY"] ?? "Pakistan",
-    };
+    // Dedupe: reuse an existing Customer for this email instead of creating duplicates.
+    let customerName = await frappeService.findCustomerByEmail(email);
 
-    const custRes = await erpFetch(getErpUrl("/api/resource/Customer"), {
-      method: "POST",
-      headers: getErpHeaders(),
-      body: JSON.stringify(customerPayload),
+    if (!customerName) {
+      const customerPayload = {
+        customer_name: fullName,
+        customer_type: "Individual",
+        email_id: email,
+        customer_group: process.env["DEFAULT_CUSTOMER_GROUP"] ?? "Individual",
+        territory: process.env["DEFAULT_TERRITORY"] ?? "Pakistan",
+      };
+
+      const custRes = await erpFetch(getErpUrl("/api/resource/Customer"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(customerPayload),
+      });
+
+      if (!custRes.ok) return "";
+      const custData = (await custRes.json()) as { data: { name?: string } };
+      customerName = custData.data?.name ?? "";
+      if (!customerName) return "";
+    }
+
+    // Reuse an existing Contact for this email when present (avoids duplicates).
+    const contactLookupParams = new URLSearchParams({
+      fields: JSON.stringify(["name"]),
+      filters: JSON.stringify([["email_id", "=", email]]),
+      limit_page_length: "1",
     });
+    try {
+      const existingContactRes = await erpFetch(
+        getErpUrl(`/api/resource/Contact?${contactLookupParams.toString()}`),
+        { headers: getErpHeaders() },
+      );
+      if (existingContactRes.ok) {
+        const existingData = (await existingContactRes.json()) as { data: { name?: string }[] };
+        if (existingData.data?.[0]?.name) return customerName;
+      }
+    } catch {
+      // best-effort dedupe lookup, non-fatal
+    }
 
-    if (!custRes.ok) return "";
-
-    const custData = (await custRes.json()) as { data: { name: string } };
-    const customerName = custData.data?.name;
-    if (!customerName) return "";
-
-    // Create Contact linked to Customer
+    // Create Contact linked to the Customer (keeps the portal profile link).
     const nameParts = fullName.trim().split(/\s+/);
     const contactPayload = {
       first_name: nameParts[0] ?? fullName,
@@ -128,11 +151,19 @@ export const frappeService = {
     };
 
     try {
-      await erpFetch(getErpUrl("/api/resource/Contact"), {
+      const contactRes = await erpFetch(getErpUrl("/api/resource/Contact"), {
         method: "POST",
         headers: getErpHeaders(),
         body: JSON.stringify(contactPayload),
       });
+
+      if (!contactRes.ok) {
+        const errData = (await contactRes.json().catch(() => ({}))) as { _server_messages?: unknown };
+        logger.warn(
+          { email, status: contactRes.status, serverMessages: errData._server_messages },
+          "[frappeService.createCustomerForEmail] Contact creation rejected by ERPNext",
+        );
+      }
     } catch (err) {
       logger.error({ err }, "[frappeService.createCustomerForEmail] failed to create contact");
     }

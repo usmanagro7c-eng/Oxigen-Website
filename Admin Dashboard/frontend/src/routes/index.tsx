@@ -29,6 +29,7 @@ export const Route = createFileRoute("/")({
 function AdminLoginPage() {
   const navigate = useNavigate();
   const setUser = useAuthStore((s) => s.setUser);
+  const user = useAuthStore((s) => s.user);
 
   const emailId = useId();
   const passwordId = useId();
@@ -42,13 +43,12 @@ function AdminLoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Auto-login / session check
+  // Auto-redirect to the dashboard if already logged in.
   useEffect(() => {
-    const existingUser = useAuthStore.getState().user;
-    if (existingUser) {
-      // Optional auto-redirect if already logged in
+    if (user) {
+      navigate({ to: "/dashboard" });
     }
-  }, []);
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
