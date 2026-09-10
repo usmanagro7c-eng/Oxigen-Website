@@ -91,6 +91,11 @@ class NotificationService extends EventEmitter {
     this.notifications = [];
     this.emit("change");
   }
+
+  public deleteNotification(id: string): void {
+    this.notifications = this.notifications.filter((n) => n.id !== id);
+    this.emit("change");
+  }
 }
 
 export const notificationService = new NotificationService();
