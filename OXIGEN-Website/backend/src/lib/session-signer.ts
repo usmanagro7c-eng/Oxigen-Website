@@ -46,12 +46,22 @@ function verify(token: string): string | null {
   }
 }
 
-/** Read + verify the `oxi_session` cookie. Returns the email or null. */
+const COOKIE_PATTERNS = [
+  /(?:^|;\s*)oxi_session=([^;]+)/,
+  /(?:^|;\s*)oxi_admin_session=([^;]+)/,
+];
+
+/** Read + verify the `oxi_session`/`oxi_admin_session` cookie. Returns the email or null. */
 export function parseSessionEmail(cookieHeader?: string): string | null {
   if (!cookieHeader) return null;
-  const match = /(?:^|;\s*)oxi_session=([^;]+)/.exec(cookieHeader);
-  if (!match || !match[1]) return null;
-  return verify(decodeURIComponent(match[1]));
+  for (const pattern of COOKIE_PATTERNS) {
+    const match = pattern.exec(cookieHeader);
+    if (match && match[1]) {
+      const email = verify(decodeURIComponent(match[1]));
+      if (email) return email;
+    }
+  }
+  return null;
 }
 
 const isSecure = () => (process.env["FRONTEND_ORIGIN"] ?? "").startsWith("https://");
@@ -62,7 +72,18 @@ export function buildSessionCookie(email: string): string {
   return `oxi_session=${token}; Max-Age=${Math.floor(TTL_MS / 1000)}; Path=/; HttpOnly; SameSite=Lax${isSecure() ? "; Secure" : ""}`;
 }
 
+/** Build a Set-Cookie value for a freshly signed admin session. */
+export function buildAdminSessionCookie(email: string): string {
+  const token = sign(email);
+  return `oxi_admin_session=${token}; Max-Age=${Math.floor(TTL_MS / 1000)}; Path=/; HttpOnly; SameSite=Lax${isSecure() ? "; Secure" : ""}`;
+}
+
 /** Build a Set-Cookie value that clears the session. */
 export function clearSessionCookie(): string {
   return `oxi_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${isSecure() ? "; Secure" : ""}`;
+}
+
+/** Build a Set-Cookie value that clears the admin session. */
+export function clearAdminSessionCookie(): string {
+  return `oxi_admin_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${isSecure() ? "; Secure" : ""}`;
 }

@@ -2,8 +2,25 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { logger } from "../lib/logger.js";
 import { itemCache } from "../lib/item-cache.js";
 import { erpFetch, getErpUrl, getErpHeaders } from "../lib/erpnext-client.js";
+import { readFileSync, existsSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const BANNERS_DIR = join(dirname(dirname(dirname(fileURLToPath(import.meta.url)))), "data");
+const BANNERS_FILE = join(BANNERS_DIR, "banners.json");
 
 const router: IRouter = Router();
+
+function readLocalBanners(): Banner[] {
+  try {
+    if (!existsSync(BANNERS_FILE)) return [];
+    const raw = readFileSync(BANNERS_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 // Fetch a Website Item by name OR item_code. Falls back to a filter search so
 // banners linked by item_code (e.g. "Nutri-Cept — Women's Wellness") still resolve.
@@ -72,19 +89,8 @@ router.get("/banners", async (_req: Request, res: Response) => {
       return;
     }
 
-    // Fetch banners from admin backend
-    const adminUrl = process.env["ADMIN_API_URL"] || "http://localhost:3001/api";
-    const adminRes = await fetch(`${adminUrl}/admin/banners`).catch(() => null);
-
-    if (!adminRes || !adminRes.ok) {
-      res.setHeader("X-Cache", "MISS");
-      res.setHeader("Cache-Control", "public, max-age=30");
-      res.json({ data: [] });
-      return;
-    }
-
-    const adminData = await adminRes.json().catch(() => ({ data: [] }));
-    const allBanners: Banner[] = adminData.data || [];
+    // Fetch banners from the local banners file (written by the admin panel)
+    const allBanners: Banner[] = readLocalBanners();
 
     // Filter active only and sort by position
     const activeBanners = allBanners

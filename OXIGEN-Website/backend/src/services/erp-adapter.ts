@@ -405,6 +405,397 @@ export class ErpAdapter {
     return normalized;
   }
 
+  static async getOrCreateSupplier(defaultCompany: string): Promise<string> {
+    try {
+      const res = await erpFetch(getErpUrl("/api/resource/Supplier?limit_page_length=1"), {
+        headers: getErpHeaders(),
+      });
+      if (res.ok) {
+        const json: any = await res.json();
+        if (json.data?.[0]?.name) return json.data[0].name;
+      }
+      const createRes = await erpFetch(getErpUrl("/api/resource/Supplier"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({
+          doctype: "Supplier",
+          supplier_name: "External",
+          supplier_group: "All Supplier Groups",
+          supplier_type: "Company",
+        }),
+      });
+      if (createRes.ok) {
+        const createJson: any = await createRes.json();
+        if (createJson.data?.name) return createJson.data.name;
+      }
+    } catch {
+      // fallback
+    }
+    return "External";
+  }
+
+  /**
+   * Creates a new Item and an associated Website Item in ERPNext.
+   */
+  static async createItem(payload: {
+    item_name: string;
+    item_group: string;
+    stock_uom: string;
+    description?: string;
+    standard_rate?: number;
+    stock_qty?: number;
+    image?: string;
+    imageUrl?: string;
+    sku?: string;
+    item_code?: string;
+    publish?: boolean;
+    website_warehouse?: string;
+    short_description?: string;
+    web_long_description?: string;
+    images?: string[];
+  }): Promise<{ name: string; item_code: string } | null> {
+    const defaultCompany = process.env.DEFAULT_COMPANY ?? "Oxigen";
+    const mainWarehouse = (process.env.MAIN_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || process.env.ONLINE_WAREHOUSE || "Oxigen Warehouse - O").trim();
+    const onlineWarehouse = (process.env.ONLINE_WAREHOUSE || mainWarehouse).trim();
+    const defaultWarehouse = mainWarehouse;
+
+    const itemCode = (payload.sku || payload.item_code || ErpAdapter.slugify(payload.item_name))
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    // 1. Create the Item
+    const itemPayload = {
+      doctype: "Item",
+      item_name: payload.item_name,
+      item_code: itemCode,
+      item_group: payload.item_group,
+      stock_uom: payload.stock_uom || "Nos",
+      description: payload.description,
+      standard_rate: payload.standard_rate,
+      is_stock_item: 1,
+      default_warehouse: defaultWarehouse,
+      item_defaults: [
+        {
+          company: defaultCompany,
+          default_warehouse: defaultWarehouse,
+        },
+      ],
+      // Add image if provided
+      ...(payload.image ? { image: payload.image } : {}),
+    };
+
+    const itemRes = await erpFetch(getErpUrl("/api/resource/Item"), {
+      method: "POST",
+      headers: getErpHeaders(),
+      body: JSON.stringify(itemPayload),
+    });
+
+    if (!itemRes.ok) {
+      const err = (await itemRes.json().catch(() => ({}))) as { _server_messages?: string };
+      logger.error({ err }, "[ErpAdapter] Failed to create Item in ERPNext");
+      throw new Error(parseErpError(err) || "Failed to create item in ERPNext.");
+    }
+
+    const itemData = (await itemRes.json()) as { data: { name: string; item_code: string } };
+    const newItemCode = itemData.data.item_code;
+
+    // 2. Create the Website Item if publish is true
+    if (payload.publish) {
+      const websiteItemPayload = {
+        doctype: "Website Item",
+        item_code: newItemCode,
+        web_item_name: payload.item_name,
+        published: 1,
+        website_warehouse: onlineWarehouse,
+        short_description: payload.short_description || "",
+        web_long_description: payload.web_long_description || "",
+        description: payload.description || "",
+      };
+
+      const websiteItemRes = await erpFetch(getErpUrl("/api/resource/Website Item"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(websiteItemPayload),
+      });
+
+      if (!websiteItemRes.ok) {
+        const err = (await websiteItemRes.json().catch(() => ({}))) as { _server_messages?: string };
+        logger.warn({ err, newItemCode }, "[ErpAdapter] Failed to create Website Item for new Item.");
+      }
+    }
+
+    // 3. Create Item Price for standard selling
+    if (typeof payload.standard_rate === "number" && payload.standard_rate > 0) {
+      try {
+        await erpFetch(getErpUrl("/api/resource/Item Price"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Item Price",
+            item_code: newItemCode,
+            price_list: "Standard Selling",
+            price_list_rate: payload.standard_rate,
+            selling: 1,
+          }),
+        });
+      } catch {
+        // non-fatal
+      }
+    }
+
+    // 4. Create & Submit Purchase Invoice with update_stock: 1 in Main Warehouse
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const supplier = await ErpAdapter.getOrCreateSupplier(defaultCompany);
+      const invoiceQty = (typeof payload.stock_qty === 'number' && payload.stock_qty > 0)
+        ? payload.stock_qty
+        : (Number(payload.stock_qty) > 0 ? Number(payload.stock_qty) : 1);
+      const rate = typeof payload.standard_rate === 'number' && payload.standard_rate > 0
+        ? payload.standard_rate
+        : 0;
+
+      const piPayload: any = {
+        doctype: "Purchase Invoice",
+        company: defaultCompany,
+        supplier,
+        posting_date: today,
+        due_date: today,
+        update_stock: 1,
+        set_warehouse: mainWarehouse,
+        items: [
+          {
+            item_code: newItemCode,
+            qty: invoiceQty,
+            rate,
+            warehouse: mainWarehouse,
+            expense_account: "Stock In Hand - O",
+            cost_center: "Main - O",
+          },
+        ],
+      };
+
+      let piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(piPayload),
+      });
+
+      // If initial creation fails, retry without hardcoded expense account/cost center
+      if (!piRes.ok) {
+        delete piPayload.items[0].expense_account;
+        delete piPayload.items[0].cost_center;
+        piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify(piPayload),
+        });
+      }
+
+      if (piRes.ok) {
+        const piData: any = await piRes.json();
+        if (piData.data?.name) {
+          await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ doc: piData.data }),
+          }).catch((subErr) => {
+            logger.warn({ subErr, piName: piData.data.name }, "[ErpAdapter] Purchase Invoice submit error");
+          });
+          logger.info({ newItemCode, piName: piData.data.name, qty: invoiceQty, warehouse: mainWarehouse }, "[ErpAdapter] Purchase Invoice submitted with update_stock: 1 in Main Warehouse");
+        }
+      } else {
+        const err = await piRes.json().catch(() => ({}));
+        logger.warn({ err, newItemCode }, "[ErpAdapter] Failed to create Purchase Invoice for new Item");
+      }
+    } catch (stockErr) {
+      logger.warn({ stockErr, newItemCode }, "[ErpAdapter] Error creating Purchase Invoice for initial stock");
+    }
+
+    // ── 5. Write slideshow gallery images (non-fatal) ──
+    const imagesToSlideshow = Array.isArray(payload.images) && payload.images.length > 0
+      ? payload.images
+      : (payload.image ? [payload.image] : []);
+    if (imagesToSlideshow.length > 0) {
+      await ErpAdapter.upsertSlideshow({
+        itemCode: newItemCode,
+        webItemName: payload.item_name,
+        images: imagesToSlideshow,
+      });
+    }
+
+    itemCache.clear();
+    return itemData.data;
+  }
+
+  /**
+   * Ensures a Website Item exists for an item code, then (re)writes the
+   * Website Slideshow gallery with the given ordered images and links it to
+   * the Website Item. The first image is also set as the primary website image.
+   * This is non-fatal: any ERPNext slideshow failure is logged and swallowed so
+   * that a product save always succeeds.
+   */
+  static async upsertSlideshow(opts: {
+    itemCode: string;
+    webItemName?: string;
+    images: string[];
+  }): Promise<void> {
+    const { itemCode, webItemName, images } = opts;
+    const cleanImages = (images || []).filter(Boolean);
+
+    try {
+      // ── 1. Find (or create) the Website Item for this item code ──
+      let websiteItemName: string | null = null;
+      const webSearchRes = await erpFetch(
+        getErpUrl(`/api/resource/Website Item?${new URLSearchParams({
+          fields: JSON.stringify(["name", "published", "item_code", "slideshow"]),
+          filters: JSON.stringify([["item_code", "=", itemCode]]),
+          limit_page_length: "1",
+        }).toString()}`),
+        { headers: getErpHeaders() },
+      ).catch(() => null);
+
+      if (webSearchRes && webSearchRes.ok) {
+        const webSearchJson: any = await webSearchRes.json().catch(() => ({}));
+        const doc = webSearchJson.data?.[0];
+        if (doc && doc.name) websiteItemName = doc.name;
+      }
+
+      const onlineWarehouse = (process.env.ONLINE_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || "Oxigen Warehouse - O").trim();
+      if (!websiteItemName) {
+        const createWebRes = await erpFetch(getErpUrl("/api/resource/Website Item"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Website Item",
+            item_code: itemCode,
+            web_item_name: webItemName || itemCode,
+            published: 1,
+            website_warehouse: onlineWarehouse,
+            website_image: cleanImages[0] || null,
+          }),
+        }).catch(() => null);
+        if (createWebRes && createWebRes.ok) {
+          const created: any = await createWebRes.json().catch(() => ({}));
+          websiteItemName = created.data?.name || null;
+        }
+        if (!websiteItemName) return;
+      }
+
+      // ── 2. Determine the slideshow name ──
+      const currentWeb = await erpFetch(
+        getErpUrl(`/api/resource/Website Item/${encodeURIComponent(websiteItemName)}`),
+        { headers: getErpHeaders() },
+      ).catch(() => null);
+      let slideshowName: string | null = null;
+      if (currentWeb && currentWeb.ok) {
+        const currentData: any = await currentWeb.json().catch(() => ({}));
+        slideshowName = currentData.data?.slideshow || currentData.data?.website_slideshow || null;
+      }
+
+      if (!slideshowName) {
+        slideshowName = `ws-${itemCode}`;
+      }
+
+      // ── 3. Create or update the Website Slideshow document in ERPNext ──
+      if (cleanImages.length === 0) {
+        // No images → detach slideshow if one exists
+        await erpFetch(getErpUrl("/api/method/frappe.client.set_value"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Website Item",
+            name: websiteItemName,
+            fieldname: "slideshow",
+            value: null,
+          }),
+        }).catch(() => {});
+        return;
+      }
+
+      const childRows = cleanImages.map((img) => ({
+        image: img,
+        image_description: "",
+      }));
+
+      // Check if Website Slideshow exists
+      const checkSsRes = await erpFetch(
+        getErpUrl(`/api/resource/Website Slideshow/${encodeURIComponent(slideshowName)}`),
+        { headers: getErpHeaders() }
+      ).catch(() => null);
+
+      if (checkSsRes && checkSsRes.ok) {
+        await erpFetch(
+          getErpUrl(`/api/resource/Website Slideshow/${encodeURIComponent(slideshowName)}`),
+          {
+            method: "PUT",
+            headers: getErpHeaders(),
+            body: JSON.stringify({
+              slideshow_name: slideshowName,
+              slideshow_items: childRows,
+            }),
+          },
+        );
+      } else {
+        const createSlideshowRes = await erpFetch(getErpUrl("/api/resource/Website Slideshow"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Website Slideshow",
+            name: slideshowName,
+            slideshow_name: slideshowName,
+            slideshow_items: childRows,
+          }),
+        });
+        if (!createSlideshowRes.ok) {
+          const err = (await createSlideshowRes.json().catch(() => ({}))) as any;
+          logger.warn({ err, slideshowName }, "[ErpAdapter] Failed to create Website Slideshow");
+        }
+      }
+
+      // ── 4. Link slideshow + primary website_image to the Website Item and Item ──
+      await erpFetch(getErpUrl("/api/method/frappe.client.set_value"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({
+          doctype: "Website Item",
+          name: websiteItemName,
+          fieldname: "slideshow",
+          value: slideshowName,
+        }),
+      }).catch(() => {});
+
+      if (cleanImages[0]) {
+        await erpFetch(getErpUrl("/api/method/frappe.client.set_value"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Website Item",
+            name: websiteItemName,
+            fieldname: "website_image",
+            value: cleanImages[0],
+          }),
+        }).catch(() => {});
+
+        await erpFetch(getErpUrl("/api/method/frappe.client.set_value"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({
+            doctype: "Item",
+            name: itemCode,
+            fieldname: "image",
+            value: cleanImages[0],
+          }),
+        }).catch(() => {});
+      }
+
+      logger.info({ itemCode, websiteItemName, slideshowName, count: cleanImages.length }, "[ErpAdapter] Slideshow created & linked to Website Item");
+    } catch (err) {
+      logger.warn({ err, itemCode }, "[ErpAdapter] Slideshow upsert failed (non-fatal)");
+    }
+  }
+
   /**
    * Fetches parent Item Groups from ERPNext (categories).
    */

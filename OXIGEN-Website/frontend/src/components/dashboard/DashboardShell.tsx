@@ -77,7 +77,7 @@ export function DashboardShell({ children }: { children?: ReactNode }) {
       <div className="mx-auto flex max-w-[1440px] gap-6 px-4 py-6 lg:px-8">
         {/* Desktop sidebar */}
         <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-64 shrink-0 lg:block">
-          <SidebarBody onNavigate={() => setMobileOpen(false)} isActive={isActive} onSignOut={signOut} />
+          <SidebarBody onNavigate={() => setMobileOpen(false)} isActive={isActive} onSignOut={signOut} user={user} />
         </aside>
 
         {/* Main column */}
@@ -122,7 +122,7 @@ export function DashboardShell({ children }: { children?: ReactNode }) {
                 >
                   <X className="h-4 w-4" />
                 </button>
-                <SidebarBody onNavigate={() => setMobileOpen(false)} isActive={isActive} onSignOut={signOut} />
+<SidebarBody onNavigate={() => setMobileOpen(false)} isActive={isActive} onSignOut={signOut} user={user} />
               </div>
             </motion.aside>
           </>
@@ -139,10 +139,12 @@ function SidebarBody({
   onNavigate,
   isActive,
   onSignOut,
+  user,
 }: {
   onNavigate: () => void;
   isActive: (to: string, exact?: boolean) => boolean;
   onSignOut: () => void;
+  user: { name: string; email: string; user_type?: "System User" | "Website User" } | null;
 }) {
   return (
     <div className="flex h-full flex-col rounded-3xl glass p-4">
@@ -178,6 +180,17 @@ function SidebarBody({
           );
         })}
       </nav>
+
+      {user?.user_type === "System User" && (
+        <Link
+          to="/admin"
+          onClick={onNavigate}
+          className="mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-primary transition-all hover:bg-primary/10"
+        >
+          <ShieldCheck className="h-4.5 w-4.5" />
+          Admin Dashboard
+        </Link>
+      )}
 
       <Link
         to="/shop"

@@ -1,7 +1,13 @@
+import { timingSafeEqual, createHash } from "crypto";
 import { logger } from "../lib/logger.js";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import multer from "multer";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
+
 import {
   getQueueStats,
   getCircuitState,
@@ -13,7 +19,21 @@ import {
   clearDlq,
   clearCompleted,
 } from "../lib/order-queue.js";
-import { pingErpNext, getErpUrl, getErpHeaders, erpFetch} from "../lib/erpnext-client.js";
+import { pingErpNext, getErpUrl, getErpHeaders, erpFetch, parseErpError, buildMultipartBody } from "../lib/erpnext-client.js";
+import { itemCache } from "../lib/item-cache.js";
+import { ErpAdapter } from "../services/erp-adapter.js";
+import { notificationService } from "../services/notification.service.js";
+
+function secureEqual(a: string, b: string): boolean {
+  const hashA = createHash("sha256").update(a, "utf8").digest();
+  const hashB = createHash("sha256").update(b, "utf8").digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+});
 
 // Middleware to add Request ID to response if missing (for debugging)
 const attachRequestId = (req: Request, res: Response, next: NextFunction) => {
@@ -49,6 +69,14 @@ function isActiveProcessingSalesOrder(status?: string): boolean {
   return s !== "completed" && s !== "cancelled" && s !== "closed" && s !== "draft";
 }
 
+function getMainWarehouse(): string {
+  return (process.env.MAIN_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || process.env.ONLINE_WAREHOUSE || "Oxigen Warehouse - O").trim();
+}
+
+function getOnlineWarehouse(): string {
+  return (process.env.ONLINE_WAREHOUSE || getMainWarehouse()).trim();
+}
+
 async function fetchRecentSalesOrders(): Promise<SalesOrderSummary[]> {
   try {
     const params = new URLSearchParams({
@@ -82,17 +110,17 @@ async function fetchRecentSalesOrders(): Promise<SalesOrderSummary[]> {
 
 const router: IRouter = Router();
 
+// Apply authentication and System User check to all admin routes
+router.use(requireAuth);
+router.use(requireAdmin);
+
+
 // ---------------------------------------------------------------------------
 // GET /api/admin/monitor
 // Returns system health + queue stats + ERPNext Sales Order status buckets.
-// Important naming:
-// - completedJobs/order-completed.json means queue submission completed only.
-// - completedOrders means ERPNext Sales Order status is actually Completed.
 // ---------------------------------------------------------------------------
 router.get(
   "/admin/monitor",
-  requireAuth,
-  requireAdmin,
   attachRequestId,
   async (_req: Request, res: Response) => {
     const pingStart = Date.now();
@@ -113,9 +141,6 @@ router.get(
       .slice(0, 20);
 
     const processingJobs = getProcessingJobs().slice(0, 20);
-
-    // These are orders that were successfully submitted to ERPNext by the queue.
-    // They are NOT business-completed orders yet.
     const submittedJobs = getCompletedJobs().slice(-20).reverse();
 
     const salesOrders = await fetchRecentSalesOrders();
@@ -136,15 +161,11 @@ router.get(
         pending: queue.pending,
         processing: queue.processing,
         dead: queue.dead,
-        // Queue submitted count: Sales Order created/submitted in ERPNext.
-        // Kept as completed for backward compatibility with old frontend.
         completed: queue.completed,
         submitted: queue.completed,
-        // Business status buckets from ERPNext Sales Order status.
         erpProcessing: processingOrders.length,
         erpCompleted: completedOrders.length,
         total: queue.total,
-        // Queue cap + backlog alert fields
         backlogAlert: queue.backlogAlert,
         queueCapPercent: queue.queueCapPercent,
         maxQueueSize: queue.maxQueueSize,
@@ -167,15 +188,13 @@ router.get(
 );
 
 // ---------------------------------------------------------------------------
-// POST /admin/monitor routes - attachRequestId
+// Monitor Actions
 // ---------------------------------------------------------------------------
 router.post(
   "/admin/monitor/retry-dlq",
-  requireAuth,
-  requireAdmin,
   attachRequestId,
   async (_req: Request, res: Response) => {
-    const { retryDlqJobs } = await import("../lib/order-queue");
+    const { retryDlqJobs } = await import("../lib/order-queue.js");
     const count = retryDlqJobs();
     res.json({ ok: true, retriedCount: count });
   }
@@ -183,8 +202,6 @@ router.post(
 
 router.post(
   "/admin/monitor/clear-pending",
-  requireAuth,
-  requireAdmin,
   attachRequestId,
   (_req: Request, res: Response) => {
     const count = clearPendingQueue();
@@ -194,8 +211,6 @@ router.post(
 
 router.post(
   "/admin/monitor/clear-dlq",
-  requireAuth,
-  requireAdmin,
   attachRequestId,
   (_req: Request, res: Response) => {
     const count = clearDlq();
@@ -205,8 +220,6 @@ router.post(
 
 router.post(
   "/admin/monitor/clear-completed",
-  requireAuth,
-  requireAdmin,
   attachRequestId,
   (_req: Request, res: Response) => {
     const count = clearCompleted();
@@ -214,113 +227,2307 @@ router.post(
   }
 );
 
-
 // ---------------------------------------------------------------------------
 // GET /api/admin/inventory
-// Returns all published Website Items with actual_qty, reserved_qty, available_qty
-// from Bin doctype for the configured website_warehouse.
 // ---------------------------------------------------------------------------
 router.get(
   "/admin/inventory",
-  requireAuth,
-  requireAdmin,
   attachRequestId,
   async (_req: Request, res: Response) => {
     try {
-      // 1. Fetch all published Website Items (item_code + website_warehouse)
       const itemParams = new URLSearchParams({
-        fields: JSON.stringify(["item_code", "web_item_name", "item_name", "website_warehouse", "custom_stock_qty"]),
-        filters: JSON.stringify([["published", "=", 1]]),
+        fields: JSON.stringify(["name", "item_code", "item_name", "item_group", "stock_uom", "image", "disabled"]),
         limit_page_length: "500",
-        order_by: "web_item_name asc",
+        order_by: "item_name asc",
       });
 
       const itemRes = await erpFetch(
-        getErpUrl(`/api/resource/Website Item?${itemParams}`),
+        getErpUrl(`/api/resource/Item?${itemParams.toString()}`),
         { headers: getErpHeaders() }
       );
 
       if (!itemRes.ok) {
-        res.status(502).json({ error: "Failed to fetch Website Items from ERPNext." });
+        const errText = await itemRes.text().catch(() => "");
+        logger.error({ status: itemRes.status, errText }, "[admin/inventory] Failed to fetch Items from ERPNext");
+        res.status(502).json({ error: "Failed to fetch Items from ERPNext." });
         return;
       }
 
       const itemJson = (await itemRes.json()) as {
-        data: { item_code: string; web_item_name?: string; item_name?: string; website_warehouse?: string | null; custom_stock_qty?: number | null }[];
+        data: { item_code?: string; name: string; item_name?: string; item_group?: string; stock_uom?: string; image?: string | null; disabled?: number | boolean }[];
       };
 
-      const items = itemJson.data;
+      const items = itemJson.data || [];
+      const mainWarehouse = getMainWarehouse();
+      const onlineWarehouse = getOnlineWarehouse();
 
-      // 2. Batch fetch Bin data for all item+warehouse combos
-      const warehouseItems = items.filter((i) => i.item_code && i.website_warehouse);
-      const defaultWarehouse = process.env["ONLINE_WAREHOUSE"] || process.env["DEFAULT_WAREHOUSE"] || "Oxigen Warehouse - O";
+      const binItemCodes = [...new Set(items.map((i) => i.item_code || i.name))].filter(Boolean);
+      const binMap: Record<string, { actual_qty: number; reserved_qty: number; ordered_qty: number; projected_qty: number }> = {};
 
-      // Items without website_warehouse — fall back to defaultWarehouse
-      const fallbackItems = items.filter((i) => i.item_code && !i.website_warehouse);
-
-      const allBinFilters: { item_code: string; warehouse: string }[] = [
-        ...warehouseItems.map((i) => ({ item_code: i.item_code, warehouse: i.website_warehouse as string })),
-        ...fallbackItems.map((i) => ({ item_code: i.item_code, warehouse: defaultWarehouse })),
-      ];
-
-      const binMap: Record<string, { actual_qty: number; reserved_qty: number }> = {};
-
-      if (allBinFilters.length > 0) {
-        const binItemCodes = [...new Set(allBinFilters.map((i) => i.item_code))];
-        const binWarehouses = [...new Set(allBinFilters.map((i) => i.warehouse))];
-
+      if (binItemCodes.length > 0) {
         const binParams = new URLSearchParams({
-          fields: JSON.stringify(["item_code", "warehouse", "actual_qty", "reserved_qty"]),
-          filters: JSON.stringify([
-            ["item_code", "in", binItemCodes],
-            ["warehouse", "in", binWarehouses],
-          ]),
-          limit_page_length: String(allBinFilters.length * 2),
+          fields: JSON.stringify(["item_code", "warehouse", "actual_qty", "reserved_qty", "ordered_qty", "projected_qty"]),
+          filters: JSON.stringify([["item_code", "in", binItemCodes]]),
+          limit_page_length: "1000",
         });
 
         const binRes = await erpFetch(
-          getErpUrl(`/api/resource/Bin?${binParams}`),
+          getErpUrl(`/api/resource/Bin?${binParams.toString()}`),
           { headers: getErpHeaders() }
-        );
+        ).catch(() => null);
 
-        if (binRes.ok) {
+        if (binRes?.ok) {
           const binJson = (await binRes.json()) as {
-            data: { item_code: string; warehouse: string; actual_qty: number; reserved_qty: number }[];
+            data: { item_code: string; warehouse: string; actual_qty: number; reserved_qty: number; ordered_qty: number; projected_qty: number }[];
           };
-          for (const row of binJson.data) {
+          for (const row of binJson.data || []) {
             binMap[`${row.item_code}::${row.warehouse}`] = {
-              actual_qty: row.actual_qty ?? 0,
-              reserved_qty: row.reserved_qty ?? 0,
+              actual_qty: Number(row.actual_qty) || 0,
+              reserved_qty: Number(row.reserved_qty) || 0,
+              ordered_qty: Number(row.ordered_qty) || 0,
+              projected_qty: Number(row.projected_qty) || 0,
             };
           }
         }
       }
 
-      // 3. Build response
       const inventory = items.map((item) => {
-        const warehouse = item.website_warehouse || defaultWarehouse || null;
-        const bin = warehouse ? (binMap[`${item.item_code}::${warehouse}`] ?? null) : null;
-        const actual_qty = bin?.actual_qty ?? 0;
-        const reserved_qty = bin?.reserved_qty ?? 0;
-        const available_qty = actual_qty - reserved_qty;
+        const itemCode = item.item_code || item.name;
+        const mainBin = binMap[`${itemCode}::${mainWarehouse}`] ?? null;
+        const onlineBin = binMap[`${itemCode}::${onlineWarehouse}`] ?? null;
+
+        const actual_qty = mainBin?.actual_qty ?? 0;
+        const reserved_qty = onlineBin?.reserved_qty ?? 0;
+        const ordered_qty = onlineBin?.ordered_qty ?? 0;
+        const available_qty = Math.max(0, (onlineBin?.actual_qty ?? 0) - reserved_qty);
+        const projected_qty = onlineBin?.projected_qty ?? (actual_qty - reserved_qty + ordered_qty);
 
         return {
-          item_code: item.item_code,
-          item_name: item.web_item_name || item.item_name || item.item_code,
-          warehouse: warehouse ?? "—",
+          item_code: itemCode,
+          item_name: item.item_name || itemCode,
+          item_group: item.item_group || "General",
+          warehouse: onlineWarehouse,
           actual_qty,
           reserved_qty,
+          ordered_qty,
           available_qty,
+          projected_qty,
+          stock_uom: item.stock_uom || "Nos",
+          image: item.image || null,
           in_stock: available_qty > 0,
+          disabled: item.disabled === 1 || item.disabled === true,
         };
       });
 
       res.json({ data: inventory });
     } catch (err) {
-      logger.error({ err: err }, "[admin/inventory]");
+      logger.error({ err }, "[admin/inventory]");
       res.status(500).json({ error: "Internal server error." });
     }
   }
 );
+
+// POST /api/admin/inventory/adjust (Add/Adjust/Reconcile Stock in ERPNext)
+router.post(
+  "/admin/inventory/adjust",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { item_code, qty, warehouse, rate = 0, entry_type = "Stock Reconciliation", mode } = req.body;
+      const defaultCompany = process.env.DEFAULT_COMPANY ?? "Oxigen";
+      const mainWarehouse = getMainWarehouse();
+      const onlineWarehouse = getOnlineWarehouse();
+      const targetWarehouse = warehouse || (entry_type === "Material Receipt" ? mainWarehouse : onlineWarehouse);
+      const numQty = Number(qty) ?? 0;
+      const today = new Date().toISOString().split("T")[0];
+
+      // When website stock is edited, set the target online warehouse to the desired quantity by
+      // calculating the delta vs. current stock instead of blindly moving the entered number.
+      if (mode === "set" || entry_type === "Stock Reconciliation" || entry_type === "Stock Adjustment") {
+        const isOnlineEdit = targetWarehouse === onlineWarehouse;
+
+        if (isOnlineEdit && item_code) {
+          const currentBinRes = await erpFetch(
+            getErpUrl(`/api/resource/Bin?${new URLSearchParams({
+              fields: JSON.stringify(["actual_qty", "reserved_qty"]),
+              filters: JSON.stringify([
+                ["item_code", "=", item_code],
+                ["warehouse", "=", onlineWarehouse],
+              ]),
+              limit_page_length: "1",
+            }).toString()}`),
+            { headers: getErpHeaders() }
+          ).catch(() => null);
+
+          let currentOnlineQty = 0;
+          if (currentBinRes?.ok) {
+            const currentBinJson = (await currentBinRes.json()) as {
+              data?: { actual_qty?: number; reserved_qty?: number }[];
+            };
+            const row = currentBinJson.data?.[0];
+            currentOnlineQty = row ? Math.max(0, Number(row.actual_qty ?? 0) - Number(row.reserved_qty ?? 0)) : 0;
+          }
+
+          const deltaQty = numQty - currentOnlineQty;
+
+          if (deltaQty > 0) {
+            // Check available stock in Stores - O before transferring
+            const mainBinRes = await erpFetch(
+              getErpUrl(`/api/resource/Bin?${new URLSearchParams({
+                fields: JSON.stringify(["actual_qty", "reserved_qty"]),
+                filters: JSON.stringify([
+                  ["item_code", "=", item_code],
+                  ["warehouse", "=", mainWarehouse],
+                ]),
+                limit_page_length: "1",
+              }).toString()}`),
+              { headers: getErpHeaders() }
+            ).catch(() => null);
+
+            let mainAvailableQty = 0;
+            if (mainBinRes?.ok) {
+              const mainBinJson = (await mainBinRes.json()) as {
+                data?: { actual_qty?: number; reserved_qty?: number }[];
+              };
+              const row = mainBinJson.data?.[0];
+              mainAvailableQty = row ? Math.max(0, Number(row.actual_qty ?? 0) - Number(row.reserved_qty ?? 0)) : 0;
+            }
+
+            if (mainAvailableQty < deltaQty) {
+              itemCache.clear();
+              res.status(400).json({
+                error: `Low stock in main warehouse (${mainWarehouse}). Quantity cannot be added to website stock.`,
+              });
+              return;
+            }
+
+            // Transfer from Stores - O to Oxigen Warehouse - O
+            const transferPayload = {
+              doctype: "Stock Entry",
+              stock_entry_type: "Material Transfer",
+              company: defaultCompany,
+              posting_date: today,
+              items: [
+                {
+                  item_code,
+                  qty: deltaQty,
+                  s_warehouse: mainWarehouse,
+                  t_warehouse: onlineWarehouse,
+                },
+              ],
+            };
+
+            const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify(transferPayload),
+            });
+
+            if (seRes.ok) {
+              const seData: any = await seRes.json();
+              if (seData.data) {
+                await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                  method: "POST",
+                  headers: getErpHeaders(),
+                  body: JSON.stringify({ doc: seData.data }),
+                }).catch(() => {});
+              }
+              itemCache.clear();
+              res.status(200).json({ success: true, data: seData.data, warehouse: onlineWarehouse });
+              return;
+            }
+
+            const err = (await seRes.json().catch(() => ({}))) as any;
+            res.status(seRes.status).json({ error: parseErpError(err) || "Failed to transfer stock to the online warehouse." });
+            return;
+          }
+
+          if (deltaQty < 0) {
+            const returnQty = Math.abs(deltaQty);
+            const reversePayload = {
+              doctype: "Stock Entry",
+              stock_entry_type: "Material Transfer",
+              company: defaultCompany,
+              posting_date: today,
+              items: [
+                {
+                  item_code,
+                  qty: returnQty,
+                  s_warehouse: onlineWarehouse,
+                  t_warehouse: mainWarehouse,
+                },
+              ],
+            };
+
+            const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify(reversePayload),
+            });
+
+            if (seRes.ok) {
+              const seData: any = await seRes.json();
+              if (seData.data) {
+                await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                  method: "POST",
+                  headers: getErpHeaders(),
+                  body: JSON.stringify({ doc: seData.data }),
+                }).catch(() => {});
+              }
+              itemCache.clear();
+              res.status(200).json({ success: true, data: seData.data, warehouse: onlineWarehouse });
+              return;
+            }
+
+            const err = (await seRes.json().catch(() => ({}))) as any;
+            res.status(seRes.status).json({ error: parseErpError(err) || "Failed to reverse stock transfer." });
+            return;
+          }
+
+          itemCache.clear();
+          res.status(200).json({ success: true, data: null, warehouse: onlineWarehouse });
+          return;
+        }
+
+        // 1. Check current stock in targetWarehouse (e.g. Stores - O)
+        const currentBinRes = await erpFetch(
+          getErpUrl(`/api/resource/Bin?${new URLSearchParams({
+            fields: JSON.stringify(["actual_qty", "reserved_qty", "valuation_rate"]),
+            filters: JSON.stringify([
+              ["item_code", "=", item_code],
+              ["warehouse", "=", targetWarehouse],
+            ]),
+            limit_page_length: "1",
+          }).toString()}`),
+          { headers: getErpHeaders() }
+        ).catch(() => null);
+
+        let currentQty = 0;
+        let valRate = Number(rate) || 0;
+        if (currentBinRes?.ok) {
+          const currentBinJson = (await currentBinRes.json()) as any;
+          const row = currentBinJson.data?.[0];
+          if (row) {
+            currentQty = Number(row.actual_qty ?? 0);
+            if (!valRate && row.valuation_rate) {
+              valRate = Number(row.valuation_rate);
+            }
+          }
+        if (!valRate || valRate <= 0) {
+          const itemDocRes = await erpFetch(
+            getErpUrl(`/api/resource/Item/${encodeURIComponent(item_code)}?fields=${encodeURIComponent(JSON.stringify(["standard_rate", "valuation_rate"]))}`),
+            { headers: getErpHeaders() }
+          ).catch(() => null);
+          if (itemDocRes?.ok) {
+            const itemDocJson = (await itemDocRes.json()) as any;
+            valRate = Number(itemDocJson.data?.standard_rate || itemDocJson.data?.valuation_rate) || 0;
+          }
+        }
+        if (!valRate || valRate <= 0) {
+          valRate = 100;
+        }
+
+        const delta = numQty - currentQty;
+
+        if (delta > 0) {
+          // Add delta units strictly via Purchase Invoice with update_stock: 1
+          const supplier = await ErpAdapter.getOrCreateSupplier(defaultCompany);
+          const piPayload: any = {
+            doctype: "Purchase Invoice",
+            company: defaultCompany,
+            supplier,
+            posting_date: today,
+            due_date: today,
+            update_stock: 1,
+            set_warehouse: targetWarehouse,
+            items: [
+              {
+                item_code,
+                qty: delta,
+                rate: valRate,
+                warehouse: targetWarehouse,
+                expense_account: "Stock In Hand - O",
+                cost_center: "Main - O",
+              },
+            ],
+          };
+
+          let piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify(piPayload),
+          });
+
+          // If initial creation fails, retry without hardcoded expense account/cost center
+          if (!piRes.ok) {
+            delete piPayload.items[0].expense_account;
+            delete piPayload.items[0].cost_center;
+            piRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify(piPayload),
+            });
+          }
+
+          if (piRes.ok) {
+            const piJson: any = await piRes.json().catch(() => ({}));
+            if (piJson.data) {
+              await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                method: "POST",
+                headers: getErpHeaders(),
+                body: JSON.stringify({ doc: piJson.data }),
+              }).catch(() => {});
+            }
+            itemCache.clear();
+            res.status(200).json({ success: true, data: piJson.data, warehouse: targetWarehouse });
+            return;
+          }
+
+          // Fallback: Stock Entry Material Receipt
+          const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify({
+              doctype: "Stock Entry",
+              stock_entry_type: "Material Receipt",
+              company: defaultCompany,
+              posting_date: today,
+              items: [
+                {
+                  item_code,
+                  qty: delta,
+                  t_warehouse: targetWarehouse,
+                },
+              ],
+            }),
+          }).catch(() => null);
+
+          if (seRes && seRes.ok) {
+            const seJson: any = await seRes.json().catch(() => ({}));
+            if (seJson.data) {
+              await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                method: "POST",
+                headers: getErpHeaders(),
+                body: JSON.stringify({ doc: seJson.data }),
+              }).catch(() => {});
+            }
+            itemCache.clear();
+            res.status(200).json({ success: true, data: seJson.data, warehouse: targetWarehouse });
+            return;
+          }
+
+          const err = (await piRes.json().catch(() => ({}))) as any;
+          res.status(piRes.status).json({ error: parseErpError(err) || "Failed to create Purchase Invoice in ERPNext." });
+          return;
+        } else if (delta < 0) {
+          // Reduce units via Stock Entry Material Issue
+          const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify({
+              doctype: "Stock Entry",
+              stock_entry_type: "Material Issue",
+              company: defaultCompany,
+              posting_date: today,
+              items: [
+                {
+                  item_code,
+                  qty: Math.abs(delta),
+                  s_warehouse: targetWarehouse,
+                },
+              ],
+            }),
+          }).catch(() => null);
+
+          if (seRes && seRes.ok) {
+            const seJson: any = await seRes.json().catch(() => ({}));
+            if (seJson.data) {
+              await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+                method: "POST",
+                headers: getErpHeaders(),
+                body: JSON.stringify({ doc: seJson.data }),
+              }).catch(() => {});
+            }
+            itemCache.clear();
+            res.status(200).json({ success: true, data: seJson.data, warehouse: targetWarehouse });
+            return;
+          }
+
+          const err = (await seRes?.json().catch(() => ({}))) as any;
+          res.status(seRes?.status || 500).json({ error: parseErpError(err) || "Failed to issue stock in ERPNext." });
+          return;
+        }
+
+        itemCache.clear();
+        res.status(200).json({ success: true, message: "Stock is already up to date.", warehouse: targetWarehouse });
+        return;
+      }
+
+      if (entry_type === "Material Receipt") {
+        const receiptWarehouse = targetWarehouse === onlineWarehouse ? mainWarehouse : targetWarehouse;
+
+        const piPayload = {
+          doctype: "Purchase Invoice",
+          company: defaultCompany,
+          supplier: "External",
+          posting_date: today,
+          due_date: today,
+          update_stock: 1,
+          set_warehouse: receiptWarehouse,
+          items: [
+            {
+              item_code,
+              qty: numQty,
+              rate: Number(rate) || 0,
+              warehouse: receiptWarehouse,
+              expense_account: "Stock In Hand - O",
+              cost_center: "Main - O",
+            },
+          ],
+        };
+
+        const erpRes = await erpFetch(getErpUrl("/api/resource/Purchase Invoice"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify(piPayload),
+        });
+
+        if (!erpRes.ok) {
+          const err = (await erpRes.json().catch(() => ({}))) as any;
+          res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to create Purchase Invoice." });
+          return;
+        }
+
+        const data: any = await erpRes.json();
+        if (data.data) {
+          await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ doc: data.data }),
+          });
+        }
+
+        itemCache.clear();
+        res.status(201).json({ success: true, data: data.data });
+        return;
+      }
+
+      const stockPayload = {
+        doctype: "Stock Entry",
+        stock_entry_type: "Material Issue",
+        company: defaultCompany,
+        posting_date: today,
+        items: [
+          {
+            item_code,
+            qty: Math.abs(numQty),
+            s_warehouse: targetWarehouse,
+          },
+        ],
+      };
+
+      const seRes = await erpFetch(getErpUrl("/api/resource/Stock Entry"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(stockPayload),
+      });
+
+      if (!seRes.ok) {
+        const err = (await seRes.json().catch(() => ({}))) as any;
+        res.status(seRes.status).json({ error: parseErpError(err) || "Failed to adjust stock." });
+        return;
+      }
+
+      const seData: any = await seRes.json();
+      if (seData.data) {
+        await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({ doc: seData.data }),
+        });
+      }
+
+      itemCache.clear();
+      res.status(201).json({ success: true, data: seData.data });
+    }
+    } catch (err: any) {
+      logger.error({ err }, "[admin/inventory/adjust]");
+      res.status(500).json({ error: err.message || "Failed to adjust inventory." });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// ORDERS (Sales Order CRUD)
+// ---------------------------------------------------------------------------
+
+type ShippingDetails = {
+  title?: string;
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+};
+
+async function resolveShippingAddresses(orderDocs: { shipping_address_name?: string }[]): Promise<Map<string, ShippingDetails | null>> {
+  const names = orderDocs
+    .map((o) => o.shipping_address_name)
+    .filter((n): n is string => Boolean(n));
+  const uniqueNames = [...new Set(names)];
+  const map = new Map<string, ShippingDetails | null>();
+  const CHUNK = 10;
+
+  for (let i = 0; i < uniqueNames.length; i += CHUNK) {
+    const slice = uniqueNames.slice(i, i + CHUNK);
+    const results = await Promise.all(
+      slice.map(async (name) => {
+        try {
+          const res = await erpFetch(
+            getErpUrl(`/api/resource/Address/${encodeURIComponent(name)}`),
+            { headers: getErpHeaders() }
+          );
+          if (!res.ok) return null;
+          const json = (await res.json()) as { data?: any };
+          const a = json.data ?? {};
+          return {
+            title: a.address_title || undefined,
+            line1: a.address_line1 || undefined,
+            line2: a.address_line2 || undefined,
+            city: a.city || undefined,
+            state: a.state || undefined,
+            pincode: a.pincode || undefined,
+            country: a.country || undefined,
+            phone: a.phone || undefined,
+            email: a.email_id || undefined,
+          } satisfies ShippingDetails;
+        } catch {
+          return null;
+        }
+      })
+    );
+    slice.forEach((name, idx) => map.set(name, results[idx] ?? null));
+  }
+  return map;
+}
+
+type LinkedOrderItem = {
+  item_code?: string;
+  item_name?: string;
+  qty?: number;
+  rate?: number;
+  amount?: number;
+  uom?: string;
+};
+
+async function fetchOrderItems(name: string): Promise<LinkedOrderItem[]> {
+  const res = await erpFetch(
+    getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+    { headers: getErpHeaders() }
+  );
+  if (!res.ok) return [];
+  const json = (await res.json()) as { data?: { items?: Array<any> } };
+  return (json.data?.items ?? []).map((it) => ({
+    item_code: it.item_code,
+    item_name: it.item_name || it.item_code,
+    qty: it.qty,
+    rate: it.rate,
+    amount: it.amount,
+    uom: it.uom,
+  }));
+}
+
+// GET /admin/orders/items?names=["SO-1","SO-2",...] — batch items for a set of
+// orders (used to populate the "Items" column for the visible page).
+// The child-table list API (Sales Order Item) is not permissioned for this key,
+// so we read each Sales Order parent doc (which carries its items child rows).
+router.get(
+  "/admin/orders/items",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      let names: string[] = [];
+      try {
+        const raw = req.query.names;
+        const parsed = typeof raw === "string" ? (JSON.parse(raw) as unknown) : null;
+        if (Array.isArray(parsed)) names = parsed.map(String);
+      } catch {
+        names = [];
+      }
+      names = [...new Set(names)].slice(0, 50);
+
+      const out: Record<string, LinkedOrderItem[]> = {};
+      const queue = [...names];
+      const CONCURRENCY = 6;
+      const worker = async () => {
+        while (queue.length) {
+          const name = queue.shift();
+          if (!name) continue;
+          try {
+            const items = await fetchOrderItems(name);
+            if (items.length) out[name] = items;
+          } catch {
+            /* skip — drawer falls back to per-order detail */
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+      res.json({ data: out });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/items.GET]");
+      res.status(500).json({ error: err.message || "Failed to load order items." });
+    }
+  }
+);
+
+type LinkedInvoiceInfo = {
+  invoice_name?: string;
+  invoice_status?: string;
+  outstanding_amount?: number;
+  docstatus?: number;
+};
+
+async function findLinkedSalesInvoice(orderName: string, customerName?: string): Promise<string | null> {
+  const info = await resolveSalesInvoicesForOrders([{ name: orderName, customer: customerName }]);
+  return info.get(orderName)?.invoice_name ?? null;
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (idx < items.length) {
+      const cur = idx++;
+      results[cur] = await fn(items[cur]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+// The API key may lack read permission on the Sales Invoice Item child doctype
+// (403). These helpers try the fast child-table query first and otherwise fall
+// back to reading the customers' submitted Sales Invoices + their items child
+// rows via permitted parent-doc reads.
+async function resolveSalesInvoicesForOrders(
+  orders: Array<{ name: string; customer?: string }>
+): Promise<Map<string, LinkedInvoiceInfo | null>> {
+  const uniqueOrders = [...new Map(orders.map((o) => [o.name, o])).values()];
+  const uniqueNames = uniqueOrders.map((o) => o.name);
+  const customerOf = new Map<string, string>();
+  for (const o of uniqueOrders) if (o.customer) customerOf.set(o.name, o.customer);
+  const out = new Map<string, LinkedInvoiceInfo | null>();
+  if (!uniqueNames.length) return out;
+
+  const fetchInvoiceInfo = async (params: URLSearchParams): Promise<Map<string, LinkedInvoiceInfo>> => {
+    const infoBySiName = new Map<string, LinkedInvoiceInfo>();
+    const res = await erpFetch(getErpUrl(`/api/resource/Sales Invoice?${params.toString()}`), { headers: getErpHeaders() });
+    if (res.ok) {
+      const json = (await res.json()) as { data?: Array<any> };
+      for (const si of json.data ?? []) {
+        infoBySiName.set(si.name, {
+          invoice_name: si.name,
+          invoice_status: si.status,
+          outstanding_amount: si.outstanding_amount,
+          docstatus: si.docstatus,
+        });
+      }
+    }
+    return infoBySiName;
+  };
+
+  // ── Fast path: child-table query (needs read permission on Sales Invoice Item) ──
+  let childTableOk = true;
+  const bySo = new Map<string, string[]>();
+  const siNames = new Set<string>();
+  const CHUNK = 40;
+  try {
+    for (let i = 0; i < uniqueNames.length; i += CHUNK) {
+      const slice = uniqueNames.slice(i, i + CHUNK);
+      const params = new URLSearchParams({
+        filters: JSON.stringify([["sales_order", "in", slice]]),
+        fields: JSON.stringify(["parent", "sales_order"]),
+        limit_page_length: "1000",
+      });
+      const res = await erpFetch(
+        getErpUrl(`/api/resource/Sales Invoice Item?${params.toString()}`),
+        { headers: getErpHeaders() }
+      );
+      if (res.status === 403) {
+        childTableOk = false;
+        break;
+      }
+      if (res.ok) {
+        const json = (await res.json()) as { data?: Array<{ parent?: string; sales_order?: string }> };
+        for (const row of json.data ?? []) {
+          if (!row.parent || !row.sales_order) continue;
+          if (!bySo.has(row.sales_order)) bySo.set(row.sales_order, []);
+          bySo.get(row.sales_order)!.push(row.parent);
+          siNames.add(row.parent);
+        }
+      }
+    }
+    if (childTableOk && siNames.size > 0) {
+      const infoBySiName = await fetchInvoiceInfo(
+        new URLSearchParams({
+          filters: JSON.stringify([["name", "in", [...siNames]]]),
+          fields: JSON.stringify(["name", "status", "outstanding_amount", "docstatus"]),
+          limit_page_length: "1000",
+        })
+      );
+      for (const soName of uniqueNames) {
+        const names = (bySo.get(soName) ?? []).sort(
+          (a, b) => (infoBySiName.get(b)?.docstatus ?? 0) - (infoBySiName.get(a)?.docstatus ?? 0)
+        );
+        const first = names.map((n) => infoBySiName.get(n)).find((x): x is LinkedInvoiceInfo => Boolean(x));
+        out.set(soName, first ?? null);
+      }
+      return out;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // ── Fallback: read submitted Sales Invoices (per customer) + items child rows ──
+  logger.info({ reason: childTableOk ? "no-invoices" : "no-permission" }, "[admin resolveSi] using parent-doc fallback");
+  try {
+    const tasks: Array<{ customer: string; invoiceName: string }> = [];
+    const byCustomer = new Map<string, string[]>();
+    for (const soName of uniqueNames) {
+      const c = customerOf.get(soName);
+      if (!c) continue;
+      if (!byCustomer.has(c)) byCustomer.set(c, []);
+      byCustomer.get(c)!.push(soName);
+    }
+    for (const [customer, soNames] of byCustomer) {
+      const listRes = await erpFetch(
+        getErpUrl(
+          `/api/resource/Sales Invoice?${new URLSearchParams({
+            filters: JSON.stringify([["customer", "=", customer], ["docstatus", "=", 1]]),
+            fields: JSON.stringify(["name"]),
+            limit_page_length: "200",
+            order_by: "creation desc",
+          })}`
+        ),
+        { headers: getErpHeaders() }
+      );
+      if (!listRes.ok) continue;
+      const invoices = ((await listRes.json()) as { data?: Array<{ name: string }> }).data ?? [];
+      for (const inv of invoices) tasks.push({ customer, invoiceName: inv.name });
+      if (tasks.length >= 3000) break;
+    }
+
+    const infoBySo = new Map<string, LinkedInvoiceInfo>();
+    await mapWithConcurrency(tasks, 6, async (t) => {
+      try {
+        const fields = encodeURIComponent(JSON.stringify(["name", "customer", "status", "docstatus", "outstanding_amount", "items"]));
+        const docRes = await erpFetch(
+          getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(t.invoiceName)}?fields=${fields}`),
+          { headers: getErpHeaders() }
+        );
+        if (!docRes.ok) return;
+        const doc = ((await docRes.json()) as { data?: any }).data;
+        if (!doc?.items || !doc.status) return;
+        const soNames = (doc.items as Array<{ sales_order?: string }>)
+          .map((it) => it.sales_order)
+          .filter((x): x is string => Boolean(x));
+        const info: LinkedInvoiceInfo = {
+          invoice_name: doc.name,
+          invoice_status: doc.status,
+          outstanding_amount: doc.outstanding_amount,
+          docstatus: doc.docstatus,
+        };
+        for (const soName of soNames) {
+          if (customerOf.get(soName) && customerOf.get(soName) !== doc.customer) continue;
+          const existing = infoBySo.get(soName);
+          if (!existing || (info.docstatus ?? 0) > (existing.docstatus ?? 0)) {
+            infoBySo.set(soName, info);
+          }
+        }
+      } catch {
+        /* skip this invoice */
+      }
+    });
+
+    for (const soName of uniqueNames) {
+      out.set(soName, infoBySo.get(soName) ?? null);
+    }
+  } catch (err) {
+    logger.warn({ err }, "[admin resolveSi] fallback failed");
+  }
+  return out;
+}
+
+function computeOrderDisplayStatus(so: any, info: LinkedInvoiceInfo | null): string {
+  if (Number(so.docstatus) === 2) return "Cancelled";
+  if (info && info.invoice_status) {
+    const s = String(info.invoice_status).toLowerCase();
+    if (s === "paid") return "Completed";
+    if (
+      s === "unpaid" ||
+      s === "overdue" ||
+      s === "partly paid" ||
+      s === "partial" ||
+      s === "return" ||
+      s === "credit note issued" ||
+      s === "draft"
+    ) return "Unpaid";
+  }
+  return so.status || "To Deliver and Bill";
+}
+
+router.get(
+  "/admin/orders",
+  attachRequestId,
+  async (_req: Request, res: Response) => {
+    try {
+      const params = new URLSearchParams({
+        fields: JSON.stringify([
+          "name",
+          "customer",
+          "customer_name",
+          "status",
+          "grand_total",
+          "currency",
+          "transaction_date",
+          "delivery_date",
+          "modified",
+          "owner",
+          "shipping_address_name",
+          "docstatus",
+        ]),
+        limit_page_length: "200",
+        order_by: "transaction_date desc, modified desc",
+      });
+
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Order?${params.toString()}`),
+        { headers: getErpHeaders() }
+      );
+
+      if (!erpRes.ok) {
+        res.status(502).json({ error: "Failed to fetch orders from ERPNext." });
+        return;
+      }
+
+      const data = (await erpRes.json()) as { data: any[] };
+      const orders = data.data || [];
+      const shippingMap = await resolveShippingAddresses(orders);
+      const invoiceMap = await resolveSalesInvoicesForOrders(orders);
+      const withShipping = orders.map((o: any) => {
+        const info = invoiceMap.get(o.name) || null;
+        return {
+          ...o,
+          shipping: shippingMap.get(o.shipping_address_name) || null,
+          invoice_name: info?.invoice_name || null,
+          invoice_status: info?.invoice_status || null,
+          outstanding_amount: info?.outstanding_amount ?? o.grand_total ?? 0,
+          status: computeOrderDisplayStatus(o, info),
+        };
+      });
+      res.json({ data: withShipping });
+    } catch (err) {
+      logger.error({ err }, "[admin/orders]");
+      res.status(500).json({ error: "Internal server error." });
+    }
+  }
+);
+
+router.get(
+  "/admin/orders/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+        { headers: getErpHeaders() }
+      );
+
+      if (!erpRes.ok) {
+        res.status(404).json({ error: "Order not found." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      const so = data.data;
+      let invoiceInfo: LinkedInvoiceInfo | null = null;
+      const invoiceName = await findLinkedSalesInvoice(so?.name, so?.customer);
+      if (invoiceName) {
+        const fields = encodeURIComponent(JSON.stringify(["name", "docstatus", "status", "outstanding_amount"]));
+        const siRes = await erpFetch(
+          getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(invoiceName)}?fields=${fields}`),
+          { headers: getErpHeaders() }
+        );
+        if (siRes.ok) {
+          const si = ((await siRes.json()) as { data?: any }).data;
+          invoiceInfo = {
+            invoice_name: si?.name,
+            invoice_status: si?.status,
+            outstanding_amount: si?.outstanding_amount,
+            docstatus: si?.docstatus,
+          };
+        }
+      }
+      res.json({
+        data: {
+          ...so,
+          invoice_name: invoiceInfo?.invoice_name ?? null,
+          invoice_status: invoiceInfo?.invoice_status ?? null,
+          outstanding_amount: invoiceInfo?.outstanding_amount ?? (Number(so?.grand_total) || 0),
+          display_status: computeOrderDisplayStatus(so, invoiceInfo),
+        },
+      });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/:name.GET]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+router.post(
+  "/admin/orders",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        customer,
+        customer_name,
+        delivery_date,
+        transaction_date,
+        items,
+        currency = "PKR",
+      } = req.body;
+
+      const defaultCompany = process.env.DEFAULT_COMPANY ?? "Oxigen";
+      const defaultWarehouse = process.env.ONLINE_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || "Oxigen Warehouse - O";
+      const today = new Date().toISOString().split("T")[0];
+
+      const formattedItems = (items || []).map((it: any) => ({
+        item_code: it.item_code || it.name,
+        qty: Number(it.qty) || 1,
+        rate: Number(it.rate) || Number(it.price) || 0,
+        warehouse: defaultWarehouse,
+      }));
+
+      if (formattedItems.length === 0) {
+        res.status(400).json({ error: "At least one item is required to create an order." });
+        return;
+      }
+
+      const orderPayload = {
+        doctype: "Sales Order",
+        company: defaultCompany,
+        customer: customer || customer_name,
+        currency,
+        transaction_date: transaction_date || today,
+        delivery_date: delivery_date || today,
+        order_type: "Sales",
+        items: formattedItems,
+      };
+
+      const erpRes = await erpFetch(getErpUrl("/api/resource/Sales Order"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to create Sales Order in ERPNext." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+
+      // Submit Sales Order in ERPNext to immediately reserve/deduct available inventory
+      const orderName = data.data?.name;
+      let soSubmitted = false;
+      try {
+        await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({ doc: data.data }),
+        });
+        soSubmitted = true;
+        if (orderName) {
+          logger.info({ order: orderName }, "Sales Order submitted");
+        }
+      } catch (submitErr) {
+        logger.warn({ submitErr, order: orderName }, "Sales Order created in Draft, submit failed");
+      }
+
+      // Create + submit the Sales Invoice so the order lands as "Unpaid" with stock deducted
+      if (soSubmitted && orderName) {
+        try {
+          await ErpAdapter.createAndSubmitSalesInvoice(orderName, defaultWarehouse);
+        } catch (invErr: any) {
+          try {
+            await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify({ doctype: "Sales Order", name: orderName }),
+            });
+          } catch {
+            /* best effort */
+          }
+          res.status(502).json({ error: invErr?.message || "Sales Order created but Sales Invoice creation failed." });
+          return;
+        }
+      }
+
+      itemCache.clear();
+      res.status(201).json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders.POST]");
+      res.status(500).json({ error: err.message || "Failed to create order." });
+    }
+  }
+);
+
+router.put(
+  "/admin/orders/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+        {
+          method: "PUT",
+          headers: getErpHeaders(),
+          body: JSON.stringify(req.body),
+        }
+      );
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to update Sales Order." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      res.json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/:name.PUT]");
+      res.status(500).json({ error: err.message || "Failed to update order." });
+    }
+  }
+);
+
+// GET /admin/payment-modes - available Mode of Payment records for the Payment form
+router.get(
+  "/admin/payment-modes",
+  attachRequestId,
+  async (_req: Request, res: Response) => {
+    try {
+      const params = new URLSearchParams({
+        fields: JSON.stringify(["name", "type", "accounts"]),
+        limit_page_length: "100",
+        order_by: "name asc",
+      });
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Mode of Payment?${params.toString()}`),
+        { headers: getErpHeaders() }
+      );
+      if (!erpRes.ok) {
+        res.status(502).json({ error: "Failed to fetch payment modes from ERPNext." });
+        return;
+      }
+      const data = (await erpRes.json()) as { data?: any[] };
+      res.json({
+        data: (data.data || []).map((m) => ({
+          name: m.name,
+          type: m.type || null,
+          default_account: (m.accounts || [])[0]?.default_account || null,
+        })),
+      });
+    } catch (err) {
+      logger.error({ err }, "[admin/payment-modes]");
+      res.status(500).json({ error: "Internal server error." });
+    }
+  }
+);
+
+// POST /admin/orders/:name/payment - create + submit a Payment Entry against the order's Sales Invoice
+router.post(
+  "/admin/orders/:name/payment",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const { mode_of_payment, amount, reference_no, posting_date, reference_date } = req.body as {
+        mode_of_payment?: string;
+        amount?: number;
+        reference_no?: string;
+        posting_date?: string;
+        reference_date?: string;
+      };
+
+      // 1) Load the Sales Order
+      const soRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+        { headers: getErpHeaders() }
+      );
+      if (!soRes.ok) {
+        res.status(404).json({ error: "Order not found." });
+        return;
+      }
+      const soData: any = ((await soRes.json()) as any).data;
+      if (Number(soData.docstatus) === 2) {
+        res.status(400).json({ error: "Cancelled orders cannot be paid." });
+        return;
+      }
+
+// 2) Resolve (or create) the linked Sales Invoice
+        let invoiceName = await findLinkedSalesInvoice(name, soData?.customer);
+      if (!invoiceName) {
+        try {
+          invoiceName = await ErpAdapter.createAndSubmitSalesInvoice(
+            name,
+            soData?.items?.[0]?.warehouse
+          );
+        } catch (err: any) {
+          res.status(502).json({ error: err?.message || "Failed to create Sales Invoice for this order." });
+          return;
+        }
+      }
+
+      // 3) Build the Payment Entry from the Sales Invoice
+      const peTemplateRes = await erpFetch(
+        getErpUrl("/api/method/erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry"),
+        {
+          method: "POST",
+          headers: getErpHeaders(),
+          body: JSON.stringify({ dt: "Sales Invoice", dn: invoiceName }),
+        }
+      );
+      if (!peTemplateRes.ok) {
+        const err = (await peTemplateRes.json().catch(() => ({}))) as any;
+        res.status(502).json({ error: parseErpError(err) || "Failed to prepare Payment Entry." });
+        return;
+      }
+
+      const peTemplate: any = ((await peTemplateRes.json()) as any).message;
+      if (!peTemplate || !peTemplate.doctype) {
+        res.status(502).json({ error: "Payment Entry could not be prepared." });
+        return;
+      }
+
+      // 4) Patch with the admin's selection
+      const today = new Date().toISOString().split("T")[0];
+      const payAmount = Number(amount) > 0 ? Number(amount) : (Number(soData.grand_total) || 0);
+      peTemplate.mode_of_payment = mode_of_payment || "Cash";
+      peTemplate.paid_amount = payAmount;
+      peTemplate.received_amount = payAmount;
+      if (posting_date) peTemplate.posting_date = posting_date;
+      if (reference_date) peTemplate.reference_date = reference_date;
+      peTemplate.reference_no = reference_no || "";
+
+      // 5) Insert + submit the Payment Entry
+      const peInsRes = await erpFetch(getErpUrl("/api/resource/Payment Entry"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(peTemplate),
+      });
+      if (!peInsRes.ok) {
+        const err = (await peInsRes.json().catch(() => ({}))) as any;
+        res.status(502).json({ error: parseErpError(err) || "Failed to create Payment Entry." });
+        return;
+      }
+      const peData: any = await peInsRes.json();
+
+      const peSubRes = await erpFetch(getErpUrl("/api/method/frappe.client.submit"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({ doc: peData.data }),
+      });
+      if (!peSubRes.ok) {
+        const err = (await peSubRes.json().catch(() => ({}))) as any;
+        res.status(502).json({ error: parseErpError(err) || "Payment Entry could not be submitted." });
+        return;
+      }
+      const peSubmitJson: any = await peSubRes.json();
+      const peName = peSubmitJson.message?.name ?? peData.data.name;
+
+      itemCache.clear();
+      res.json({
+        success: true,
+        paymentEntry: peName,
+        invoice: invoiceName,
+        message: `Payment recorded against ${invoiceName}.`,
+      });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/:name/payment]");
+      res.status(500).json({ error: err.message || "Failed to record payment." });
+    }
+  }
+);
+
+// POST /admin/orders/:name/return - cancel Sales Invoice + Sales Order, restore stock
+router.post(
+  "/admin/orders/:name/return",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+
+      const soRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+        { headers: getErpHeaders() }
+      );
+      if (!soRes.ok) {
+        res.status(404).json({ error: "Order not found." });
+        return;
+      }
+      const soData: any = ((await soRes.json()) as any).data;
+      if (Number(soData.docstatus) === 2) {
+        res.status(400).json({ error: "Order is already cancelled." });
+        return;
+      }
+
+// 1) Cancel the linked Sales Invoice first (restores physical stock when update_stock = 1)
+        const invoiceName = await findLinkedSalesInvoice(name, soData?.customer);
+      if (invoiceName) {
+        const siRes = await erpFetch(
+          getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(invoiceName)}`),
+          { headers: getErpHeaders() }
+        );
+        if (siRes.ok) {
+          const siDoc: any = ((await siRes.json()) as any).data;
+          if (Number(siDoc.docstatus) === 1) {
+            await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+              method: "POST",
+              headers: getErpHeaders(),
+              body: JSON.stringify({ doctype: "Sales Invoice", name: invoiceName }),
+            });
+            logger.info({ order: name, invoice: invoiceName }, "[return] Sales Invoice cancelled (stock restored)");
+          }
+        }
+      }
+
+      // 2) Cancel the Sales Order (restores reserved stock)
+      await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({ doctype: "Sales Order", name }),
+      });
+
+      itemCache.clear();
+      res.json({
+        success: true,
+        message: `Order ${name} cancelled. Stock restored.`,
+      });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/:name/return]");
+      res.status(500).json({ error: err.message || "Failed to cancel order." });
+    }
+  }
+);
+
+router.delete(
+  "/admin/orders/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+
+      await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({ doctype: "Sales Order", name }),
+      }).catch(() => {});
+
+      const delRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`),
+        {
+          method: "DELETE",
+          headers: getErpHeaders(),
+        }
+      );
+
+      if (!delRes.ok) {
+        await erpFetch(getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name)}`), {
+          method: "PUT",
+          headers: getErpHeaders(),
+          body: JSON.stringify({ status: "Cancelled" }),
+        });
+      }
+
+      res.json({ success: true, message: `Order ${name} cancelled/deleted.` });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/orders/:name.DELETE]");
+      res.status(500).json({ error: err.message || "Failed to delete order." });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// CUSTOMERS CRUD
+// ---------------------------------------------------------------------------
+router.get(
+  "/admin/customers",
+  attachRequestId,
+  async (_req: Request, res: Response) => {
+    try {
+      const params = new URLSearchParams({
+        fields: JSON.stringify([
+          "name",
+          "customer_name",
+          "customer_type",
+          "customer_group",
+          "territory",
+          "email_id",
+          "mobile_no",
+          "creation",
+          "modified",
+        ]),
+        limit_page_length: "200",
+        order_by: "creation desc",
+      });
+
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Customer?${params}`),
+        { headers: getErpHeaders() }
+      );
+
+      if (!erpRes.ok) {
+        res.status(502).json({ error: "Failed to fetch customers from ERPNext." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      res.json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/customers.GET]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+router.get(
+  "/admin/customers/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Customer/${encodeURIComponent(name)}`),
+        { headers: getErpHeaders() }
+      );
+
+      if (!erpRes.ok) {
+        res.status(404).json({ error: "Customer not found." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      res.json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/customers/:name.GET]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+router.post(
+  "/admin/customers",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        customer_name,
+        email_id,
+        mobile_no,
+        customer_type = "Individual",
+        customer_group = "Individual",
+        territory = "Pakistan",
+      } = req.body;
+
+      if (!customer_name) {
+        res.status(400).json({ error: "Customer name is required." });
+        return;
+      }
+
+      const payload = {
+        doctype: "Customer",
+        customer_name,
+        customer_type,
+        customer_group,
+        territory,
+        email_id: email_id || undefined,
+        mobile_no: mobile_no || undefined,
+      };
+
+      const erpRes = await erpFetch(getErpUrl("/api/resource/Customer"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to create customer in ERPNext." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      res.status(201).json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/customers.POST]");
+      res.status(500).json({ error: err.message || "Failed to create customer." });
+    }
+  }
+);
+
+router.put(
+  "/admin/customers/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Customer/${encodeURIComponent(name)}`),
+        {
+          method: "PUT",
+          headers: getErpHeaders(),
+          body: JSON.stringify(req.body),
+        }
+      );
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to update customer." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      res.json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/customers/:name.PUT]");
+      res.status(500).json({ error: err.message || "Failed to update customer." });
+    }
+  }
+);
+
+router.delete(
+  "/admin/customers/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Customer/${encodeURIComponent(name)}`),
+        {
+          method: "DELETE",
+          headers: getErpHeaders(),
+        }
+      );
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to delete customer." });
+        return;
+      }
+
+      res.json({ success: true, message: `Customer ${name} deleted.` });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/customers/:name.DELETE]");
+      res.status(500).json({ error: err.message || "Failed to delete customer." });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// DISCOUNTS / PRICING RULES
+// ---------------------------------------------------------------------------
+router.get(
+  "/admin/discounts",
+  attachRequestId,
+  async (_req: Request, res: Response) => {
+    try {
+      const params = new URLSearchParams({
+        fields: JSON.stringify([
+          "name",
+          "title",
+          "apply_on",
+          "rate_or_discount",
+          "rate",
+          "discount_percentage",
+          "discount_amount",
+          "valid_from",
+          "valid_upto",
+          "priority",
+          "disable",
+          "modified",
+          "creation",
+        ]),
+        filters: JSON.stringify([["selling", "=", 1]]),
+        limit_page_length: "1000",
+        order_by: "modified desc",
+      });
+
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Pricing Rule?${params}`),
+        { headers: getErpHeaders() }
+      );
+
+      if (!erpRes.ok) {
+        res.status(502).json({ error: "Failed to fetch pricing rules." });
+        return;
+      }
+
+      const listJson: any = await erpRes.json();
+      const rules = listJson.data ?? [];
+
+      // Child table "items" parent fields ke through nahi milta — har doc ko
+      // individual fetch karke item_code list nikaalni hoti hai (v14 structure).
+      const enriched = await Promise.all(
+        rules.map(async (rule: any) => {
+          const itemCodes: string[] = [];
+          const detailRes = await erpFetch(
+            getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(rule.name)}`),
+            { headers: getErpHeaders() }
+          ).catch(() => null);
+          if (detailRes?.ok) {
+            const detailJson: any = await detailRes.json();
+            const items = detailJson.data?.items ?? [];
+            for (const it of items) {
+              if (it.item_code) itemCodes.push(it.item_code);
+            }
+          }
+          return { ...rule, item_codes: itemCodes, item_code: itemCodes[0] || "" };
+        })
+      );
+
+      res.json({ data: enriched });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/discounts.GET]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+router.post(
+  "/admin/discounts",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        item_code,
+        title,
+        rate_or_discount = "Discount Percentage",
+        discount_percentage,
+        rate,
+        discount_amount,
+        valid_from,
+        valid_upto,
+        priority = 0,
+        disable = 0,
+      } = req.body;
+
+      if (!item_code) {
+        res.status(400).json({ error: "Item code is required." });
+        return;
+      }
+
+      const payload: Record<string, unknown> = {
+        doctype: "Pricing Rule",
+        title: title || `Discount ${item_code}`,
+        apply_on: "Item Code",
+        selling: 1,
+        price_or_product_discount: "Price",
+        rate_or_discount,
+        priority: Number(priority) || 0,
+        disable: Number(disable) || 0,
+        company: process.env.DEFAULT_COMPANY || "Oxigen",
+        items: [{ item_code }],
+      };
+
+      if (rate_or_discount === "Rate") {
+        payload.rate = Number(rate) || 0;
+      } else if (rate_or_discount === "Discount Amount") {
+        payload.discount_amount = Number(discount_amount) || 0;
+      } else {
+        payload.discount_percentage = Number(discount_percentage) || 0;
+      }
+
+      if (valid_from) payload.valid_from = valid_from;
+      if (valid_upto) payload.valid_upto = valid_upto;
+
+      const erpRes = await erpFetch(getErpUrl("/api/resource/Pricing Rule"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to create pricing rule." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      itemCache.clear();
+      res.status(201).json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/discounts.POST]");
+      res.status(500).json({ error: err.message || "Failed to create pricing rule." });
+    }
+  }
+);
+
+router.put(
+  "/admin/discounts/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const {
+        item_code,
+        rate_or_discount,
+        discount_percentage,
+        rate,
+        discount_amount,
+        valid_from,
+        valid_upto,
+        priority,
+        disable,
+        title,
+      } = req.body;
+
+      const payload: Record<string, unknown> = {};
+      if (title !== undefined) payload.title = title;
+      if (rate_or_discount !== undefined) payload.rate_or_discount = rate_or_discount;
+      if (priority !== undefined) payload.priority = Number(priority) || 0;
+      if (disable !== undefined) payload.disable = Number(disable) || 0;
+      if (valid_from !== undefined) payload.valid_from = valid_from || null;
+      if (valid_upto !== undefined) payload.valid_upto = valid_upto || null;
+      if (item_code !== undefined) payload.items = [{ item_code }];
+
+      if (rate_or_discount === "Rate" && rate !== undefined) payload.rate = Number(rate) || 0;
+      else if (rate_or_discount === "Discount Amount" && discount_amount !== undefined) payload.discount_amount = Number(discount_amount) || 0;
+      else if (rate_or_discount === "Discount Percentage" && discount_percentage !== undefined) payload.discount_percentage = Number(discount_percentage) || 0;
+
+      if (Object.keys(payload).length === 0) {
+        res.status(400).json({ error: "No fields to update." });
+        return;
+      }
+
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(name)}`),
+        {
+          method: "PUT",
+          headers: getErpHeaders(),
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to update pricing rule." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      itemCache.clear();
+      res.json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/discounts/:name.PUT]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+router.delete(
+  "/admin/discounts/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      
+      // Step 1: Try hard delete first
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(name)}`),
+        {
+          method: "DELETE",
+          headers: getErpHeaders(),
+        }
+      );
+
+      // Step 2: If successfully deleted
+      if (erpRes.ok) {
+        itemCache.clear();
+        res.json({ success: true, message: `Pricing rule ${name} deleted.`, action: "deleted" });
+        return;
+      }
+
+      // Step 3: Parse error to check if it's a "linked" error
+      const err = (await erpRes.json().catch(() => ({}))) as { _server_messages?: string; message?: string };
+      const errorMsg = parseErpError(err) || err.message || "";
+
+      // Step 4: If linked to orders (417 status or "linked" in error message), try soft delete
+      if (erpRes.status === 417 || errorMsg.toLowerCase().includes("linked")) {
+        logger.info({ name, errorMsg }, "[admin/discounts/:name.DELETE] Pricing rule linked, attempting soft delete");
+        
+        const updateRes = await erpFetch(
+          getErpUrl(`/api/resource/Pricing Rule/${encodeURIComponent(name)}`),
+          {
+            method: "PUT",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ disable: 1 }),
+          }
+        );
+
+        if (updateRes.ok) {
+          itemCache.clear();
+          res.json({
+            success: true,
+            message: `Pricing rule ${name} archived (linked to existing orders).`,
+            action: "disabled",
+            reason: errorMsg,
+          });
+          return;
+        }
+
+        // If soft delete also failed, return that error
+        const updateErr = (await updateRes.json().catch(() => ({}))) as { _server_messages?: string; message?: string };
+        const updateErrorMsg = parseErpError(updateErr) || updateErr.message || "Failed to disable pricing rule.";
+        res.status(updateRes.status).json({ error: updateErrorMsg });
+        return;
+      }
+
+      // Step 5: Other errors - return as-is
+      res.status(erpRes.status).json({ error: errorMsg || "Failed to delete pricing rule." });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/discounts/:name.DELETE]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// USERS / TEAM MANAGEMENT
+// ---------------------------------------------------------------------------
+router.get(
+  "/admin/users",
+  attachRequestId,
+  async (_req: Request, res: Response) => {
+    try {
+      const params = new URLSearchParams({
+        fields: JSON.stringify([
+          "name",
+          "email",
+          "first_name",
+          "last_name",
+          "full_name",
+          "user_type",
+          "enabled",
+          "role_profile_name",
+          "creation",
+          "last_active",
+        ]),
+        limit_page_length: "200",
+        order_by: "creation desc",
+      });
+
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/User?${params}`),
+        { headers: getErpHeaders() }
+      );
+
+      if (!erpRes.ok) {
+        res.status(502).json({ error: "Failed to fetch Users from ERPNext." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      res.json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/users.GET]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+router.post(
+  "/admin/users",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { email, first_name, last_name, user_type = "Website User", send_welcome_email = 0 } = req.body;
+      if (!email) {
+        res.status(400).json({ error: "Email is required." });
+        return;
+      }
+
+      const payload = {
+        doctype: "User",
+        email,
+        first_name: first_name || email.split("@")[0],
+        last_name,
+        user_type,
+        send_welcome_email,
+        enabled: 1,
+      };
+
+      const erpRes = await erpFetch(getErpUrl("/api/resource/User"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to create user in ERPNext." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      res.status(201).json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/users.POST]");
+      res.status(500).json({ error: err.message || "Failed to create user." });
+    }
+  }
+);
+
+router.put(
+  "/admin/users/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/User/${encodeURIComponent(name)}`),
+        {
+          method: "PUT",
+          headers: getErpHeaders(),
+          body: JSON.stringify(req.body),
+        }
+      );
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to update user." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      res.json({ data: data.data });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/users/:name.PUT]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+router.delete(
+  "/admin/users/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/User/${encodeURIComponent(name)}`),
+        {
+          method: "PUT",
+          headers: getErpHeaders(),
+          body: JSON.stringify({ enabled: 0 }),
+        }
+      );
+
+      if (!erpRes.ok) {
+        res.status(erpRes.status).json({ error: "Failed to disable user." });
+        return;
+      }
+
+      res.json({ success: true, message: `User ${name} disabled.` });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/users/:name.DELETE]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// FILES / MEDIA
+// ---------------------------------------------------------------------------
+router.get(
+  "/admin/files",
+  attachRequestId,
+  async (_req: Request, res: Response) => {
+    try {
+      const params = new URLSearchParams({
+        fields: JSON.stringify([
+          "name",
+          "file_name",
+          "file_url",
+          "file_size",
+          "is_private",
+          "is_folder",
+          "creation",
+          "attached_to_doctype",
+          "attached_to_name",
+        ]),
+        limit_page_length: "200",
+        order_by: "creation desc",
+      });
+
+      const erpRes = await erpFetch(
+        getErpUrl(`/api/resource/File?${params}`),
+        { headers: getErpHeaders() }
+      );
+
+      if (!erpRes.ok) {
+        res.status(502).json({ error: "Failed to fetch files from ERPNext." });
+        return;
+      }
+
+      const data: any = await erpRes.json();
+      const rawFiles = (data.data || []).filter(
+        (f: any) => !f.is_folder && f.file_url && f.file_url.trim() !== ""
+      );
+
+      // Deduplicate files by file_url while aggregating attached references and DB IDs
+      const fileMap = new Map<string, any>();
+      for (const f of rawFiles) {
+        const key = f.file_url.trim().toLowerCase();
+        if (!fileMap.has(key)) {
+          fileMap.set(key, {
+            ...f,
+            file_ids: [f.name],
+            attachments: f.attached_to_doctype ? [`${f.attached_to_doctype}: ${f.attached_to_name}`] : [],
+          });
+        } else {
+          const existing = fileMap.get(key);
+          if (!existing.file_ids.includes(f.name)) {
+            existing.file_ids.push(f.name);
+          }
+          if (f.attached_to_doctype) {
+            const att = `${f.attached_to_doctype}: ${f.attached_to_name}`;
+            if (!existing.attachments.includes(att)) {
+              existing.attachments.push(att);
+            }
+          }
+        }
+      }
+
+      const files = Array.from(fileMap.values());
+      res.json({ data: files });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/files.GET]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+router.post(
+  "/admin/files/upload",
+  upload.single("file"),
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: "No file uploaded." });
+        return;
+      }
+
+      const { body, contentType } = buildMultipartBody([
+        { name: "file", value: file.buffer, filename: file.originalname },
+        { name: "is_private", value: "0" },
+        { name: "folder", value: "Home/Attachments" },
+      ]);
+
+      const erpRes = await erpFetch(getErpUrl("/api/method/upload_file"), {
+        method: "POST",
+        headers: { ...getErpHeaders(), "Content-Type": contentType },
+        body,
+      });
+
+      if (!erpRes.ok) {
+        const err = (await erpRes.json().catch(() => ({}))) as any;
+        res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to upload file to ERPNext." });
+        return;
+      }
+
+      const json: any = await erpRes.json();
+      res.status(201).json({ data: json.message });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/files/upload.POST]");
+      res.status(500).json({ error: err.message || "Failed to upload file." });
+    }
+  }
+);
+
+router.delete(
+  "/admin/files/:name",
+  attachRequestId,
+  async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const idsToDelete = name.split(",").map((s) => s.trim()).filter(Boolean);
+      let anySuccess = false;
+      let lastError = "";
+
+      for (const id of idsToDelete) {
+        const erpRes = await erpFetch(
+          getErpUrl(`/api/resource/File/${encodeURIComponent(id)}`),
+          {
+            method: "DELETE",
+            headers: getErpHeaders(),
+          }
+        );
+        if (erpRes.ok) {
+          anySuccess = true;
+        } else {
+          lastError = `Failed for ${id} (status ${erpRes.status})`;
+        }
+      }
+
+      if (!anySuccess && idsToDelete.length > 0) {
+        res.status(500).json({ error: lastError || "Failed to delete file from ERPNext." });
+        return;
+      }
+
+      res.json({ success: true, message: `File(s) deleted.` });
+    } catch (err: any) {
+      logger.error({ err }, "[admin/files/:name.DELETE]");
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Real-time Admin Notifications & Live Order Stream
+// ---------------------------------------------------------------------------
+
+router.get("/admin/notifications", attachRequestId, async (_req: Request, res: Response) => {
+  res.json({
+    data: notificationService.getAll(),
+    unread: notificationService.getUnreadCount(),
+  });
+});
+
+router.post("/admin/notifications", attachRequestId, async (req: Request, res: Response) => {
+  const expected = process.env["WEBHOOK_SECRET"] ?? "";
+  const provided = (req.headers["x-admin-shared-secret"] as string) ?? "";
+  if (!expected || !secureEqual(expected, provided)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  try {
+    const { orderId, customerName, email, city, total, itemCount, paymentMethod, items } = req.body;
+    if (!email) {
+      res.status(400).json({ error: "email is required" });
+      return;
+    }
+    const notif = notificationService.addOrderNotification({
+      orderId,
+      customerName,
+      email,
+      city,
+      total: Number(total) || 0,
+      itemCount: Number(itemCount) || 1,
+      paymentMethod,
+      items,
+    });
+    res.status(201).json({ data: notif });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/notifications.POST]");
+    res.status(500).json({ error: err.message || "Failed to create notification" });
+  }
+});
+
+router.post("/admin/notifications/mark-read", attachRequestId, async (req: Request, res: Response) => {
+  const { id } = req.body || {};
+  notificationService.markAsRead(id);
+  res.json({ success: true, unread: notificationService.getUnreadCount() });
+});
+
+router.post("/admin/notifications/clear", attachRequestId, async (_req: Request, res: Response) => {
+  notificationService.clear();
+  res.json({ success: true, unread: 0 });
+});
+
+router.delete("/admin/notifications/:id", attachRequestId, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  notificationService.deleteNotification(id);
+  res.json({ success: true, unread: notificationService.getUnreadCount() });
+});
+
+router.get("/admin/notifications/stream", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  const sendInitial = () => {
+    res.write(`event: init\ndata: ${JSON.stringify({
+      notifications: notificationService.getAll(),
+      unread: notificationService.getUnreadCount(),
+    })}\n\n`);
+  };
+
+  sendInitial();
+
+  const onNotification = (notif: any) => {
+    res.write(`event: notification\ndata: ${JSON.stringify({
+      notification: notif,
+      unread: notificationService.getUnreadCount(),
+    })}\n\n`);
+  };
+
+  const onChange = () => {
+    res.write(`event: change\ndata: ${JSON.stringify({
+      notifications: notificationService.getAll(),
+      unread: notificationService.getUnreadCount(),
+    })}\n\n`);
+  };
+
+  notificationService.on("notification", onNotification);
+  notificationService.on("change", onChange);
+
+  const heartbeat = setInterval(() => {
+    res.write(": heartbeat\n\n");
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    notificationService.off("notification", onNotification);
+    notificationService.off("change", onChange);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Banner Management (JSON file storage)
+// ---------------------------------------------------------------------------
+type BannerProduct = { productName: string; sortOrder: number };
+type Banner = {
+  id: string;
+  title: string;
+  image: string;
+  isActive: boolean;
+  position: number;
+  products: BannerProduct[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+const __filename = fileURLToPath(import.meta.url);
+const BANNERS_DIR = join(dirname(dirname(dirname(__filename))), "data");
+const BANNERS_FILE = join(BANNERS_DIR, "banners.json");
+
+function ensureBannersFile(): void {
+  if (!existsSync(BANNERS_DIR)) mkdirSync(BANNERS_DIR, { recursive: true });
+  if (!existsSync(BANNERS_FILE)) writeFileSync(BANNERS_FILE, "[]", "utf-8");
+}
+
+function readBanners(): Banner[] {
+  ensureBannersFile();
+  try {
+    const raw = readFileSync(BANNERS_FILE, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function writeBanners(banners: Banner[]): void {
+  ensureBannersFile();
+  writeFileSync(BANNERS_FILE, JSON.stringify(banners, null, 2), "utf-8");
+}
+
+// GET /api/admin/banners
+router.get("/admin/banners", attachRequestId, async (_req: Request, res: Response) => {
+  try {
+    const banners = readBanners();
+    res.json({ data: banners });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/banners.GET]");
+    res.status(500).json({ error: err.message || "Internal server error." });
+  }
+});
+
+// POST /api/admin/banners
+router.post("/admin/banners", attachRequestId, async (req: Request, res: Response) => {
+  try {
+    const { title, image, isActive, position, products } = req.body;
+    if (!title || !image) {
+      res.status(400).json({ error: "Title and image are required." });
+      return;
+    }
+    const banners = readBanners();
+    const now = new Date().toISOString();
+    const id = `banner-${Date.now()}`;
+    const banner: Banner = {
+      id,
+      title,
+      image,
+      isActive: isActive !== false,
+      position: position ?? banners.length,
+      products: Array.isArray(products) ? products.slice(0, 5) : [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    banners.push(banner);
+    writeBanners(banners);
+    itemCache.clear();
+    res.status(201).json({ data: banner });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/banners.POST]");
+    res.status(500).json({ error: err.message || "Internal server error." });
+  }
+});
+
+// PUT /api/admin/banners/:id
+router.put("/admin/banners/:id", attachRequestId, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const banners = readBanners();
+    const idx = banners.findIndex((b) => b.id === id);
+    if (idx === -1) {
+      res.status(404).json({ error: "Banner not found." });
+      return;
+    }
+    const { title, image, isActive, position, products } = req.body;
+    if (title !== undefined) banners[idx].title = title;
+    if (image !== undefined) banners[idx].image = image;
+    if (isActive !== undefined) banners[idx].isActive = isActive;
+    if (position !== undefined) banners[idx].position = position;
+    if (Array.isArray(products)) banners[idx].products = products.slice(0, 5);
+    banners[idx].updatedAt = new Date().toISOString();
+    writeBanners(banners);
+    itemCache.clear();
+    res.json({ data: banners[idx] });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/banners.PUT]");
+    res.status(500).json({ error: err.message || "Internal server error." });
+  }
+});
+
+// DELETE /api/admin/banners/:id
+router.delete("/admin/banners/:id", attachRequestId, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const banners = readBanners();
+    const idx = banners.findIndex((b) => b.id === id);
+    if (idx === -1) {
+      res.status(404).json({ error: "Banner not found." });
+      return;
+    }
+    banners.splice(idx, 1);
+    writeBanners(banners);
+    itemCache.clear();
+    res.json({ success: true, message: "Banner deleted." });
+  } catch (err: any) {
+    logger.error({ err }, "[admin/banners.DELETE]");
+    res.status(500).json({ error: err.message || "Internal server error." });
+  }
+});
 
 export default router;

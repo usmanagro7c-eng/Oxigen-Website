@@ -7,7 +7,7 @@ import { catalog, type CatalogItem, slugify } from "./site-data";
 /* ------------------------------------------------------------------ */
 
 export type CartLine = { slug: string; qty: number };
-export type User = { name: string; email: string };
+export type User = { name: string; email: string; user_type?: "System User" | "Website User" };
 export type Order = {
   id: string;
   date: string;
@@ -141,7 +141,7 @@ type StoreValue = {
   inWishlist: (slug: string) => boolean;
   user: User | null;
   hydrated: boolean;
-  signIn: (usr: string, pwd: string) => Promise<boolean>;
+  signIn: (usr: string, pwd: string) => Promise<User | null>;
   signUp: (email: string, full_name: string) => Promise<boolean>;
   signOut: () => Promise<boolean>;
   forgotPassword: (email: string) => Promise<boolean>;
@@ -503,14 +503,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       if (!res.success) {
         toast.error(res.error || "Sign in failed.");
-        return false;
+        return null;
       }
       setUser(res.user ?? null);
       toast.success(`Welcome back, ${res.user?.name}!`);
-      return true;
+      return res.user ?? null;
     } catch {
       toast.error("An unexpected error occurred during sign in.");
-      return false;
+      return null;
     }
   };
 
