@@ -12,15 +12,18 @@ export default {
       if (!upstream) {
         return apiResponse(503, { error: "Backend not deployed yet" });
       }
-      const target = new URL(upstream.replace(/\/+$/, ""));
-      target.pathname = url.pathname;
-      target.search  = url.search;
+      const base = upstream.replace(/\/+$/, "");
+      const target = new URL(base + url.pathname);
+      target.search = url.search;
 
       const headers = new Headers();
+      const realIp = request.headers.get("cf-connecting-ip") ?? "";
       for (const [k, v] of request.headers.entries()) {
         const lk = k.toLowerCase();
-        if (!["host","connection","cf-connecting-ip","cf-ray"].includes(lk)) headers.append(k, v);
+        if (!["host","connection","cf-connecting-ip","cf-ray","x-forwarded-for","x-real-ip"].includes(lk)) headers.append(k, v);
       }
+      headers.set("x-forwarded-for", realIp || request.headers.get("x-real-ip") || "");
+      headers.set("x-real-ip", realIp);
       headers.set("x-forwarded-host", request.headers.get("host") ?? "");
       headers.set("x-forwarded-proto", "https");
 
