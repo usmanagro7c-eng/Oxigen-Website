@@ -97,7 +97,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Prop
         <div className="border-t border-border/60 p-3 space-y-1.5">
           {!collapsed && (
             <a
-              href="http://localhost:5173"
+              href={window.location.origin}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
