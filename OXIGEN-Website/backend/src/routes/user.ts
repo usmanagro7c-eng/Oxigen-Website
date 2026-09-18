@@ -12,6 +12,7 @@ import { notifyAdminOfOrder } from "../lib/admin-notify.js";
 const router: IRouter = Router();
 
 const changePasswordLimiter = createRateLimiter("changePassword");
+const orderLimiter = createRateLimiter("order");
 
 // ---------------------------------------------------------------------------
 // Profile
@@ -508,7 +509,7 @@ router.get("/user/orders", requireAuth, async (req, res) => {
 
 // POST /api/user/orders — Place a Sales Order (direct when ERPNext is up,
 // queue + retry fallback when it is temporarily unreachable)
-router.post("/user/orders", async (req, res) => {
+router.post("/user/orders", orderLimiter, async (req, res) => {
   const { items, delivery_date, addressName, shippingAddress, setAsDefault, payment_method } = req.body as {
     items?: { item_code: string; item_name?: string; qty: number }[];
     delivery_date?: string;

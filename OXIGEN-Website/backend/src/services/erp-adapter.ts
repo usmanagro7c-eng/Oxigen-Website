@@ -9,6 +9,7 @@ import {
   updateCustomerName,
   ensureAddressLinkedToCustomer,
   createCustomerForEmail,
+  sanitizeErpFilePath,
 } from "../lib/erpnext-client.js";
 import { itemCache } from "../lib/item-cache.js";
 
@@ -1033,8 +1034,13 @@ export class ErpAdapter {
     contentType: string | null;
     buffer: Buffer;
   }> {
+    const safePath = sanitizeErpFilePath(filepath);
+    if (!safePath) {
+      return { ok: false, status: 400, contentType: null, buffer: Buffer.alloc(0) };
+    }
+
     const erpRes = await erpFetch(
-      getErpUrl(`/${filepath}`),
+      getErpUrl(safePath),
       { headers: getErpHeaders() },
     );
 

@@ -3,6 +3,10 @@ import { itemCache } from "../lib/item-cache.js";
 import { logger } from "../lib/logger.js";
 import { ErpAdapter } from "../services/erp-adapter.js";
 import { erpFetch, getErpUrl, getErpHeaders, parseErpError } from "../lib/erpnext-client.js";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { requireAdmin } from "../middlewares/requireAdmin.js";
+
+const requireAdminWrite = [requireAuth, requireAdmin];
 
 const router: IRouter = Router();
 
@@ -12,14 +16,14 @@ router.get("/items/version", (_req, res) => {
 });
 
 // ─── POST /api/items/cache/clear ──────────────────────────────────────────────
-router.post("/items/cache/clear", (_req, res) => {
+router.post("/items/cache/clear", ...requireAdminWrite, (_req, res) => {
   itemCache.clear();
   logger.info("[items] Cache cleared via admin webhook/event");
   res.json({ success: true, version: itemCache.getVersion() });
 });
 
 // ─── POST /api/items ──────────────────────────────────────────────────────────
-router.post("/items", async (req: Request, res: Response) => {
+router.post("/items", ...requireAdminWrite, async (req: Request, res: Response) => {
   try {
     const item = await ErpAdapter.createItem(req.body);
     itemCache.clear();
@@ -93,7 +97,7 @@ router.get("/items/groups", async (_req, res) => {
 });
 
 // POST /api/items/groups
-router.post("/items/groups", async (req: Request, res: Response) => {
+router.post("/items/groups", ...requireAdminWrite, async (req: Request, res: Response) => {
   try {
     const { item_group_name, name, parent_item_group = "All Item Groups", is_group = 0, description, image } = req.body;
     const groupName = item_group_name || name;
@@ -134,7 +138,7 @@ router.post("/items/groups", async (req: Request, res: Response) => {
 });
 
 // PUT /api/items/groups/:name
-router.put("/items/groups/:name", async (req: Request, res: Response) => {
+router.put("/items/groups/:name", ...requireAdminWrite, async (req: Request, res: Response) => {
   try {
     const { name } = req.params;
     const erpRes = await erpFetch(
@@ -162,7 +166,7 @@ router.put("/items/groups/:name", async (req: Request, res: Response) => {
 });
 
 // DELETE /api/items/groups/:name
-router.delete("/items/groups/:name", async (req: Request, res: Response) => {
+router.delete("/items/groups/:name", ...requireAdminWrite, async (req: Request, res: Response) => {
   try {
     const { name } = req.params;
     const erpRes = await erpFetch(
@@ -188,7 +192,7 @@ router.delete("/items/groups/:name", async (req: Request, res: Response) => {
 });
 
 // ─── PUT /api/items/:name ─────────────────────────────────────────────────────
-router.put("/items/:name", async (req: Request, res: Response) => {
+router.put("/items/:name", ...requireAdminWrite, async (req: Request, res: Response) => {
   try {
     const { name } = req.params;
     const { item_name, item_group, standard_rate, description, image, stock_uom, status, images, short_description, web_long_description } = req.body;
@@ -367,14 +371,6 @@ router.put("/items/:name", async (req: Request, res: Response) => {
 
     itemCache.clear();
 
-    // Trigger immediate cache invalidation on the website backend
-    try {
-      const websiteUrl = process.env.WEBSITE_BACKEND_URL || "http://localhost:3002";
-      await fetch(`${websiteUrl}/api/items/cache/clear`, { method: "POST" }).catch(() => {});
-    } catch {
-      /* non-fatal */
-    }
-
     const data: any = await erpRes.json();
     res.json({ data: data.data });
   } catch (err: any) {
@@ -384,7 +380,7 @@ router.put("/items/:name", async (req: Request, res: Response) => {
 });
 
 // ─── DELETE /api/items/:name ──────────────────────────────────────────────────
-router.delete("/items/:name", async (req: Request, res: Response) => {
+router.delete("/items/:name", ...requireAdminWrite, async (req: Request, res: Response) => {
   try {
     const { name } = req.params;
     const itemCode = name;

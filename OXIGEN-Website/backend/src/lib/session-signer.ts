@@ -9,12 +9,36 @@ import { logger } from "./logger.js";
  * `sid` cookie alone. This module signs our own `oxi_session` cookie at login
  * time (HMAC + expiry) so session hydration keeps working without an
  * ERPNext round-trip.
+ *
+ * Security: a dedicated `SESSION_SECRET` is required (falls back to
+ * WEBHOOK_SECRET only as a convenience). There is NO hardcoded default — if
+ * neither is set the server refuses to boot. Per-purpose keys are derived
+ * from the base secret with domain separation so the session key, CSRF key
+ * and webhook key can never collide.
  */
 
-const SESSION_SECRET =
-  process.env["SESSION_SECRET"] ??
-  process.env["WEBHOOK_SECRET"] ??
-  "oxigen-dev-session-secret";
+function getBaseSecret(): string {
+  const base = process.env["SESSION_SECRET"] ?? process.env["WEBHOOK_SECRET"] ?? "";
+  if (!base) {
+    throw new Error(
+      "Missing SESSION_SECRET or WEBHOOK_SECRET — refusing to start with an insecure default.",
+    );
+  }
+  if (base.length < 16) {
+    logger.warn(
+      "SESSION_SECRET/WEBHOOK_SECRET is shorter than 16 characters — please use a strong random secret.",
+    );
+  }
+  return base;
+}
+
+/** Derives a domain-separated signing key for a given purpose. */
+export function getPurposeSecret(purpose: string): string {
+  const base = getBaseSecret();
+  return crypto.createHmac("sha256", base).update(`oxigen:${purpose}`).digest("hex");
+}
+
+const SESSION_SECRET = getPurposeSecret("session");
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 

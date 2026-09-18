@@ -145,7 +145,14 @@ router.post("/customer/change-password", requireAuth, async (req: Request, res: 
 
 // ─── POST /api/customer/profile-image ─────────────────────────────────────────
 import multer from "multer";
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/^image\//i.test(file.mimetype ?? "")) cb(null, true);
+    else cb(new Error("Only image files are allowed."));
+  },
+});
 
 router.post("/customer/profile-image", requireAuth, upload.single("image"), async (req: Request, res: Response) => {
   const email = req.loggedInEmail!;
