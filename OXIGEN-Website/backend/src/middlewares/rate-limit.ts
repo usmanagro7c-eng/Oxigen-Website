@@ -18,6 +18,7 @@ const LIMITS = {
   setPassword:    isDev ? { max: 50,  windowMs: 60 * 60 * 1000 } : { max: 10, windowMs: 60 * 60 * 1000 },
   changePassword: isDev ? { max: 20,  windowMs: 15 * 60 * 1000 } : { max: 5,  windowMs: 15 * 60 * 1000 },
   contact:        isDev ? { max: 50,  windowMs: 60 * 60 * 1000 } : { max: 5,  windowMs: 60 * 60 * 1000 },
+  order:          isDev ? { max: 100, windowMs: 15 * 60 * 1000 } : { max: 10, windowMs: 15 * 60 * 1000 },
   default:        isDev ? { max: 1000, windowMs: 60 * 1000 }     : { max: 100, windowMs: 60 * 1000 },
 } as const;
 
@@ -30,15 +31,34 @@ const cleanupTimer = setInterval(() => {
 }, 30 * 60 * 1000);
 cleanupTimer.unref();
 
+function incrementBucket(key: string, max: number, windowMs: number, now: number): boolean {
+  const entry = store.get(key);
+  if (!entry || now > entry.resetAt) {
+    store.set(key, { count: 1, resetAt: now + windowMs });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > max;
+}
+
 export function createRateLimiter(type: keyof typeof LIMITS) {
   const { max, windowMs } = LIMITS[type];
+
+  const reject = (res: Response) => {
+    const retryAfterSec = Math.ceil(windowMs / 1000);
+    res.setHeader("Retry-After", String(retryAfterSec));
+    res.status(429).json({
+      error: "Too many attempts. Please try again later.",
+    });
+  };
 
   return function rateLimitHandler(
     req: Request,
     res: Response,
     next: NextFunction
   ): void {
-    // Identifier = IP + email (if available) — more precise than IP alone
+    // Per-IP bucket is always enforced — a client-supplied email in the body
+    // can change per request, so it must not be able to mint fresh buckets.
     const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
     const email = (
       (req.body as Record<string, string> | undefined)?.["email"] ??
@@ -46,26 +66,18 @@ export function createRateLimiter(type: keyof typeof LIMITS) {
       ""
     ).toLowerCase().trim();
 
-    const identifier = `${type}:${ip}${email ? `:${email}` : ""}`;
     const now = Date.now();
+    const ipKey = `${type}:${ip}`;
 
-    let entry = store.get(identifier);
-
-    if (!entry || now > entry.resetAt) {
-      entry = { count: 1, resetAt: now + windowMs };
-      store.set(identifier, entry);
-      next();
+    if (incrementBucket(ipKey, max, windowMs, now)) {
+      reject(res);
       return;
     }
 
-    entry.count += 1;
-
-    if (entry.count > max) {
-      const retryAfterSec = Math.ceil((entry.resetAt - now) / 1000);
-      res.setHeader("Retry-After", String(retryAfterSec));
-      res.status(429).json({
-        error: "Too many attempts. Please try again later.",
-      });
+    // Secondary per-account bucket (only when the client supplies an account
+    // identifier) — adds precision without enabling a bypass.
+    if (email && incrementBucket(`${ipKey}:${email}`, max, windowMs, now)) {
+      reject(res);
       return;
     }
 

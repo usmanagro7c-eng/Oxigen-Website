@@ -8,6 +8,7 @@
  * on every ERPNext call.
  */
 
+import { posix } from "path";
 import { Agent, fetch as undiciFetch } from "undici";
 
 // ---------------------------------------------------------------------------
@@ -46,6 +47,49 @@ export function erpFetch(
 export function getErpUrl(path: string): string {
   const base = (process.env["ERPNEXT_URL"] ?? "").replace(/\/$/, "");
   return `${base}${path}`;
+}
+
+const EPR_FILE_BASES = ["/files/", "/private/files/"];
+
+// Only these file types may be proxied from ERPNext. Anything else is an
+// attempt to reach a non-file resource through the file proxy.
+const EPR_FILE_EXTENSIONS = new Set([
+  "jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "bmp", "ico",
+  "heic", "heif", "pdf", "tif", "tiff", "doc", "docx", "xls", "xlsx",
+  "ppt", "pptx", "csv", "txt", "zip",
+]);
+
+/**
+ * Validates and normalizes a path used to proxy files from ERPNext.
+ * Returns the normalized, safe path (e.g. `/files/foo.png`) or `null` when the
+ * input does not resolve inside `/files/` or `/private/files/`. This prevents
+ * path traversal (e.g. `/files/../api/resource/User`) from reaching arbitrary
+ * ERPNext API endpoints with the server credentials.
+ */
+export function sanitizeErpFilePath(rawPath: string): string | null {
+  try {
+    let decoded = rawPath;
+    try {
+      decoded = decodeURIComponent(rawPath);
+    } catch {
+      // Not URL-encodable — leave as-is; normalization below still applies.
+    }
+
+    if (decoded.includes("\\")) return null;
+
+    // Normalize dot-segments so `..` can never escape the file root.
+    const normalized = posix.normalize("/" + decoded.replace(/^\/+/, ""));
+
+    if (!EPR_FILE_BASES.some((base) => normalized.startsWith(base))) return null;
+
+    // Only allow known, inert file extensions.
+    const ext = posix.extname(normalized).toLowerCase().replace(".", "");
+    if (!EPR_FILE_EXTENSIONS.has(ext)) return null;
+
+    return normalized;
+  } catch {
+    return null;
+  }
 }
 
 export interface MultipartPart {

@@ -8,14 +8,99 @@ import { existsSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { doubleCsrf } from "csrf-csrf";
+import { isIP } from "net";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 import { rateLimitMiddleware } from "./middlewares/rate-limit.js";
 import { getQueueStats } from "./lib/order-queue.js";
-import { erpFetch, getErpUrl, getErpHeaders } from "./lib/erpnext-client.js";
+import { erpFetch, getErpUrl, getErpHeaders, sanitizeErpFilePath } from "./lib/erpnext-client.js";
+import { getPurposeSecret } from "./lib/session-signer.js";
 
 const app: Express = express();
-app.set('trust proxy', 1);
+
+// ── Trust proxy ──────────────────────────────────────────────────────────────
+// Never trust a random `X-Forwarded-For`. Only honour forwarded headers when
+// the immediate peer is one of the `TRUSTED_PROXIES` (IPs or CIDR ranges,
+// comma-separated). Behind nginx this must be `127.0.0.1`. Without this, any
+// client that can reach the backend directly can spoof XFF and bypass both
+// rate limiting and the CSRF IP fallback.
+function ipToBytes(ip: string): Buffer | null {
+  if (isIP(ip) === 4) {
+    return Buffer.from(ip.split(".").map((octet) => Number(octet)));
+  }
+  if (isIP(ip) === 6) {
+    const doubleColon = ip.indexOf("::");
+    let head: string[] = [];
+    let tail: string[] = [];
+    if (doubleColon !== -1) {
+      const left = ip.slice(0, doubleColon);
+      const right = ip.slice(doubleColon + 2);
+      head = left ? left.split(":") : [];
+      tail = right ? right.split(":") : [];
+    } else {
+      head = ip.split(":");
+    }
+    const parseGroup = (group: string): Buffer | null => {
+      if (group === "") return null;
+      const value = parseInt(group, 16);
+      if (Number.isNaN(value) || value < 0 || value > 0xffff) return null;
+      const buf = Buffer.alloc(2);
+      buf.writeUInt16BE(value);
+      return buf;
+    };
+    const headBuf = head.map(parseGroup);
+    const tailBuf = tail.map(parseGroup);
+    if (headBuf.includes(null) || tailBuf.includes(null)) return null;
+    const missing = 8 - headBuf.length - tailBuf.length;
+    if (missing < 0) return null;
+    return Buffer.concat([...(headBuf as Buffer[]), Buffer.alloc(2 * missing), ...(tailBuf as Buffer[])]);
+  }
+  return null;
+}
+
+function ipInCidr(cidr: string, ip: string): boolean {
+  const [range, bitsRaw] = cidr.split("/").map((part) => part.trim());
+  if (!range) return false;
+  const ver = isIP(range);
+  if (ver === 0) return false;
+  const bits =
+    bitsRaw !== undefined
+      ? Number(bitsRaw)
+      : ver === 4 ? 32 : 128;
+  if (!Number.isInteger(bits)) return false;
+  const a = ipToBytes(range);
+  const b = ipToBytes(ip);
+  if (!a || !b || a.length !== b.length) return false;
+  const maxBits = a.length * 8;
+  const n = Math.min(bits, maxBits);
+  const fullBytes = n >> 3;
+  const rem = n & 7;
+  for (let i = 0; i < fullBytes; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  if (rem > 0) {
+    const mask = 0xff << (8 - rem);
+    if ((a[fullBytes] & mask) !== (b[fullBytes] & mask)) return false;
+  }
+  return true;
+}
+
+const trustedProxies = (process.env["TRUSTED_PROXIES"] ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+if (trustedProxies.length > 0) {
+  app.set("trust proxy", (ip: string): boolean =>
+    trustedProxies.some((rule) => rule === ip || ipInCidr(rule, ip)),
+  );
+  logger.info({ trustedProxies }, "trust proxy: restricted to configured proxies");
+} else {
+  logger.warn(
+    "TRUSTED_PROXIES is not set — trusting a single proxy hop. Set TRUSTED_PROXIES=127.0.0.1 (nginx) in production.",
+  );
+  app.set("trust proxy", 1);
+}
 
 // Request ID Middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -61,7 +146,6 @@ const allowedOrigins = Array.from(
     ...configuredOrigins,
     "http://localhost:5173",
     "http://localhost:8080",
-    "http://192.168.90.113:8080",
     "https://testing.oxigen.com.pk"
   ])
 );
@@ -88,7 +172,6 @@ app.use(
       "X-Requested-With",
       "X-CSRF-Token",
     ],
-    exposedHeaders: ["Set-Cookie"],
     maxAge: 86400, // 24 hours preflight cache
   })
 );
@@ -141,7 +224,7 @@ const {
   generateCsrfToken,
   doubleCsrfProtection,
 } = doubleCsrf({
-  getSecret: () => process.env["WEBHOOK_SECRET"] ?? "csrf-secret",
+  getSecret: () => getPurposeSecret("csrf"),
   getSessionIdentifier: (req) =>
     // Use the ERPNext session cookie as the stable session identifier.
     // For unauthenticated requests (signup, contact) fall back to IP.
@@ -171,7 +254,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     req.path.startsWith("/api/auth/login") ||
     req.path.startsWith("/api/auth/signup") ||
     req.path.startsWith("/api/webhooks") ||
-    req.path.startsWith("/api/items/cache/clear") ||
     req.path.startsWith("/api/admin/notifications") ||
     req.path.startsWith("/api/notifications")
   ) {
@@ -211,27 +293,39 @@ app.get(["/files/*", "/private/files/*", "/api/files/*", "/api/private/files/*"]
       targetPath = targetPath.replace("/api/private/files/", "/private/files/");
     }
 
-    let erpUrl = getErpUrl(targetPath);
+    // Reject traversal so the file proxy can never reach arbitrary ERPNext
+    // API endpoints with the server API-key credentials.
+    const safePath = sanitizeErpFilePath(targetPath);
+    if (!safePath) {
+      res.status(400).send("Invalid file path.");
+      return;
+    }
+
+    let erpUrl = getErpUrl(safePath);
     let erpRes = await erpFetch(erpUrl, {
       headers: getErpHeaders(),
     });
 
-    // Fallback: If 403 / 404 and targetPath was /private/files/, try public /files/ (or vice-versa)
-    if (!erpRes.ok && targetPath.includes("/private/files/")) {
-      const fallbackPath = targetPath.replace("/private/files/", "/files/");
-      const fallbackRes = await erpFetch(getErpUrl(fallbackPath), {
-        headers: getErpHeaders(),
-      });
-      if (fallbackRes.ok) {
-        erpRes = fallbackRes;
+    // Fallback: If 403 / 404 and safePath was /private/files/, try public /files/ (or vice-versa)
+    if (!erpRes.ok && safePath.includes("/private/files/")) {
+      const fallbackSafe = sanitizeErpFilePath(safePath.replace("/private/files/", "/files/"));
+      if (fallbackSafe) {
+        const fallbackRes = await erpFetch(getErpUrl(fallbackSafe), {
+          headers: getErpHeaders(),
+        });
+        if (fallbackRes.ok) {
+          erpRes = fallbackRes;
+        }
       }
-    } else if (!erpRes.ok && targetPath.includes("/files/")) {
-      const fallbackPath = targetPath.replace("/files/", "/private/files/");
-      const fallbackRes = await erpFetch(getErpUrl(fallbackPath), {
-        headers: getErpHeaders(),
-      });
-      if (fallbackRes.ok) {
-        erpRes = fallbackRes;
+    } else if (!erpRes.ok && safePath.includes("/files/")) {
+      const fallbackSafe = sanitizeErpFilePath(safePath.replace("/files/", "/private/files/"));
+      if (fallbackSafe) {
+        const fallbackRes = await erpFetch(getErpUrl(fallbackSafe), {
+          headers: getErpHeaders(),
+        });
+        if (fallbackRes.ok) {
+          erpRes = fallbackRes;
+        }
       }
     }
 
@@ -296,7 +390,7 @@ app.use((err: Error & { statusCode?: number; status?: number }, req: Request, re
       process.env.NODE_ENV === "production"
         ? "Internal Server Error"
         : err.message || "Something went wrong",
-    ...(process.env.NODE_ENV !== "production" && { stack: err.stack }),
+    ...(process.env["DEBUG"] === "true" && { stack: err.stack }),
   });
 });
 

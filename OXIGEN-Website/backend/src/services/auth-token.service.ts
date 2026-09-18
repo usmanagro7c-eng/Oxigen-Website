@@ -92,7 +92,7 @@ export const authTokenService = {
    */
   verifyToken(rawToken: string, email: string): boolean {
     const hashedToken = hashToken(rawToken);
-    logger.info({ email, hashedToken, rawToken }, "[authTokenService.verifyToken] Attempting verification");
+    logger.info({ email, hashedToken }, "[authTokenService.verifyToken] Attempting verification");
     const entry = tokenStore.get(hashedToken);
 
     if (!entry) {

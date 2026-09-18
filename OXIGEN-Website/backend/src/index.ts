@@ -19,6 +19,7 @@ const requiredEnv = [
   "FRONTEND_ORIGIN",
   "FRONTEND_URL",
   "WEBHOOK_SECRET",
+  "SESSION_SECRET",
 ];
 
 for (const env of requiredEnv) {
@@ -39,10 +40,17 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const server = app.listen(port, () => {
+// Bind address — default to 0.0.0.0, but production should set 127.0.0.1
+// when nginx (or another reverse proxy) forwards to this port. Binding to
+// loopback prevents anyone from reaching the backend directly, which
+// eliminates X-Forwarded-For spoofing.
+const bindAddress = process.env["BIND_ADDRESS"] ?? "0.0.0.0";
+
+const server = app.listen(port, bindAddress, () => {
   logger.info(
     {
       port,
+      bindAddress,
       env: process.env["NODE_ENV"] || "development",
       frontend: process.env["FRONTEND_ORIGIN"],
     },
