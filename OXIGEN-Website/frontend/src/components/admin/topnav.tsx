@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 
 import { useAuthStore } from "@/lib/admin-auth-store";
 import { API_BASE } from "@/lib/admin-api";
+import { useStore } from "@/lib/store";
 
 export function TopNav({ onMobileOpen }: { onMobileOpen: () => void }) {
   const [dark, setDark] = useState(false);
@@ -28,6 +29,7 @@ export function TopNav({ onMobileOpen }: { onMobileOpen: () => void }) {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const { signOut } = useStore();
   const email = user?.email ?? "";
   const fullName = user?.full_name ?? email.split("@")[0] ?? "OxiGen Admin";
   const initials = fullName
@@ -183,8 +185,9 @@ export function TopNav({ onMobileOpen }: { onMobileOpen: () => void }) {
                 <button
                   onClick={async () => {
                     setProfileOpen(false);
-                    await logout();
-                    navigate({ to: "/" });
+                    navigate({ to: "/signin" });
+                    void logout();
+                    void signOut();
                   }}
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
                 >
