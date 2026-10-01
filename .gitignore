@@ -32,6 +32,7 @@ lerna-debug.log*
 *.local
 cookies.txt
 *.cookies.txt
+oxigen env
 
 # Backend Local Data
 backend/data/

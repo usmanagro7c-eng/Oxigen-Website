@@ -8,3 +8,7 @@ workers_dev = true
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+
+[[services]]
+binding = "VERIFICATION"
+service = "verification"
