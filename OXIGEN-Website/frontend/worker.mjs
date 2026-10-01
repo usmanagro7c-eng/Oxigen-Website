@@ -2,26 +2,34 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // ─── Verification Worker via Service Binding ───
+    // ─── Verification portal ───
+    // The portal is a separate Worker with its own origin. It cannot be mounted
+    // under this origin: it is built for the site root, so it emits root-absolute
+    // asset URLs (/assets/*) that collide with this site's SPA assets, and its
+    // client-side router resolves "/" to this site instead. Redirect instead.
     if (
       url.pathname === "/verification" ||
       url.pathname.startsWith("/verification/")
     ) {
-      const targetUrl = new URL(request.url);
+      const origin = env.VERIFICATION_ORIGIN;
+      if (!origin) {
+        return apiResponse(503, {
+          error: "Verification portal not configured",
+        });
+      }
 
-      // Remove /verification prefix before forwarding
-      targetUrl.pathname =
-        url.pathname.replace(/^\/verification/, "") || "/";
+      const target = new URL(origin);
+      target.pathname =
+        url.pathname.slice("/verification".length) || "/";
+      target.search = url.search;
 
-      // Keep query parameters
-      targetUrl.search = url.search;
-
-      const verificationRequest = new Request(
-        targetUrl.toString(),
-        request
-      );
-
-      return await env.VERIFICATION.fetch(verificationRequest);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: target.toString(),
+          "Cache-Control": "no-store",
+        },
+      });
     }
 
     // ─── API / Files reverse proxy ───

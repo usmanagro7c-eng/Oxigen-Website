@@ -9,6 +9,5 @@ directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
-[[services]]
-binding = "VERIFICATION"
-service = "verification"
+[vars]
+VERIFICATION_ORIGIN = "https://verification.usman-agro7c.workers.dev"
