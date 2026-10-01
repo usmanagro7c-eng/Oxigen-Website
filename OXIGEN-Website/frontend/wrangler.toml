@@ -7,7 +7,6 @@ workers_dev = true
 [assets]
 directory = "./dist"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
 
 [vars]
 VERIFICATION_ORIGIN = "https://verification.usman-agro7c.workers.dev"

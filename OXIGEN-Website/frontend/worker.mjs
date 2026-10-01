@@ -120,9 +120,24 @@ export default {
       });
     }
 
-    // ─── Static assets / SPA ───
+    // ─── Static assets / SPA fallback ───
+    // `not_found_handling` is deliberately off. The assets binding's SPA
+    // catch-all gets edge-cached and then shadows the routes handled above,
+    // so this Worker stays the single router and resolves index.html itself.
+    // Never fall back under /assets: a missing file must 404, not return HTML.
     try {
-      return await env.ASSETS.fetch(request);
+      const resp = await env.ASSETS.fetch(request);
+
+      if (
+        resp.status === 404 &&
+        !url.pathname.startsWith("/assets/")
+      ) {
+        return await env.ASSETS.fetch(
+          new Request(new URL("/index.html", url).toString())
+        );
+      }
+
+      return resp;
     } catch (e) {
       return apiResponse(500, {
         error: "worker asset error",
