@@ -83,7 +83,8 @@ function NewWizard() {
           // The wizard used to fall back to a hardcoded "General" group, which
           // does not exist in ERPNext — the save then failed server-side with an
           // opaque 500. Stop here with the actual reason instead.
-          const groupError = groupValidationError(itemGroups, restForm.category);
+          const resolvedWizardGroup = resolveGroupValue(itemGroups, restForm.category);
+          const groupError = groupValidationError(itemGroups, resolvedWizardGroup);
           if (groupError) {
             console.error("Wizard creation blocked:", groupError);
             return;
@@ -91,7 +92,7 @@ function NewWizard() {
 
           const payload: any = {
             item_name: restForm.name || "New Product",
-            item_group: restForm.category,
+            item_group: resolvedWizardGroup,
             standard_rate: Number(String(restForm.price || "").replace(/[^0-9.]/g, "")) || 1000,
             stock_uom: "Nos",
             description: restForm.description || "",

@@ -1528,9 +1528,11 @@ function RecordModal({
           : (initial?.image ? [initial.image] : []);
         if (!seed.image && Array.isArray(seed.images) && seed.images.length) seed.image = seed.images[0];
         if (mode === "create" && !seed.status) seed.status = "Enable";
+        if (mode === "create" && !seed.item_group) seed.item_group = resolveGroupValue(itemGroups, "");
       } else if (slug === "inventory") {
         if (mode === "create" && !seed.status) seed.status = "In stock";
         seed.warehouse = "Stores - O";
+        if (mode === "create" && !seed.item_group) seed.item_group = resolveGroupValue(itemGroups, "");
       } else if (slug === "discounts") {
         if (mode === "create" && !seed.rate_or_discount) seed.rate_or_discount = "Discount Percentage";
         if (mode === "create" && !seed.title) seed.title = "Discount " + (seed.item_code || "");
@@ -2912,9 +2914,10 @@ function LiveTablePage({
 
           const chosenStatus = formData.status || "Enable";
 
-          // Never send a placeholder group: ERPNext rejects unknown links and
-          // the user sees an opaque 500. Fail with the real reason instead.
-          const groupError = groupValidationError(itemGroups, formData.item_group);
+          // Resolve the displayed default (first group) when the user leaves the
+          // field untouched, so we never validate/save an empty value.
+          const resolvedGroup = resolveGroupValue(itemGroups, formData.item_group);
+          const groupError = groupValidationError(itemGroups, resolvedGroup);
           if (groupError) {
             pushToast("error", groupError);
             return;
@@ -2924,7 +2927,7 @@ function LiveTablePage({
             item_name: formData.name || autoSku,
             item_code: autoSku || undefined,
             sku: autoSku || undefined,
-            item_group: formData.item_group,
+            item_group: resolvedGroup,
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")) || 0,
             stock_qty: Number(formData.stock) || 0,
             stock_uom: "Nos",
@@ -2947,7 +2950,8 @@ function LiveTablePage({
           const chosenStatus = formData.status || "In stock";
           const stockQty = chosenStatus === "Out of stock" ? 0 : (Number(formData.stock ?? formData.actual_qty) || 0);
 
-          const groupError = groupValidationError(itemGroups, formData.item_group);
+          const resolvedGroup = resolveGroupValue(itemGroups, formData.item_group);
+          const groupError = groupValidationError(itemGroups, resolvedGroup);
           if (groupError) {
             pushToast("error", groupError);
             return;
@@ -2957,7 +2961,7 @@ function LiveTablePage({
             item_name: formData.name || autoSku,
             item_code: autoSku || undefined,
             sku: autoSku || undefined,
-            item_group: formData.item_group,
+            item_group: resolvedGroup,
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")) || 0,
             stock_qty: stockQty,
             stock_uom: "Nos",
@@ -3020,7 +3024,8 @@ function LiveTablePage({
         // Edit mode
         const recordName = modal.row?.rawKey || modal.row?.name || modal.row?.id || modal.row?.rawId;
         if (slug === "products") {
-          const groupError = groupValidationError(itemGroups, formData.item_group);
+          const resolvedGroup = resolveGroupValue(itemGroups, formData.item_group);
+          const groupError = groupValidationError(itemGroups, resolvedGroup);
           if (groupError) {
             pushToast("error", groupError);
             return;
@@ -3028,7 +3033,7 @@ function LiveTablePage({
 
           await updateItem(recordName, {
             item_name: formData.name,
-            item_group: formData.item_group,
+            item_group: resolvedGroup,
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")),
             description: formData.description,
             short_description: formData.short_description || "",
