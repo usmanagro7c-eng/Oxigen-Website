@@ -185,7 +185,9 @@ export const authController = {
 
       res.json({
         success: true,
-        message: result.message,
+        // ERPNext answers "No App" for Website Users, which is meaningless to
+        // API consumers. Report a real confirmation instead.
+        message: "Signed in successfully.",
         user: {
           email: usr,
           name: fullName || usr,

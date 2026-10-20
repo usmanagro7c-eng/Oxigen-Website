@@ -8,6 +8,7 @@ import { ErpAdapter } from "../services/erp-adapter.js";
 import { createRateLimiter } from "../middlewares/rate-limit.js";
 import { validate, changePasswordSchema } from "../lib/validation.js";
 import { notifyAdminOfOrder } from "../lib/admin-notify.js";
+import { hiddenOrders } from "../lib/hidden-orders.js";
 
 const router: IRouter = Router();
 
@@ -147,23 +148,22 @@ router.post("/user/addresses", requireAuth, async (req, res) => {
       const contactName = contactData.data?.[0]?.name;
       if (contactName) {
         links.push({ link_doctype: "Contact", link_name: contactName });
-        const linkParams = new URLSearchParams({
-          fields: JSON.stringify(["link_name"]),
-          filters: JSON.stringify([
-            ["parent", "=", contactName],
-            ["link_doctype", "=", "Customer"],
-          ]),
-          limit_page_length: "1",
-        });
-        const linkRes = await erpFetch(
-          getErpUrl(`/api/resource/Dynamic Link?${linkParams.toString()}`),
+        // Read the Customer link from the Contact document itself: the
+        // Dynamic Link resource endpoint does not return child-table fields,
+        // so a filtered read of it yields only `name` and never `link_name`.
+        const fullContactRes = await erpFetch(
+          getErpUrl(`/api/resource/Contact/${encodeURIComponent(contactName)}`),
           { headers: getErpHeaders() },
         );
-        if (linkRes.ok) {
-          const linkData = (await linkRes.json()) as { data: { link_name: string }[] };
-          const customerName = linkData.data?.[0]?.link_name;
-          if (customerName) {
-            links.push({ link_doctype: "Customer", link_name: customerName });
+        if (fullContactRes.ok) {
+          const fullContact = (await fullContactRes.json()) as {
+            data?: { links?: { link_doctype: string; link_name: string }[] };
+          };
+          const customerLink = (fullContact.data?.links ?? []).find(
+            (l) => l.link_doctype === "Customer",
+          );
+          if (customerLink?.link_name) {
+            links.push({ link_doctype: "Customer", link_name: customerLink.link_name });
           }
         }
       }
@@ -500,7 +500,11 @@ router.get("/user/orders", requireAuth, async (req, res) => {
       };
     });
 
-    res.json({ data: enriched });
+    // Orders the customer removed are hidden from their dashboard.
+    const hidden = new Set(hiddenOrders.listFor(email));
+    const visible = hidden.size > 0 ? enriched.filter((o: any) => !hidden.has(o.name)) : enriched;
+
+    res.json({ data: visible });
   } catch (err) {
     logger.error({ err: err }, "[user/orders GET]");
     res.status(500).json({ error: "Internal server error." });
@@ -824,7 +828,48 @@ router.post("/user/orders/:name/delete", requireAuth, async (req, res) => {
       return;
     }
 
-    // 4) Permanently delete from ERPNext
+    // 4) Remove the linked Sales Invoice first.
+    // A Sales Order cannot be deleted while a Sales Invoice still points at it
+    // (ERPNext raises a link-exists error). The invoice created for the order
+    // is cancelled by the return flow, but a cancelled invoice still blocks
+    // the delete — so cancel it if needed and then remove it.
+    const invoiceName = await findLinkedSalesInvoice(name as string, customerName);
+    if (invoiceName) {
+      const siRes = await erpFetch(
+        getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(invoiceName)}`),
+        { headers: getErpHeaders() }
+      );
+      if (siRes.ok) {
+        const siDoc: any = ((await siRes.json()) as any).data;
+        if (Number(siDoc?.docstatus) === 1) {
+          await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
+            method: "POST",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ doctype: "Sales Invoice", name: invoiceName }),
+          });
+        }
+        const siDelete = await erpFetch(
+          getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(invoiceName)}`),
+          { method: "DELETE", headers: getErpHeaders() }
+        );
+        if (!siDelete.ok) {
+          const err = (await siDelete.json().catch(() => ({}))) as {
+            _server_messages?: string;
+            message?: string;
+          };
+          logger.warn(
+            { err, invoiceName },
+            "[user/orders/:name/delete POST] linked Sales Invoice could not be deleted"
+          );
+        }
+      }
+    }
+
+    // 5) Permanently delete from ERPNext.
+    // ERPNext keeps the accounting trail — a Sales Order whose invoice posted
+    // stock cannot be physically deleted (Stock Ledger Entry link). When that
+    // happens the order is hidden from the customer's dashboard instead, which
+    // is what "Remove Order" means to the shopper.
     const deleteRes = await erpFetch(
       getErpUrl(`/api/resource/Sales Order/${encodeURIComponent(name as string)}`),
       { method: "DELETE", headers: getErpHeaders() },
@@ -836,12 +881,29 @@ router.post("/user/orders/:name/delete", requireAuth, async (req, res) => {
         message?: string;
         exception?: string;
       };
-      res.status(deleteRes.status).json({
-        error: parseErpError(err) || err.message || "Failed to delete the order.",
+      const detail = parseErpError(err) || err.message || "Failed to delete the order.";
+
+      // Already gone in ERPNext — nothing left to hide.
+      if (deleteRes.status === 404) {
+        hiddenOrders.hide(email, name as string);
+        res.json({ message: "Order removed from your orders." });
+        return;
+      }
+
+      // Blocked by an accounting link: hide it instead of failing the request.
+      logger.warn(
+        { detail, order: name },
+        "[user/orders/:name/delete POST] order retained in ERPNext; hidden from dashboard"
+      );
+      hiddenOrders.hide(email, name as string);
+      res.json({
+        message: "Order removed from your orders.",
+        retainedInErp: true,
       });
       return;
     }
 
+    hiddenOrders.hide(email, name as string);
     res.json({ message: "Order deleted successfully." });
   } catch (err) {
     logger.error({ err: err }, "[user/orders/:name/delete POST]");

@@ -198,6 +198,45 @@ export const ensureAddressLinkedToCustomer = async (
   addressName: string,
   customerName: string,
 ): Promise<boolean> => {
-  // Intentionally stubbed as the logic is now handled in order-queue.ts
-  return true;
+  if (!addressName || !customerName) return false;
+
+  try {
+    const res = await erpFetch(
+      getErpUrl(`/api/resource/Address/${encodeURIComponent(addressName)}`),
+      { headers: getErpHeaders() },
+    );
+    if (!res.ok) return false;
+
+    const json = (await res.json()) as {
+      data?: { links?: { link_doctype: string; link_name: string }[] };
+    };
+    const links = json.data?.links ?? [];
+
+    if (links.some((l) => l.link_doctype === "Customer" && l.link_name === customerName)) {
+      return true;
+    }
+
+    // Add the missing Customer link. ERPNext rejects a Sales Order whose
+    // billing/shipping address is not linked to the customer, so this link is
+    // what makes checkout work for addresses saved before the link existed.
+    const merged = [
+      ...links,
+      ...(links.some((l) => l.link_doctype === "Customer")
+        ? []
+        : [{ link_doctype: "Customer", link_name: customerName }]),
+    ];
+
+    const upd = await erpFetch(
+      getErpUrl(`/api/resource/Address/${encodeURIComponent(addressName)}`),
+      {
+        method: "PUT",
+        headers: { ...getErpHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ links: merged }),
+      },
+    );
+
+    return upd.ok;
+  } catch {
+    return false;
+  }
 };

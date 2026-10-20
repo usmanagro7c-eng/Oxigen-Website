@@ -10,6 +10,63 @@ import { logger } from "../lib/logger.js";
 export const frappeService = {
   // ── Customer lookup ─────────────────────────────────────────────────────────
 
+  /**
+   * Makes sure a Contact carries a Dynamic Link to its Customer.
+   *
+   * ERPNext creates a Contact automatically when a Website User is created and
+   * that Contact has no Customer link. Addresses are linked to the Contact,
+   * and a Sales Order is rejected ("Billing Address does not belong to …")
+   * unless the address chain reaches the Customer.
+   */
+  async ensureContactLinkedToCustomer(contactName: string, customerName: string): Promise<boolean> {
+    if (!contactName || !customerName) return false;
+    try {
+      const res = await erpFetch(
+        getErpUrl(`/api/resource/Contact/${encodeURIComponent(contactName)}`),
+        { headers: getErpHeaders() },
+      );
+      if (!res.ok) return false;
+
+      const json = (await res.json()) as {
+        data?: { links?: { link_doctype: string; link_name: string }[] };
+      };
+      const links = json.data?.links ?? [];
+      if (links.some((l) => l.link_doctype === "Customer" && l.link_name === customerName)) {
+        return true;
+      }
+
+      const merged = [
+        ...links,
+        ...(links.some((l) => l.link_doctype === "Customer")
+          ? []
+          : [{ link_doctype: "Customer", link_name: customerName }]),
+      ];
+
+      const upd = await erpFetch(
+        getErpUrl(`/api/resource/Contact/${encodeURIComponent(contactName)}`),
+        {
+          method: "PUT",
+          headers: { ...getErpHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ links: merged }),
+        },
+      );
+
+      if (!upd.ok) {
+        logger.warn(
+          { contactName, customerName, status: upd.status },
+          "[frappeService.ensureContactLinkedToCustomer] link update failed"
+        );
+      }
+      return upd.ok;
+    } catch (err) {
+      logger.warn(
+        { err, contactName },
+        "[frappeService.ensureContactLinkedToCustomer] failed"
+      );
+      return false;
+    }
+  },
+
   async findCustomerByEmail(email: string): Promise<string> {
     const params = new URLSearchParams({
       fields: JSON.stringify(["name", "customer_name", "email_id"]),
@@ -26,7 +83,10 @@ export const frappeService = {
     const data = (await res.json()) as { data: { name: string }[] };
     let customerName = data.data?.[0]?.name ?? "";
 
-    // Fallback: lookup via Contact → Dynamic Link
+    // Fallback: lookup via Contact → its `links` child table.
+    // NOTE: the Dynamic Link *resource* endpoint does not expose child-table
+    // fields (a filtered read returns only `name`, never `link_name`), so the
+    // link has to be read from the parent Contact document instead.
     if (!customerName) {
       const contactParams = new URLSearchParams({
         fields: JSON.stringify(["name"]),
@@ -41,21 +101,18 @@ export const frappeService = {
         const contactData = (await contactRes.json()) as { data: { name: string }[] };
         const contactName = contactData.data?.[0]?.name;
         if (contactName) {
-          const linkParams = new URLSearchParams({
-            fields: JSON.stringify(["link_name"]),
-            filters: JSON.stringify([
-              ["parent", "=", contactName],
-              ["link_doctype", "=", "Customer"],
-            ]),
-            limit_page_length: "1",
-          });
-          const linkRes = await erpFetch(
-            getErpUrl(`/api/resource/Dynamic Link?${linkParams.toString()}`),
+          const fullContactRes = await erpFetch(
+            getErpUrl(`/api/resource/Contact/${encodeURIComponent(contactName)}`),
             { headers: getErpHeaders() },
           );
-          if (linkRes.ok) {
-            const linkData = (await linkRes.json()) as { data: { link_name: string }[] };
-            customerName = linkData.data?.[0]?.link_name ?? "";
+          if (fullContactRes.ok) {
+            const fullContact = (await fullContactRes.json()) as {
+              data?: { links?: { link_doctype: string; link_name: string }[] };
+            };
+            const customerLink = (fullContact.data?.links ?? []).find(
+              (l) => l.link_doctype === "Customer",
+            );
+            customerName = customerLink?.link_name ?? "";
           }
         }
       }
@@ -134,7 +191,15 @@ export const frappeService = {
       );
       if (existingContactRes.ok) {
         const existingData = (await existingContactRes.json()) as { data: { name?: string }[] };
-        if (existingData.data?.[0]?.name) return customerName;
+        const existingName = existingData.data?.[0]?.name;
+        if (existingName) {
+          // ERPNext creates a Contact automatically for a new Website User, and
+          // that one carries no Customer link. Add it — without it the
+          // customer's addresses cannot be linked to the Customer and a Sales
+          // Order is rejected with "Billing Address does not belong to ...".
+          await frappeService.ensureContactLinkedToCustomer(existingName, customerName);
+          return customerName;
+        }
       }
     } catch {
       // best-effort dedupe lookup, non-fatal
@@ -215,18 +280,23 @@ export const frappeService = {
         const contactName = contactData.data?.[0]?.name;
         if (contactName) {
           links.push({ link_doctype: "Contact", link_name: contactName });
-          const linkRes = await erpFetch(
-            getErpUrl(`/api/resource/Dynamic Link?${new URLSearchParams({
-              fields: JSON.stringify(["link_name"]),
-              filters: JSON.stringify([["parent", "=", contactName], ["link_doctype", "=", "Customer"]]),
-              limit_page_length: "1",
-            }).toString()}`),
+          // Read the Customer link from the Contact document itself: the
+          // Dynamic Link resource endpoint does not return child-table fields,
+          // so a filtered read of it yields only `name` and never `link_name`.
+          const fullContactRes = await erpFetch(
+            getErpUrl(`/api/resource/Contact/${encodeURIComponent(contactName)}`),
             { headers: getErpHeaders() },
           );
-          if (linkRes.ok) {
-            const linkData = (await linkRes.json()) as { data: { link_name: string }[] };
-            const customerName = linkData.data?.[0]?.link_name;
-            if (customerName) links.push({ link_doctype: "Customer", link_name: customerName });
+          if (fullContactRes.ok) {
+            const fullContact = (await fullContactRes.json()) as {
+              data?: { links?: { link_doctype: string; link_name: string }[] };
+            };
+            const customerLink = (fullContact.data?.links ?? []).find(
+              (l) => l.link_doctype === "Customer",
+            );
+            if (customerLink?.link_name) {
+              links.push({ link_doctype: "Customer", link_name: customerLink.link_name });
+            }
           }
         }
       }
