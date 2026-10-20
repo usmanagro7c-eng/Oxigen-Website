@@ -918,11 +918,37 @@ export class ErpAdapter {
    * fallback, selling price, slideshow images, and warehouse stock.
    */
   static async fetchWebsiteItemDetails(name: string): Promise<Record<string, unknown>> {
-    // Try the Website Item doctype first
-    const webRes = await erpFetch(
+    // Resolve the Website Item document. `name` may be either the Website Item
+    // document name (e.g. "WEB-ITM-0001") or the item_code (e.g. "NUTRI-CEPT"),
+    // so fall back to a filter lookup when the direct fetch misses.
+    let resolvedName = name;
+    let webRes = await erpFetch(
       getErpUrl(`/api/resource/Website Item/${encodeURIComponent(name)}`),
       { headers: getErpHeaders() },
     );
+
+    if (!webRes.ok) {
+      const searchRes = await erpFetch(
+        getErpUrl(`/api/resource/Website Item?${new URLSearchParams({
+          fields: JSON.stringify(["name", "item_code"]),
+          filters: JSON.stringify([["item_code", "=", name]]),
+          limit_page_length: "1",
+        }).toString()}`),
+        { headers: getErpHeaders() },
+      ).catch(() => null);
+
+      const doc = searchRes?.ok
+        ? ((await searchRes.json().catch(() => ({ data: [] }))) as { data?: { name: string }[] }).data?.[0]
+        : undefined;
+
+      if (doc?.name) {
+        resolvedName = doc.name;
+        webRes = await erpFetch(
+          getErpUrl(`/api/resource/Website Item/${encodeURIComponent(resolvedName)}`),
+          { headers: getErpHeaders() },
+        );
+      }
+    }
 
     if (!webRes.ok) {
       throw new Error("Item not found in Website Item.");
@@ -931,7 +957,7 @@ export class ErpAdapter {
     const webData = (await webRes.json()) as { data: Record<string, unknown> };
     const item = webData.data;
     const itemCode = item["item_code"] as string | undefined;
-    logger.info({ name, itemCode }, "[ErpAdapter] Website Item lookup");
+    logger.info({ name, resolvedName, itemCode }, "[ErpAdapter] Website Item lookup");
 
     // ── Fetch valuation_rate + image fallback from the Item doctype ──────
     let valuation_rate = 0;
