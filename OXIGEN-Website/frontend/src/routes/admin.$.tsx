@@ -3757,8 +3757,9 @@ function BannerModal({
       onSaved();
     } catch (err: any) {
       pushToast("error", err.message || "Failed to save banner");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (

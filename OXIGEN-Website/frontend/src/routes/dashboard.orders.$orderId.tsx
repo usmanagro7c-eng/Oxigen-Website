@@ -484,17 +484,22 @@ function PaymentModal({
   const handleSubmit = async () => {
     setSaving(true);
     setError("");
-    const ok = await paymentOrder(orderId, {
-      mode_of_payment: form.mode_of_payment || "Cash",
-      amount: Number(form.amount) > 0 ? Number(form.amount) : undefined,
-      reference_no: form.reference_no || undefined,
-    });
-    setSaving(false);
-    if (!ok) {
-      setError("Payment could not be recorded. Please try again.");
-      return;
+    try {
+      const ok = await paymentOrder(orderId, {
+        mode_of_payment: form.mode_of_payment || "Cash",
+        amount: Number(form.amount) > 0 ? Number(form.amount) : undefined,
+        reference_no: form.reference_no || undefined,
+      });
+      if (!ok) {
+        setError("Payment could not be recorded. Please try again.");
+        return;
+      }
+      onDone();
+    } catch (err: any) {
+      setError(err?.message || "Payment could not be recorded. Please try again.");
+    } finally {
+      setSaving(false);
     }
-    onDone();
   };
 
   return (
