@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Breadcrumb, Header, GlassCard, FieldGroup, Input, Select } from "@/components/admin/glass-form";
 import { createItem, createItemGroup, createErpDoc, getItemGroups, uploadAdminFile, getItemImageUrl, type ItemGroup } from "@/lib/admin-api";
+import { selectableGroups, resolveGroupValue, groupValidationError } from "@/lib/item-groups";
 
 export const Route = createFileRoute("/admin/new/$kind")({
   head: ({ params }) => ({ meta: [{ title: `Create ${params.kind.replace("-"," ")} — OxiGen Admin` }] }),
@@ -71,9 +72,19 @@ function NewWizard() {
       try {
         if (kind === "product") {
           const { image, imageUrl, ...restForm } = formData;
+
+          // The wizard used to fall back to a hardcoded "General" group, which
+          // does not exist in ERPNext — the save then failed server-side with an
+          // opaque 500. Stop here with the actual reason instead.
+          const groupError = groupValidationError(itemGroups, restForm.category);
+          if (groupError) {
+            console.error("Wizard creation blocked:", groupError);
+            return;
+          }
+
           const payload: any = {
             item_name: restForm.name || "New Product",
-            item_group: restForm.category || (itemGroups[0]?.item_group_name ?? itemGroups[0]?.name ?? "General"),
+            item_group: restForm.category,
             standard_rate: Number(String(restForm.price || "").replace(/[^0-9.]/g, "")) || 1000,
             stock_uom: "Nos",
             description: restForm.description || "",
@@ -228,13 +239,13 @@ function StepContent({
             />
           </FieldGroup>
           <FieldGroup label="Category / Item Group">
-            {itemGroups.length > 0 ? (
+            {selectableGroups(itemGroups).length > 0 ? (
               <select
-                value={form.category || itemGroups[0]?.name || "General"}
+                value={resolveGroupValue(itemGroups, form.category)}
                 onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
                 className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
               >
-                {itemGroups.map((g) => (
+                {selectableGroups(itemGroups).map((g) => (
                   <option key={g.name} value={g.item_group_name || g.name} className="bg-card text-foreground py-1.5">
                     {g.item_group_name || g.name}
                   </option>
@@ -385,7 +396,7 @@ if (step === "media") {
         <ul className="space-y-2">
           {[
             `Entity Name: ${form.name || "Item"}`,
-            `Category / Group: ${form.category || "General"}`,
+            `Category / Group: ${form.category || "—"}`,
             `Price: PKR ${form.price || "1,000"}`,
             "Live connection to server verified",
           ].map(item => (

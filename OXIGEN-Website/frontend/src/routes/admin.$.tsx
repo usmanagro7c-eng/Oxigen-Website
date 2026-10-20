@@ -34,6 +34,7 @@ import {
 } from "@/lib/admin-api";
 import { useAuthStore } from "@/lib/admin-auth-store";
 import { ContentHub } from "@/components/admin/content-editor";
+import { selectableGroups, resolveGroupValue, groupValidationError } from "@/lib/item-groups";
 
 export const Route = createFileRoute("/admin/$")({
   component: DashboardCatchAll,
@@ -1943,16 +1944,32 @@ function RecordModal({
                   }
 
                   // Dynamic select for category / item_group
-                  if (c.key === "item_group" && itemGroups && itemGroups.length > 0) {
+                  if (c.key === "item_group" && slug === "products") {
+                    const usable = selectableGroups(itemGroups);
+
+                    // No groups at all is a setup problem, not a field the user
+                    // can fix here. Say so instead of silently omitting the
+                    // control and failing later on save.
+                    if (usable.length === 0) {
+                      return (
+                        <label key={c.key} className="block">
+                          <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
+                          <div className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-destructive/5 border border-destructive/30 text-xs text-destructive">
+                            No Item Group found in ERPNext. Create one before adding products.
+                          </div>
+                        </label>
+                      );
+                    }
+
                     return (
                       <label key={c.key} className="block">
                         <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
                         <select
-                          value={String(form[c.key] || itemGroups[0]?.name || "General")}
+                          value={resolveGroupValue(itemGroups, form[c.key] as string | undefined)}
                           onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
                           className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                         >
-                          {itemGroups.map((g) => (
+                          {usable.map((g) => (
                             <option key={g.name} value={g.item_group_name || g.name} className="bg-card text-foreground py-1.5">
                               {g.item_group_name || g.name}
                             </option>
@@ -2481,7 +2498,7 @@ function LiveTablePage({
         rawKey: it.item_code || it.name,
         name: it.item_name || it.item_code,
         sku: it.item_code || it.name,
-        item_group: it.item_group || "General",
+        item_group: it.item_group || "",
         price: `PKR ${(it.standard_rate || it.valuation_rate || 0).toLocaleString()}`,
         rawPrice: it.standard_rate || it.valuation_rate || 0,
         stock: qty,
@@ -2557,7 +2574,7 @@ function LiveTablePage({
             rawKey: `${inv.item_code}-${inv.warehouse}`,
             sku: inv.item_code,
             name: inv.item_name || inv.item_code,
-            item_group: inv.item_group || "General",
+            item_group: inv.item_group || "",
             warehouse: inv.warehouse || "Oxigen Warehouse - O",
             actual_qty: inv.actual_qty ?? 0,
             reserved_qty: inv.reserved_qty ?? 0,
@@ -2857,11 +2874,20 @@ function LiveTablePage({
             .replace(/^-+|-+$/g, "");
 
           const chosenStatus = formData.status || "Enable";
+
+          // Never send a placeholder group: ERPNext rejects unknown links and
+          // the user sees an opaque 500. Fail with the real reason instead.
+          const groupError = groupValidationError(itemGroups, formData.item_group);
+          if (groupError) {
+            pushToast("error", groupError);
+            return;
+          }
+
           await createItem({
             item_name: formData.name || autoSku,
             item_code: autoSku || undefined,
             sku: autoSku || undefined,
-            item_group: formData.item_group || "General",
+            item_group: formData.item_group,
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")) || 0,
             stock_qty: Number(formData.stock) || 0,
             stock_uom: "Nos",
@@ -2884,11 +2910,17 @@ function LiveTablePage({
           const chosenStatus = formData.status || "In stock";
           const stockQty = chosenStatus === "Out of stock" ? 0 : (Number(formData.stock ?? formData.actual_qty) || 0);
 
+          const groupError = groupValidationError(itemGroups, formData.item_group);
+          if (groupError) {
+            toast.error(groupError);
+            return;
+          }
+
           await createItem({
             item_name: formData.name || autoSku,
             item_code: autoSku || undefined,
             sku: autoSku || undefined,
-            item_group: formData.item_group || "General",
+            item_group: formData.item_group,
             standard_rate: Number(String(formData.price || "").replace(/[^0-9.]/g, "")) || 0,
             stock_qty: stockQty,
             stock_uom: "Nos",
@@ -2951,6 +2983,12 @@ function LiveTablePage({
         // Edit mode
         const recordName = modal.row?.rawKey || modal.row?.name || modal.row?.id || modal.row?.rawId;
         if (slug === "products") {
+          const groupError = groupValidationError(itemGroups, formData.item_group);
+          if (groupError) {
+            pushToast("error", groupError);
+            return;
+          }
+
           await updateItem(recordName, {
             item_name: formData.name,
             item_group: formData.item_group,

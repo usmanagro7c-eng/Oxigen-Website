@@ -466,12 +466,21 @@ export class ErpAdapter {
       .replace(/[^A-Z0-9_-]/g, "-")
       .replace(/^-+|-+$/g, "");
 
+    // Resolve the group first: an unknown name aborts the whole save in
+    // ERPNext with a link validation error, so validate before writing.
+    const resolvedGroup = await ErpAdapter.resolveItemGroup(payload.item_group);
+    if (!resolvedGroup) {
+      throw new Error(
+        "No Item Group is configured in ERPNext. Create one (e.g. \"Women\") before adding products.",
+      );
+    }
+
     // 1. Create the Item
     const itemPayload = {
       doctype: "Item",
       item_name: payload.item_name,
       item_code: itemCode,
-      item_group: payload.item_group,
+      item_group: resolvedGroup,
       stock_uom: payload.stock_uom || "Nos",
       description: payload.description,
       standard_rate: payload.standard_rate,
@@ -795,6 +804,55 @@ export class ErpAdapter {
     } catch (err) {
       logger.warn({ err, itemCode }, "[ErpAdapter] Slideshow upsert failed (non-fatal)");
     }
+  }
+
+  /**
+   * Verifies that an Item Group exists in ERPNext and returns a usable name.
+   *
+   * ERPNext links Item.item_group to the Item Group tree and refuses to save a
+   * document referencing a name it does not know (`LinkValidationError`), which
+   * surfaced to the browser as an opaque HTTP 500. The storefront used to fall
+   * back to a hardcoded "General" group that does not exist in this instance,
+   * so any product saved before the group list had loaded failed.
+   *
+   * Resolution order: the requested group when it is valid, else the first
+   * group under the tree root, else `null` so the caller can report a setup
+   * problem rather than guessing.
+   */
+  static async resolveItemGroup(requested?: string | null): Promise<string | null> {
+    const params = new URLSearchParams({
+      fields: JSON.stringify(["name"]),
+      filters: JSON.stringify([["name", "!=", "All Item Groups"]]),
+      limit_page_length: "100",
+      order_by: "name asc",
+    });
+
+    const erpRes = await erpFetch(
+      getErpUrl(`/api/resource/Item Group?${params}`),
+      { headers: getErpHeaders() },
+    );
+
+    if (!erpRes.ok) {
+      logger.error("[ErpAdapter] Unable to list Item Groups for validation");
+      return null;
+    }
+
+    const json = (await erpRes.json()) as { data: { name: string }[] };
+    const names = json.data.map((g) => g.name).filter(Boolean);
+
+    if (!names.length) return null;
+
+    const wanted = (requested ?? "").trim();
+    if (wanted && names.includes(wanted)) return wanted;
+
+    if (wanted) {
+      logger.warn(
+        { requested: wanted, fallback: names[0] },
+        "[ErpAdapter] Unknown Item Group requested; using the first available group",
+      );
+    }
+
+    return names[0];
   }
 
   /**
