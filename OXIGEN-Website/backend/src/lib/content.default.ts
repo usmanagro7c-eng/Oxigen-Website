@@ -523,8 +523,8 @@ export function defaultContent(): ContentDocument {
           sub: "See the difference consistent, quality nutrition can make.",
         },
         resultsImages: [
-          { img: "/before_2.webp", fallback: `${CDN}/before_2.webp?v=1780588913&width=1200`, label: "Before" },
-          { img: "/after_oxigen.png", fallback: `${CDN}/after_oxigen.png?v=1780590184&width=1200`, label: "After" },
+          { img: "/files/before-optimized.webp", fallback: "/files/before-optimized.webp", label: "Before" },
+          { img: "/files/after-optimized.png", fallback: "/files/after-optimized.png", label: "After" },
         ],
       },
       legal: {

@@ -383,7 +383,7 @@ export function Results() {
         />
       </Reveal>
       <div className="mt-8 grid gap-6 sm:mt-14 sm:grid-cols-2">
-        {(resultsImages ?? [{ img: "/before_2.webp", fallback: `${CDN}/before_2.webp?v=1780588913&width=1200`, label: "Before" }, { img: "/after_oxigen.png", fallback: `${CDN}/after_oxigen.png?v=1780590184&width=1200`, label: "After" }]).map((r, i) => (
+        {(resultsImages ?? [{ img: "/files/before-optimized.webp", fallback: "/files/before-optimized.webp", label: "Before" }, { img: "/files/after-optimized.png", fallback: "/files/after-optimized.png", label: "After" }]).map((r, i) => (
           <Reveal key={r.label} delay={i * 0.12}>
             <div className="group relative overflow-hidden rounded-[2rem] glass p-2.5 sm:p-3 transition-all duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10">
               <span className="sr-only">{r.label}</span>

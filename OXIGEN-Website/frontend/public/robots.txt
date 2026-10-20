@@ -1,3 +1,18 @@
 User-agent: *
 Allow: /
-Sitemap: /sitemap.xml
+
+# Admin, account and checkout flows carry no indexable content and must not
+# appear in search results.
+Disallow: /admin
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /checkout
+Disallow: /cart
+Disallow: /account
+Disallow: /signin
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /set-password
+
+Sitemap: https://oxigen.usman-agro7c.workers.dev/sitemap.xml

@@ -205,13 +205,29 @@ export default {
     // catch-all gets edge-cached and then shadows the routes handled above,
     // so this Worker stays the single router and resolves index.html itself.
     // Never fall back under /assets: a missing file must 404, not return HTML.
+    //
+    // A missing *crawlable* file must also 404. Returning the SPA shell for
+    // /sitemap.xml is actively harmful: crawlers read it as invalid XML. The
+    // SPA fallback is only for extension-less routes the client router owns.
+    const isAssetPath = url.pathname.startsWith("/assets/");
+
+    const looksLikeFile =
+      !isAssetPath && /\.[a-z0-9]{2,5}$/i.test(url.pathname);
+
     try {
       const resp = await env.ASSETS.fetch(request);
 
-      if (
-        resp.status === 404 &&
-        !url.pathname.startsWith("/assets/")
-      ) {
+      if (resp.status === 404 && !isAssetPath) {
+        if (looksLikeFile) {
+          return new Response("Not found", {
+            status: 404,
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+              "Cache-Control": "public, max-age=300",
+            },
+          });
+        }
+
         return await env.ASSETS.fetch(
           new Request(new URL("/index.html", url).toString())
         );
