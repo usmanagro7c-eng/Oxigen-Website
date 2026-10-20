@@ -248,9 +248,9 @@ function StepContent({
           <FieldGroup label="Category / Item Group">
             {selectableGroups(itemGroups).length > 0 ? (
               <RadixSelect
-                modal={false}
                 value={resolveGroupValue(itemGroups, form.category)}
                 onValueChange={(v) => setForm(f => ({ ...f, category: v }))}
+                onOpenChange={(open) => { if (open) (document.activeElement as HTMLElement | null)?.blur(); }}
               >
                 <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground shadow-sm focus:ring-2 focus:ring-primary/20">
                   <SelectValue placeholder="Select category" />

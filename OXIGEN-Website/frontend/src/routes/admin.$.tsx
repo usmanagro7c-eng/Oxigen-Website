@@ -1976,9 +1976,9 @@ function RecordModal({
                       <label key={c.key} className="block">
                         <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
                         <RadixSelect
-                          modal={false}
                           value={resolveGroupValue(itemGroups, form[c.key] as string | undefined)}
                           onValueChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))}
+                          onOpenChange={(open) => { if (open) (document.activeElement as HTMLElement | null)?.blur(); }}
                         >
                           <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground shadow-sm focus:ring-2 focus:ring-primary/20">
                             <SelectValue placeholder="Select category" />
