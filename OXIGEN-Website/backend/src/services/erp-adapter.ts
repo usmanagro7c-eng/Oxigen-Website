@@ -859,6 +859,24 @@ export class ErpAdapter {
    * Fetches parent Item Groups from ERPNext (categories).
    */
   static async fetchItemGroups(): Promise<Record<string, unknown>[]> {
+    // ERPNext occasionally resets the TLS connection (ECONNRESET) under load.
+    // Retry once before surfacing a 500, so a transient blip does not blank
+    // out the category dropdown in the admin panel.
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await this.fetchItemGroupsOnce();
+      } catch (err) {
+        lastError = err;
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  private static async fetchItemGroupsOnce(): Promise<Record<string, unknown>[]> {
     const fields = JSON.stringify(["item_group_name", "image", "description"]);
     const filters = JSON.stringify([
       ["parent_item_group", "=", "All Item Groups"],
