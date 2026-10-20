@@ -248,6 +248,7 @@ function StepContent({
           <FieldGroup label="Category / Item Group">
             {selectableGroups(itemGroups).length > 0 ? (
               <RadixSelect
+                modal={false}
                 value={resolveGroupValue(itemGroups, form.category)}
                 onValueChange={(v) => setForm(f => ({ ...f, category: v }))}
               >

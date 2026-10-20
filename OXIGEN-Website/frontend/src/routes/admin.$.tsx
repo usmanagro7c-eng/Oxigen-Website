@@ -1976,6 +1976,7 @@ function RecordModal({
                       <label key={c.key} className="block">
                         <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
                         <RadixSelect
+                          modal={false}
                           value={resolveGroupValue(itemGroups, form[c.key] as string | undefined)}
                           onValueChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))}
                         >
