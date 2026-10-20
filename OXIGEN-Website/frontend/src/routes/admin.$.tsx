@@ -1844,6 +1844,15 @@ function RecordModal({
                                   </span>
                                 )}
                                 <img src={getItemImageUrl(src)} alt={`Image ${i + 1}`} className="h-full w-full object-cover" />
+                                {/* Remove button — always visible so touch users can delete */}
+                                <button
+                                  type="button"
+                                  onClick={() => removeImage(i)}
+                                  className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-red-500/90 text-white shadow transition hover:bg-red-600"
+                                  aria-label="Remove image"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
                                 {/* Reorder controls */}
                                 {isProduct && (
                                   <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 transition group-hover:opacity-100">
@@ -1858,14 +1867,6 @@ function RecordModal({
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => removeImage(i)}
-                                      className="grid h-6 w-6 place-items-center rounded-md bg-red-500 text-white transition hover:bg-red-600"
-                                      aria-label="Remove image"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
                                       onClick={() => moveImage(i, 1)}
                                       disabled={i === galleryImages.length - 1}
                                       className="grid h-6 w-6 place-items-center rounded-md bg-white/90 text-black transition hover:bg-white disabled:opacity-30"
@@ -1874,16 +1875,6 @@ function RecordModal({
                                       <ChevronRight className="h-3.5 w-3.5" />
                                     </button>
                                   </div>
-                                )}
-                                {!isProduct && (
-                                  <button
-                                    type="button"
-                                    onClick={() => removeImage(i)}
-                                    className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
-                                    aria-label="Remove image"
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
                                 )}
                               </div>
                             ))}
