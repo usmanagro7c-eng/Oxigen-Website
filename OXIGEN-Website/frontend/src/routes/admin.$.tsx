@@ -1461,13 +1461,14 @@ const SELECT_OPTIONS_MAP: Record<string, { label: string; value: string }[]> = {
 };
 
 function RecordModal({
-  open, onClose, mode, title, columns: rawColumns, initial, onSave, itemGroups, slug, itemCodes,
+  open, onClose, mode, title, columns: rawColumns, initial, onSave, itemGroups, slug, itemCodes, defaultWarehouse,
 }: {
   open: boolean; onClose: () => void; mode: "create" | "edit"; title: string;
   columns: Column[]; initial?: Row | null; onSave: (r: Row) => void;
   itemGroups?: ItemGroup[];
   itemCodes?: { itemCode: string; name: string; code: string }[];
   slug?: string;
+  defaultWarehouse?: string;
 }) {
   const [form, setForm] = useState<Row>({});
   const [saving, setSaving] = useState(false);
@@ -3295,6 +3296,7 @@ function LiveTablePage({
         itemGroups={itemGroups}
         itemCodes={itemCodes}
         slug={slug}
+        defaultWarehouse={defaultWarehouse}
       />
 
       <OrderActionModal
