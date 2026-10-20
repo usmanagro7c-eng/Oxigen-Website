@@ -1,4 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
 import { itemCache } from "../lib/item-cache.js";
 import { logger } from "../lib/logger.js";
 import { ErpAdapter } from "../services/erp-adapter.js";
@@ -732,7 +734,8 @@ router.get("/items/image/*", async (req, res) => {
       res.status(400).json({ error: "File path required." });
       return;
     }
-    const result = await ErpAdapter.proxyFile(filepath);
+
+    const result = await ErpAdapter.proxyFileStream(filepath);
 
     if (!result.ok) {
       res.status(404).json({ error: "Image not found." });
@@ -740,11 +743,39 @@ router.get("/items/image/*", async (req, res) => {
     }
 
     res.setHeader("Content-Type", result.contentType || "image/jpeg");
-    res.setHeader("Cache-Control", "public, max-age=86400");
-    res.send(result.buffer);
+    // Uploads are immutable (ERPNext filenames are unique), so the browser and
+    // any intermediate cache may keep them for a long time.
+    res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+
+    if (result.contentLength) {
+      res.setHeader("Content-Length", result.contentLength);
+    }
+    if (result.etag) {
+      res.setHeader("ETag", result.etag);
+      // Let the browser skip re-downloading an unchanged image entirely.
+      if (req.headers["if-none-match"] === result.etag) {
+        res.status(304).end();
+        return;
+      }
+    }
+    if (result.lastModified) {
+      res.setHeader("Last-Modified", result.lastModified);
+    }
+
+    if (result.body) {
+      // Stream straight through: no full-file buffering in the Node process.
+      await pipeline(Readable.fromWeb(result.body as never), res);
+      return;
+    }
+
+    res.send(result.buffer ?? Buffer.alloc(0));
   } catch (err) {
     logger.error({ err }, "[items/image]");
-    res.status(500).json({ error: "Internal server error." });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error." });
+    } else {
+      res.end();
+    }
   }
 });
 

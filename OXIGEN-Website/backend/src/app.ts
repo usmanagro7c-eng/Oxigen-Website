@@ -7,6 +7,8 @@ import { randomUUID } from "crypto";
 import { existsSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
 import { doubleCsrf } from "csrf-csrf";
 import { isIP } from "net";
 import router from "./routes/index.js";
@@ -286,7 +288,10 @@ logger.info({ rawServeEnv: process.env["SERVE_FRONTEND"], nodeEnv: process.env["
 // ====================== ERPNEXT FILE / IMAGE PROXY ======================
 app.get(["/files/*", "/private/files/*", "/api/files/*", "/api/private/files/*"], async (req: Request, res: Response) => {
   try {
-    let targetPath = req.originalUrl || req.url;
+    // `originalUrl` carries the query string, which `sanitizeErpFilePath`
+    // rejects as a malformed path. The proxy only needs the path portion;
+    // cache-busting query params must not turn a valid file into a 400.
+    let targetPath = (req.originalUrl || req.url).split("?")[0]!;
     if (targetPath.startsWith("/api/files/")) {
       targetPath = targetPath.replace("/api/files/", "/files/");
     } else if (targetPath.startsWith("/api/private/files/")) {
@@ -330,7 +335,9 @@ app.get(["/files/*", "/private/files/*", "/api/files/*", "/api/private/files/*"]
     }
 
     if (!erpRes.ok) {
-      res.status(erpRes.status).send("File not found in ERPNext.");
+      await erpRes.body?.cancel().catch(() => undefined);
+      const status = erpRes.status;
+      res.status(status).send("File not found in ERPNext.");
       return;
     }
 
@@ -342,14 +349,48 @@ app.get(["/files/*", "/private/files/*", "/api/files/*", "/api/private/files/*"]
     if (contentLength) {
       res.setHeader("Content-Length", contentLength);
     }
-    const cacheControl = erpRes.headers.get("cache-control");
-    res.setHeader("Cache-Control", cacheControl || "public, max-age=86400");
 
-    const arrayBuffer = await erpRes.arrayBuffer();
-    res.send(Buffer.from(arrayBuffer));
+    const etag = erpRes.headers.get("etag");
+    const lastModified = erpRes.headers.get("last-modified");
+    if (etag) res.setHeader("ETag", etag);
+    if (lastModified) res.setHeader("Last-Modified", lastModified);
+
+    // Public uploads are immutable, so they can be cached hard. Private files
+    // are access-controlled in ERPNext, so they must never be stored in a
+    // shared cache or the browser — only revalidated.
+    const isPrivate = safePath.includes("/private/files/");
+    if (isPrivate) {
+      res.setHeader("Cache-Control", "private, no-store");
+    } else {
+      res.setHeader(
+        "Cache-Control",
+        erpRes.headers.get("cache-control") ||
+          "public, max-age=2592000, immutable",
+      );
+    }
+
+    // When the client already holds this exact version, answer 304 and skip the
+    // body. Skipped for private files, whose bodies must not be reused blindly.
+    if (!isPrivate && etag && req.headers["if-none-match"] === etag) {
+      await erpRes.body?.cancel().catch(() => undefined);
+      res.status(304).end();
+      return;
+    }
+
+    // Stream the file through instead of buffering it in memory.
+    if (erpRes.body) {
+      await pipeline(Readable.fromWeb(erpRes.body as never), res);
+      return;
+    }
+
+    res.send(Buffer.from(await erpRes.arrayBuffer()));
   } catch (err: any) {
     logger.error({ err, path: req.url }, "[files proxy error]");
-    res.status(500).send("Error fetching file from ERPNext.");
+    if (!res.headersSent) {
+      res.status(500).send("Error fetching file from ERPNext.");
+    } else {
+      res.end();
+    }
   }
 });
 

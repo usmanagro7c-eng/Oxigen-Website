@@ -7,6 +7,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
+import { optimizeImageUpload } from "../lib/image-optimizer.js";
 
 import {
   getQueueStats,
@@ -2237,8 +2238,17 @@ router.post(
         return;
       }
 
+      // Shrink the image before it reaches ERPNext — ERPNext stores and serves
+      // uploads verbatim, and the proxy in front of it cannot resize, so
+      // upload-time is the only place the weight can be taken out.
+      const optimized = await optimizeImageUpload(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+      );
+
       const { body, contentType } = buildMultipartBody([
-        { name: "file", value: file.buffer, filename: file.originalname },
+        { name: "file", value: optimized.buffer, filename: optimized.filename },
         { name: "is_private", value: "0" },
         { name: "folder", value: "Home/Attachments" },
       ]);
@@ -2256,7 +2266,21 @@ router.post(
       }
 
       const json: any = await erpRes.json();
-      res.status(201).json({ data: json.message });
+      res.status(201).json({
+        data: json.message,
+        optimization:
+          optimized.optimizedSize < optimized.originalSize
+            ? {
+                originalSize: optimized.originalSize,
+                optimizedSize: optimized.optimizedSize,
+                savedPercent: Math.round(
+                  (1 - optimized.optimizedSize / optimized.originalSize) * 100,
+                ),
+                width: optimized.width,
+                height: optimized.height,
+              }
+            : null,
+      });
     } catch (err: any) {
       logger.error({ err }, "[admin/files/upload.POST]");
       res.status(500).json({ error: err.message || "Failed to upload file." });

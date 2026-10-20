@@ -1054,6 +1054,74 @@ export class ErpAdapter {
   }
 
   /**
+   * Streaming variant of {@link proxyFile}.
+   *
+   * Returns the upstream body as a web stream plus the metadata a reverse
+   * proxy needs, so large media never has to be fully buffered in the Node
+   * process. Falls back to a buffered body when the runtime does not expose a
+   * readable stream (never expected on Node 18+).
+   */
+  static async proxyFileStream(filepath: string): Promise<{
+    ok: boolean;
+    status: number;
+    contentType: string | null;
+    contentLength: string | null;
+    etag: string | null;
+    lastModified: string | null;
+    body: ReadableStream<Uint8Array> | null;
+    buffer: Buffer | null;
+  }> {
+    const empty = {
+      contentType: null,
+      contentLength: null,
+      etag: null,
+      lastModified: null,
+      body: null,
+      buffer: null,
+    } as const;
+
+    const safePath = sanitizeErpFilePath(filepath);
+    if (!safePath) {
+      return { ok: false, status: 400, ...empty };
+    }
+
+    const erpRes = await erpFetch(getErpUrl(safePath), {
+      headers: getErpHeaders(),
+    });
+
+    if (!erpRes.ok) {
+      // Drain so the connection can be reused instead of leaking the socket.
+      await erpRes.body?.cancel().catch(() => undefined);
+      return { ok: false, status: erpRes.status, ...empty };
+    }
+
+    const meta = {
+      contentType: erpRes.headers.get("Content-Type"),
+      contentLength: erpRes.headers.get("Content-Length"),
+      etag: erpRes.headers.get("ETag"),
+      lastModified: erpRes.headers.get("Last-Modified"),
+    };
+
+    if (erpRes.body) {
+      return {
+        ok: true,
+        status: erpRes.status,
+        ...meta,
+        body: erpRes.body as ReadableStream<Uint8Array>,
+        buffer: null,
+      };
+    }
+
+    return {
+      ok: true,
+      status: erpRes.status,
+      ...meta,
+      body: null,
+      buffer: Buffer.from(await erpRes.arrayBuffer()),
+    };
+  }
+
+  /**
    * Fetches the selling price for an item.
    */
   static async fetchSellingPriceForItem(    itemCode: string
