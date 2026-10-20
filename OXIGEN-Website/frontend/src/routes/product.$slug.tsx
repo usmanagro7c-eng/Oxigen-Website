@@ -51,7 +51,7 @@ function Stars({ rating, className = "h-4 w-4" }: { rating: number; className?: 
   );
 }
 
-function StockTimer({ slug }: { slug: string }) {
+function StockTimer({ slug, stock }: { slug: string; stock?: number | null }) {
   const [now, setNow] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -71,7 +71,11 @@ function StockTimer({ slug }: { slug: string }) {
   }, [slug]);
 
   const seed = slug.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-  const stockLeft = 3 + (seed % 8); // 3–10 units left
+  // Prefer the real ERPNext stock; fall back to a deterministic estimate only
+  // when stock is unknown.
+  const stockLeft = (typeof stock === "number" && stock >= 0)
+    ? Math.max(0, stock)
+    : 3 + (seed % 8); // 3–10 units left
   const stockPct = Math.min(100, Math.max(12, (stockLeft / 20) * 100));
 
   const h = now === null ? 0 : Math.floor(now / 3_600_000);
@@ -472,7 +476,7 @@ function ProductPage() {
               )}
 
               {product.available && product.was > product.price && (
-                <StockTimer slug={product.slug} />
+                <StockTimer slug={product.slug} stock={product.stockQty} />
               )}
 
               {product.available && (
