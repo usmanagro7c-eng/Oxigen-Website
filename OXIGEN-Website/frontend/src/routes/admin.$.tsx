@@ -2825,7 +2825,24 @@ function LiveTablePage({
         } else if (slug === "orders") {
           await deleteAdminOrder(r.rawId || recordName.replace(/^#/, ""));
         } else if (slug === "categories" || slug === "collections") {
-          await deleteItemGroup(recordName);
+          let alreadyGone = false;
+          try {
+            await deleteItemGroup(recordName);
+          } catch (err: any) {
+            // The category may already be gone (e.g. deleted from ERPNext
+            // directly, or removed by another session). Treat a 404 as success
+            // so the stale row leaves the list instead of a ghost entry.
+            if (!/404|not found/i.test(err?.message || "")) throw err;
+            alreadyGone = true;
+            pushToast("info", `Category ${recordName} was already removed.`);
+          }
+          if (alreadyGone) {
+            setRows((prev) => prev.filter((row) => {
+              const candidate = row.rawKey || row.name || row.id || row.rawId;
+              return candidate !== recordName;
+            }));
+            return;
+          }
         } else if (slug === "customers") {
           await deleteAdminCustomer(recordName);
         } else if (slug === "discounts") {
