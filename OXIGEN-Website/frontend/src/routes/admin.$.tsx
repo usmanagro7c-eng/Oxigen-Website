@@ -1531,7 +1531,7 @@ function RecordModal({
         if (mode === "create" && !seed.item_group) seed.item_group = resolveGroupValue(itemGroups, "");
       } else if (slug === "inventory") {
         if (mode === "create" && !seed.status) seed.status = "In stock";
-        seed.warehouse = "Stores - O";
+        seed.warehouse = defaultWarehouse || "";
         if (mode === "create" && !seed.item_group) seed.item_group = resolveGroupValue(itemGroups, "");
       } else if (slug === "discounts") {
         if (mode === "create" && !seed.rate_or_discount) seed.rate_or_discount = "Discount Percentage";
@@ -1548,7 +1548,7 @@ function RecordModal({
       setSaving(false);
       setManualSku(Boolean(initial?.sku));
     }
-  }, [open, initial, columns, slug, mode]);
+  }, [open, initial, columns, slug, mode, defaultWarehouse, itemGroups]);
 
   const handleNameChange = (val: string) => {
     setForm((prev) => {
@@ -2053,7 +2053,7 @@ function RecordModal({
                     );
                   }
 
-                  // Inventory warehouse input locked strictly to Stores - O
+                  // Inventory warehouse input locked strictly to Oxigen Warehouse - O
                   if (slug === "inventory" && c.key === "warehouse") {
                     return (
                       <label key={c.key} className="block opacity-80">
@@ -2065,7 +2065,7 @@ function RecordModal({
                         </div>
                         <input
                           disabled
-                          value="Stores - O"
+                          value={defaultWarehouse || "Loading..."}
                           className="w-full h-10 px-3.5 rounded-xl bg-secondary/50 border border-border text-sm font-semibold text-foreground outline-none cursor-not-allowed"
                         />
                       </label>
@@ -2458,6 +2458,7 @@ function LiveTablePage({
 }: { slug: string; icon: LucideIcon; title: string; meta: PageMeta }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [itemGroups, setItemGroups] = useState<ItemGroup[]>([]);
+  const [defaultWarehouse, setDefaultWarehouse] = useState<string>("");
   const [itemCodes, setItemCodes] = useState<{ itemCode: string; name: string; code: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(meta.filters[0] || "All");
@@ -2481,6 +2482,16 @@ function LiveTablePage({
       // Pre-fetch Item Groups for category selectors and references
       const groupsRes = await getItemGroups().catch(() => ({ data: [] }));
       setItemGroups(groupsRes.data || []);
+
+      // Fetch the configured default warehouse (from backend env) so the
+      // locked warehouse field is never hardcoded in the frontend.
+      fetch("/api/config")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          const w = j?.data?.default_warehouse;
+          if (w) setDefaultWarehouse(w);
+        })
+        .catch(() => {});
 
       // Pre-fetch product item codes for the pricing rule item picker
       const itemsRes = await getItems({ limit: 500 }).catch(() => ({ data: [] }));
@@ -3067,7 +3078,7 @@ function LiveTablePage({
           const newQty = chosenStatus === "Out of stock" ? 0 : (Number(formData.actual_qty ?? formData.qty ?? formData.stock) || 0);
           await adjustAdminInventory({
             item_code: modal.row?.sku || modal.row?.name || formData.sku || formData.name,
-            warehouse: formData.warehouse || modal.row?.warehouse || "Stores - O",
+            warehouse: formData.warehouse || modal.row?.warehouse || defaultWarehouse || undefined,
             qty: newQty,
             entry_type: "Stock Reconciliation",
             mode: "set",
