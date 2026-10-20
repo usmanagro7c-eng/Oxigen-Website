@@ -1944,7 +1944,7 @@ function RecordModal({
                   }
 
                   // Dynamic select for category / item_group
-                  if (c.key === "item_group" && slug === "products") {
+                  if (c.key === "item_group" && (slug === "products" || slug === "inventory")) {
                     const usable = selectableGroups(itemGroups);
 
                     // No groups at all is a setup problem, not a field the user
@@ -2912,7 +2912,7 @@ function LiveTablePage({
 
           const groupError = groupValidationError(itemGroups, formData.item_group);
           if (groupError) {
-            toast.error(groupError);
+            pushToast("error", groupError);
             return;
           }
 
