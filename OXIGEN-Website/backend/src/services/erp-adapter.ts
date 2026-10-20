@@ -1025,6 +1025,7 @@ export class ErpAdapter {
 
     // ── Fetch Website Slideshow images ──────────────────────────────
     let slideshow_images: string[] = [];
+    const hasSlideshowField = item["slideshow"] !== undefined || item["website_slideshow"] !== undefined;
     const slideshowName = (item["slideshow"] || item["website_slideshow"]) as string | undefined;
     if (slideshowName) {
       const ssRes = await erpFetch(
@@ -1043,8 +1044,10 @@ export class ErpAdapter {
       }
     }
 
-    // Fallback: If no slideshow images found from Website Slideshow, check File attachments
-    if (slideshow_images.length === 0) {
+    // Fallback: If no slideshow images found from Website Slideshow, check File attachments.
+    // Only fall back when the item never had a slideshow configured (hasSlideshowField
+    // false), so an explicitly cleared slideshow is not resurrected from stray files.
+    if (slideshow_images.length === 0 && !hasSlideshowField) {
       const candidateNames = [name, item["name"] as string, itemCode].filter(Boolean) as string[];
       if (candidateNames.length > 0) {
         const fileParams = new URLSearchParams({
