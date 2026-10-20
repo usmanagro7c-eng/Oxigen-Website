@@ -1,5 +1,6 @@
 import { timingSafeEqual, createHash } from "crypto";
 import { logger } from "../lib/logger.js";
+import { cancelSalesOrder } from "../lib/order-cancel.js";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
@@ -1490,32 +1491,21 @@ router.post(
         return;
       }
 
-// 1) Cancel the linked Sales Invoice first (restores physical stock when update_stock = 1)
-        const invoiceName = await findLinkedSalesInvoice(name, soData?.customer);
-      if (invoiceName) {
-        const siRes = await erpFetch(
-          getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(invoiceName)}`),
-          { headers: getErpHeaders() }
-        );
-        if (siRes.ok) {
-          const siDoc: any = ((await siRes.json()) as any).data;
-          if (Number(siDoc.docstatus) === 1) {
-            await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
-              method: "POST",
-              headers: getErpHeaders(),
-              body: JSON.stringify({ doctype: "Sales Invoice", name: invoiceName }),
-            });
-            logger.info({ order: name, invoice: invoiceName }, "[return] Sales Invoice cancelled (stock restored)");
-          }
-        }
-      }
+      // 1) Cancel the linked Sales Invoice, delete it, then cancel the order.
+      // ERPNext refuses to cancel a Sales Order while its Sales Invoice still
+      // links to it, so the invoice has to be removed first.
+      const result = await cancelSalesOrder(name);
 
-      // 2) Cancel the Sales Order (restores reserved stock)
-      await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
-        method: "POST",
-        headers: getErpHeaders(),
-        body: JSON.stringify({ doctype: "Sales Order", name }),
-      });
+      if (!result.orderCancelled) {
+        res.status(409).json({
+          error:
+            result.error ||
+            `Order ${name} could not be cancelled. It may have a payment recorded against it — cancel that first.`,
+          invoiceCancelled: result.invoiceCancelled,
+          invoiceDeleted: result.invoiceDeleted,
+        });
+        return;
+      }
 
       itemCache.clear();
       res.json({

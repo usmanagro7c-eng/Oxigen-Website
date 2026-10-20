@@ -472,10 +472,20 @@ export const frappeService = {
     const customerName = await this.findCustomerByEmail(email);
     if (!customerName) return { error: "Customer not found.", status: 404 };
 
+    // Accept the aliases a client may send so a profile edit is never dropped.
     const allowedFields = ["customer_name", "mobile_no", "image"];
-    const safePatch = Object.fromEntries(
-      Object.entries(patch).filter(([key]) => allowedFields.includes(key)),
-    );
+    const safePatch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (allowedFields.includes(key)) safePatch[key] = value;
+    }
+    if (!safePatch["customer_name"]) {
+      const name = (patch["full_name"] ?? patch["name"]) as string | undefined;
+      if (name) safePatch["customer_name"] = name;
+    }
+    if (!safePatch["mobile_no"]) {
+      const phone = (patch["phone"] ?? patch["mobile"]) as string | undefined;
+      if (phone) safePatch["mobile_no"] = phone;
+    }
 
     if (Object.keys(safePatch).length === 0) return { error: "No valid fields to update." };
 
@@ -500,16 +510,44 @@ export const frappeService = {
 
   // ── Change Password ──────────────────────────────────────────────────────────
 
+  /**
+   * Changes a user's password.
+   *
+   * ERPNext's `update_password` validates the old password against
+   * `frappe.session.user`. Our API calls authenticate with the API key, so the
+   * session user is "Administrator" and the customer's own password is never
+   * checked — the call always fails with "Incorrect User or Password".
+   *
+   * Instead: authenticate with the current password (which proves it is
+   * correct), then write the new one. Same semantics, works for Website Users.
+   */
   async changePassword(email: string, oldPassword: string, newPassword: string) {
-    const res = await erpFetch(getErpUrl("/api/method/frappe.core.doctype.user.user.update_password"), {
+    // 1) Verify the current password by signing in with it.
+    const loginRes = await erpFetch(getErpUrl("/api/method/login"), {
       method: "POST",
-      headers: { ...getErpHeaders(), Cookie: `user_id=${email}` },
-      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword, logout_all_sessions: 0 }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usr: email, pwd: oldPassword }),
     });
+
+    if (!loginRes.ok) {
+      return { error: "Incorrect password." };
+    }
+
+    // 2) Write the new password.
+    const res = await erpFetch(
+      getErpUrl(`/api/resource/User/${encodeURIComponent(email)}`),
+      {
+        method: "PUT",
+        headers: { ...getErpHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ new_password: newPassword }),
+      },
+    );
+
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { _server_messages?: string; message?: string };
       return { error: parseErpError(err) || err.message || "Failed to change password." };
     }
+
     return { message: "Password updated successfully." };
   },
 

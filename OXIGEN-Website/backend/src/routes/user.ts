@@ -9,6 +9,8 @@ import { createRateLimiter } from "../middlewares/rate-limit.js";
 import { validate, changePasswordSchema } from "../lib/validation.js";
 import { notifyAdminOfOrder } from "../lib/admin-notify.js";
 import { hiddenOrders } from "../lib/hidden-orders.js";
+import { cancelSalesOrder } from "../lib/order-cancel.js";
+import { frappeService } from "../services/frappe.service.js";
 
 const router: IRouter = Router();
 
@@ -80,18 +82,14 @@ router.put("/user/profile", requireAuth, async (req, res) => {
 
 router.post("/user/change-password", requireAuth, changePasswordLimiter, validate(changePasswordSchema), async (req, res) => {
   const { old_password, new_password } = req.body;
+  const email = req.loggedInEmail!;
   try {
-    const erpRes = await erpFetch(getErpUrl("/api/method/frappe.core.doctype.user.user.update_password"), {
-      method: "POST",
-      headers: { ...getErpHeaders(), Cookie: req.headers.cookie ?? "" },
-      body: JSON.stringify({ old_password, new_password, logout_all_sessions: 0 }),
-    });
-    if (!erpRes.ok) {
-      const err = (await erpRes.json().catch(() => ({}))) as { _server_messages?: string; message?: string };
-      res.status(erpRes.status).json({ error: parseErpError(err) || err.message || "Failed to change password." });
-      return;
-    }
-    res.json({ message: "Password updated successfully." });
+    // Shared implementation: ERPNext's own update_password checks the old
+    // password against the *session* user, which for an API-key request is
+    // "Administrator" — so it would always reject a customer's own password.
+    const result = await frappeService.changePassword(email, old_password, new_password);
+    if (result.error) { res.status(400).json(result); return; }
+    res.json(result);
   } catch (err) {
     logger.error({ err: err }, "[user/change-password]");
     res.status(500).json({ error: "Internal server error." });
@@ -590,6 +588,29 @@ router.post("/user/orders", orderLimiter, async (req, res) => {
     payment_method: payment_method || "Cash on Delivery",
   };
 
+  // ── Stock check ───────────────────────────────────────────────────────────
+  // ERPNext only complains about a missing quantity while submitting the
+  // Sales Invoice, and its message ("1.0 units of Item X needed in
+  // Warehouse Y") is meaningless to a shopper. Verify up front and answer
+  // with a plain, actionable message instead.
+  const defaultWh =
+    process.env["ONLINE_WAREHOUSE"] || process.env["DEFAULT_WAREHOUSE"] || "Oxigen Warehouse - O";
+  for (const item of items) {
+    const code = await ErpAdapter.resolveItemCode(item.item_code);
+    const available = await ErpAdapter.getAvailableStock(code, defaultWh);
+    if (available !== null && available < item.qty) {
+      res.status(409).json({
+        error:
+          available === 0
+            ? `${code} is out of stock right now. Please remove it from your cart.`
+            : `Only ${available} unit${available === 1 ? "" : "s"} of ${code} left in stock.`,
+        item_code: code,
+        available,
+      });
+      return;
+    }
+  }
+
   // ── Try direct placement first — ERPNext is healthy in the normal case ─────
   try {
     const orderName = await ErpAdapter.createErpOrder(payload);
@@ -615,6 +636,13 @@ router.post("/user/orders", orderLimiter, async (req, res) => {
       msg.includes("Status 5");
 
     if (!isConnectivityError) {
+      // Map ERPNext's stock message to something a customer can act on.
+      if (/needed in Warehouse/i.test(msg)) {
+        res.status(409).json({
+          error: "One of the items in your cart just went out of stock. Please review your cart and try again.",
+        });
+        return;
+      }
       res.status(502).json({ error: `Order could not be placed: ${msg}` });
       return;
     }
@@ -1114,32 +1142,21 @@ router.post("/user/orders/:name/return", requireAuth, async (req, res) => {
       return;
     }
 
-    // 2) Cancel the linked Sales Invoice first (restores physical stock when update_stock = 1)
-    const invoiceName = await findLinkedSalesInvoice(name as string, customerName);
-    if (invoiceName) {
-      const siRes = await erpFetch(
-        getErpUrl(`/api/resource/Sales Invoice/${encodeURIComponent(invoiceName)}`),
-        { headers: getErpHeaders() }
-      );
-      if (siRes.ok) {
-        const siDoc: any = ((await siRes.json()) as any).data;
-        if (Number(siDoc.docstatus) === 1) {
-          await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
-            method: "POST",
-            headers: getErpHeaders(),
-            body: JSON.stringify({ doctype: "Sales Invoice", name: invoiceName }),
-          });
-          logger.info({ order: name, invoice: invoiceName }, "[user return] Sales Invoice cancelled (stock restored)");
-        }
-      }
-    }
+    // 2) Cancel the linked Sales Invoice, delete it, then cancel the order.
+    // ERPNext refuses to cancel a Sales Order while its Sales Invoice still
+    // links to it, so the invoice must be removed first.
+    const result = await cancelSalesOrder(name as string);
 
-    // 3) Cancel the Sales Order (restores reserved stock)
-    await erpFetch(getErpUrl("/api/method/frappe.client.cancel"), {
-      method: "POST",
-      headers: getErpHeaders(),
-      body: JSON.stringify({ doctype: "Sales Order", name }),
-    });
+    if (!result.orderCancelled) {
+      res.status(409).json({
+        error:
+          result.error ||
+          `Order ${name} could not be cancelled. Please contact support so we can release the stock for you.`,
+        invoiceCancelled: result.invoiceCancelled,
+        invoiceDeleted: result.invoiceDeleted,
+      });
+      return;
+    }
 
     res.json({
       success: true,

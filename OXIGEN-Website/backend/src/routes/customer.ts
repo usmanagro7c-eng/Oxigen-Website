@@ -22,18 +22,28 @@ router.get("/customer/profile", requireAuth, async (req: Request, res: Response)
 router.put("/customer/profile", requireAuth, async (req: Request, res: Response) => {
   const email = req.loggedInEmail!;
   try {
-    // Also update User doc for fields like full_name, mobile_no
-    const { customer_name, mobile_no } = req.body as Record<string, unknown>;
+    // Also update User doc for fields like full_name, mobile_no.
+    // Accept the aliases the client may send (`name`, `full_name`, `phone`)
+    // so a profile edit is never silently dropped.
+    const body = req.body as Record<string, unknown>;
+    const customerName =
+      (body["customer_name"] as string) ||
+      (body["full_name"] as string) ||
+      (body["name"] as string) ||
+      "";
+    const mobileNo =
+      (body["mobile_no"] as string) || (body["phone"] as string) || "";
+
     const userPatch: Record<string, unknown> = {};
-    if (customer_name) {
-      userPatch.full_name = customer_name;
-      const parts = (customer_name as string).trim().split(/\s+/);
+    if (customerName) {
+      userPatch.full_name = customerName;
+      const parts = customerName.trim().split(/\s+/);
       userPatch.first_name = parts[0];
       if (parts.length > 1) userPatch.last_name = parts.slice(1).join(" ");
     }
-    if (mobile_no) {
-      userPatch.mobile_no = mobile_no;
-      userPatch.phone = mobile_no;
+    if (mobileNo) {
+      userPatch.mobile_no = mobileNo;
+      userPatch.phone = mobileNo;
     }
     if (Object.keys(userPatch).length > 0) {
       try {

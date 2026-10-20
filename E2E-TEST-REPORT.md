@@ -174,3 +174,70 @@ All test artifacts created during the run were removed or disabled:
 - Test FAQs content — **restored** to the original 11 entries
 - `data/hidden-orders.json` — test entries removed
 - Cancelled test sales orders remain in ERPNext (3 of them) — ERPNext cannot delete invoice-linked orders; they are cancelled and harmless, and can be removed from the ERPNext desk if you want a clean ledger
+
+
+---
+
+# Addendum — Phase 2 & 3 (gap coverage)
+
+**Date:** 2026-10-20 (same session, after the first report)
+**Scope:** every customer flow not covered in phase 1, the full admin nav, and every frontend page.
+
+## 1. Additional results
+
+| Area | Result |
+|---|---|
+| Phase 2 — customer gaps (profile, image, cart, wishlist, address update/delete, change password, guest checkout) | ✅ 14/15 |
+| Phase 2 — admin gaps (users CRUD, notifications CRUD, publish toggle, item-group guard, banner with products, order payment/return, content pages, 18 ERP doctypes, analytics) | ✅ 25/26 |
+| Phase 3 — all admin content sections + page sub-paths | ✅ 19/20 |
+| Phase 3 — 18 ERP doctypes | ✅ 18/18 |
+| Phase 3 — 14 admin API sub-routes | ✅ 14/14 |
+| Phase 3 — 36 public storefront pages | ✅ 36/36 |
+| Phase 3 — 30 admin panel pages | ✅ 30/30 |
+| **Total** | **✅ 142/144 (2 expected non-200s)** |
+
+The two non-200s are correct behaviour, not defects:
+- `GET /api/admin/content/pages/contact` → 404 — there is no `contact` page in the content document (`pages` holds `about`, `reviews`, `legal`).
+- `POST /api/items` with a duplicate item code → 409 — now a proper client error (was 500).
+
+## 2. Additional bugs found & fixed in phase 2/3
+
+### BUG-6 — Customers could not change their password
+- **Symptom:** `POST /api/customer/change-password` and `POST /api/user/change-password` both answered *"Incorrect password"* even with the right current password. The customer dashboard's Security page was therefore unusable.
+- **Cause:** both routes called ERPNext's `frappe.core.doctype.user.user.update_password`, which validates `old_password` against **`frappe.session.user`**. Our calls authenticate with the API key, so the session user is `Administrator` — the customer's own password was never checked.
+- **Fix:** `frappeService.changePassword()` now verifies the current password by signing in with it (which proves it is correct) and then writes the new one through `PUT /api/resource/User/<email>`. Both routes use it.
+- **Verified:** wrong password → 400 *"Incorrect password."*; correct password → 200; login with the new password → 200.
+
+### BUG-7 — "Return / Cancel order" reported success but left the order open and stock reserved
+- **Symptom:** the customer clicked Return, got *"cancelled. Stock restored."* — but the Sales Order stayed `To Deliver and Bill` and the Bin kept `reserved_qty: 2`. The stock was never really released, and the order could not be cancelled later either.
+- **Cause:** the return route cancelled the Sales Invoice but ERPNext refuses to cancel a Sales Order while its invoice still links to it (*"Sales Invoice … must be deleted before cancelling this Sales Order"*). The route ignored that failure and answered "success" anyway.
+- **Fix:** new `backend/src/lib/order-cancel.ts` — `cancelSalesOrder()` performs the full sequence and checks every step: cancel invoice → delete invoice → cancel order. Both the customer route (`/api/user/orders/:name/return`) and the admin route (`/api/admin/orders/:name/return`) use it and now answer **409 with the real ERPNext reason** instead of a false success.
+- **Verified:** order placed (Bin 1 → 0) → Return → Bin back to **1**, order `Cancelled` / `docstatus 2`.
+
+### BUG-8 — Out-of-stock orders failed with an internal ERPNext message
+- **Symptom:** ordering an out-of-stock item returned *"Order could not be placed: 1.0 units of Item NUTRI-CEPT: Nutri-Cept needed in Warehouse Oxigen Warehouse - O to complete this transaction."* — warehouse internals shown to a shopper.
+- **Fix:** `POST /api/user/orders` now checks available stock (Bin `actual_qty − reserved_qty`) per line item before creating anything and answers **409** with a plain message (*"NUTRI-CEPT is out of stock right now. Please remove it from your cart."*). A friendly fallback also covers the remaining ERPNext stock error.
+- **Verified:** 409 with a customer-readable message.
+
+### BUG-9 — Duplicate item code returned 500
+- **Fix:** `POST /api/items` maps ERPNext's *"Item … already exists"* to **409 Conflict** instead of 500.
+
+### BUG-10 — Profile update silently dropped the client's field names
+- **Symptom:** `PUT /api/customer/profile` answered *"No valid fields to update."* because the endpoint only accepted `customer_name` / `mobile_no` while clients may send `name` / `full_name` / `phone`.
+- **Fix:** both the route and `frappeService.updateCustomerProfile()` now accept the aliases.
+- **Note:** the endpoint is currently unused by the storefront (the dashboard uses `PUT /api/user/profile`), so this was a latent footgun rather than a live break.
+
+## 3. Known ERPNext limitations (not defects, but worth knowing)
+
+1. **A stock-affecting Sales Invoice can never be deleted.** ERPNext keeps the Stock Ledger Entries, and a Sales Order linked to such an invoice can never be deleted either. Consequence: the customer's "Remove Order" is a soft delete (hidden from their dashboard) and the documents stay in ERPNext for the audit trail. This is why 11 cancelled test orders remain in the ledger.
+2. **Stock is deducted at order placement** (`update_stock = 1` on the invoice), not at delivery. If you want genuinely cancellable orders with a clean ledger, set `update_stock = 0` and post the stock movement on delivery.
+3. The legacy `/api/customer/addresses` endpoint still creates addresses without `address_type: "Shipping"`, so its own GET filter never returns them. The storefront uses `/api/user/addresses` (correct). The legacy endpoint is unused.
+4. `POST /api/admin/notifications` is a webhook endpoint guarded by `x-admin-shared-secret` (from `WEBHOOK_SECRET`), not by the admin session — that is intentional.
+
+## 4. What is still untested (needs a real browser or a live account)
+
+- **Visual / UI behaviour** — the tests exercised the API, not the rendered pages: modal behaviour, cart drawer, slider carousel, toast placement, mobile breakpoints.
+- **Email delivery to a real inbox** — the ERPNext Communication record and the SMTP hand-off were verified, but no inbox was checked.
+- **Payment gateway / online payment** — the site is Cash-on-Delivery only; no gateway is wired up.
+- **Concurrent orders** — two customers racing for the last unit (the stock check is not an atomic reservation).
+- **Load / performance under many concurrent shoppers.**

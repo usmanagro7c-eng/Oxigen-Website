@@ -32,7 +32,14 @@ router.post("/items", ...requireAdminWrite, async (req: Request, res: Response) 
     res.status(201).json({ data: item });
   } catch (err: any) {
     logger.error({ err }, "[items.POST]");
-    res.status(err.statusCode || 500).json({ error: err.message || "Failed to create item in ERPNext." });
+    const message = err.message || "Failed to create item in ERPNext.";
+    // A duplicate item code is a client error, not a server failure. ERPNext
+    // reports it as a plain error string, so map it explicitly.
+    if (/already exists/i.test(message)) {
+      res.status(409).json({ error: message });
+      return;
+    }
+    res.status(err.statusCode || 500).json({ error: message });
   }
 });
 

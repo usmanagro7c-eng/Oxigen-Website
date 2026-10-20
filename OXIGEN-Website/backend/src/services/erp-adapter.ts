@@ -64,6 +64,37 @@ export class ErpAdapter {
    *  3. Try Item doctype directly
    *  4. Search Item doctype by item_code
    */
+  /**
+   * Available stock (actual − reserved) for an item in the online warehouse.
+   * Returns null when the quantity cannot be determined.
+   */
+  static async getAvailableStock(itemCode: string, warehouse?: string): Promise<number | null> {
+    const wh = (warehouse || process.env.ONLINE_WAREHOUSE || process.env.DEFAULT_WAREHOUSE || "Oxigen Warehouse - O").trim();
+    try {
+      const params = new URLSearchParams({
+        fields: JSON.stringify(["actual_qty", "reserved_qty"]),
+        filters: JSON.stringify([
+          ["item_code", "=", itemCode],
+          ["warehouse", "=", wh],
+        ]),
+        limit_page_length: "1",
+      });
+      const res = await erpFetch(
+        getErpUrl(`/api/resource/Bin?${params.toString()}`),
+        { headers: getErpHeaders() },
+      );
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        data?: { actual_qty?: number; reserved_qty?: number }[];
+      };
+      const row = json.data?.[0];
+      if (!row) return 0;
+      return Math.max(0, (row.actual_qty ?? 0) - (row.reserved_qty ?? 0));
+    } catch {
+      return null;
+    }
+  }
+
   static async resolveItemCode(rawCode: string): Promise<string> {
     // Strategy 1: Direct Website Item lookup by name
     try {
