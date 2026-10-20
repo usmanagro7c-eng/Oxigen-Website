@@ -9,6 +9,13 @@ import {
 import { Breadcrumb, Header, GlassCard, FieldGroup, Input, Select } from "@/components/admin/glass-form";
 import { createItem, createItemGroup, createErpDoc, getItemGroups, uploadAdminFile, getItemImageUrl, type ItemGroup } from "@/lib/admin-api";
 import { selectableGroups, resolveGroupValue, groupValidationError } from "@/lib/item-groups";
+import {
+  Select as RadixSelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/admin/new/$kind")({
   head: ({ params }) => ({ meta: [{ title: `Create ${params.kind.replace("-"," ")} — OxiGen Admin` }] }),
@@ -240,17 +247,25 @@ function StepContent({
           </FieldGroup>
           <FieldGroup label="Category / Item Group">
             {selectableGroups(itemGroups).length > 0 ? (
-              <select
+              <RadixSelect
                 value={resolveGroupValue(itemGroups, form.category)}
-                onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
-                className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                onValueChange={(v) => setForm(f => ({ ...f, category: v }))}
               >
-                {selectableGroups(itemGroups).map((g) => (
-                  <option key={g.name} value={g.item_group_name || g.name} className="bg-card text-foreground py-1.5">
-                    {g.item_group_name || g.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground shadow-sm focus:ring-2 focus:ring-primary/20">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent className="bg-card border border-border text-foreground">
+                  {selectableGroups(itemGroups).map((g) => (
+                    <SelectItem
+                      key={g.name}
+                      value={g.item_group_name || g.name}
+                      className="cursor-pointer focus:bg-primary/10 focus:text-foreground"
+                    >
+                      {g.item_group_name || g.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </RadixSelect>
             ) : (
               <Input
                 value={form.category || ""}

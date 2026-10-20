@@ -16,6 +16,13 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select as RadixSelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { findItem, NAV } from "@/components/admin/nav-config";
 import { cn } from "@/lib/utils";
 import {
@@ -1968,17 +1975,25 @@ function RecordModal({
                     return (
                       <label key={c.key} className="block">
                         <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{c.label}</span>
-                        <select
+                        <RadixSelect
                           value={resolveGroupValue(itemGroups, form[c.key] as string | undefined)}
-                          onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                          onValueChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))}
                         >
-                          {usable.map((g) => (
-                            <option key={g.name} value={g.item_group_name || g.name} className="bg-card text-foreground py-1.5">
-                              {g.item_group_name || g.name}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground shadow-sm focus:ring-2 focus:ring-primary/20">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-card border border-border text-foreground">
+                            {usable.map((g) => (
+                              <SelectItem
+                                key={g.name}
+                                value={g.item_group_name || g.name}
+                                className="cursor-pointer focus:bg-primary/10 focus:text-foreground"
+                              >
+                                {g.item_group_name || g.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </RadixSelect>
                       </label>
                     );
                   }
