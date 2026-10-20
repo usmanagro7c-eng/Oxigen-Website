@@ -357,7 +357,7 @@ export const authController = {
       const name = await authService.getUserFullName(email);
       if (name) fullName = name;
 
-      void emailService.sendSetPasswordEmail(email, fullName, setPasswordUrl);
+      void emailService.sendResetPasswordEmail(email, fullName, setPasswordUrl);
 
       res.json(genericResponse);
     } catch (err) {
