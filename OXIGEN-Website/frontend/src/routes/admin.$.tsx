@@ -1639,9 +1639,14 @@ function RecordModal({
     setMediaLoading(true);
     try {
       const res = await getAdminFiles();
-      setMediaFiles((res.data || []).filter((f) => f.file_url));
-    } catch {
+      const files = (res.data || []).filter((f) => f.file_url);
+      setMediaFiles(files);
+      if (files.length === 0) {
+        pushToast("info", "No media found. Upload an image first via the Media Library page.");
+      }
+    } catch (err: any) {
       setMediaFiles([]);
+      pushToast("error", err?.message || "Failed to load media. Please check you are logged in as admin.");
     } finally {
       setMediaLoading(false);
     }
