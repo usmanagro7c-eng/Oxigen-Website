@@ -88,7 +88,7 @@ router.get("/items/groups", async (_req, res) => {
 
     if (cached) {
       res.setHeader("X-Cache", "HIT");
-      res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
       res.json({ data: cached });
       return;
     }
@@ -100,7 +100,7 @@ router.get("/items/groups", async (_req, res) => {
     itemCache.set(cacheKey, visible);
 
     res.setHeader("X-Cache", "MISS");
-    res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res.json({ data: visible });
   } catch (err) {
     logger.error({ err }, "[items/groups]");
@@ -770,7 +770,7 @@ router.get("/items/:name", async (req, res) => {
     const cached = !bustCache && itemCache.get(cacheKey);
     if (cached) {
       res.setHeader("X-Cache", "HIT");
-      res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
       res.json({ data: cached });
       return;
     }
