@@ -60,7 +60,7 @@ const buildTimeline = (status: string, date: string) => {
   }
   if (status === "Completed") {
     upto = "Delivered";
-  } else if (status === "To Deliver" || status === "To Deliver and Bill" || status === "To Bill") {
+  } else if (status === "Unpaid" || status === "To Deliver" || status === "To Deliver and Bill" || status === "To Bill") {
     upto = "Packed";
   } else {
     upto = "Processing";
