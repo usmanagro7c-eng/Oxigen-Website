@@ -66,9 +66,9 @@ export async function requireAuth(
 }
 
 /**
- * Helper: Ensure karo ke requested email = logged-in user ka email.
- * Agar match na kare toh 403 Forbidden return karo.
- * Admin users ko bypass milta hai (future use ke liye).
+ * Helper: Ensure the requested email matches the logged-in user's email.
+ * Returns 403 Forbidden if they do not match.
+ * Admin users are bypassed (reserved for future use).
  */
 export function assertOwner(
   req: Request,

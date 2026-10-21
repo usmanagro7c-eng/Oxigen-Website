@@ -98,16 +98,16 @@ Every page returns **200**:
 ## 4. ⚠️ One real business gap found
 
 **OxiDop is listed in the storefront but has no ERPNext Item.**
-- ERPNext me sirf `NUTRI-CEPT` hai (stock 1).
-- Storefront 2 products dikhata hai: Nutri-Cept + OxiDop.
-- OxiDop order karne par → `409 "OXI-DOP is out of stock right now."` (koi order bana hi nahi sakta).
-- Ye pehle se tha (fresh ERP se pehle bhi ERPNext me OXI-DOP item nahi tha) — maine nahi banaya, bas expose kiya.
+- ERPNext only has `NUTRI-CEPT` (stock 1).
+- The storefront shows 2 products: Nutri-Cept + OxiDop.
+- Attempting to order OxiDop returns `409 "OXI-DOP is out of stock right now."` (no order can be created).
+- This existed before (OXI-DOP item was never in ERPNext even before the fresh ERP wipe) — I did not create it, just exposed it.
 
-**Fix:** ERPNext me `OXI-DOP` item banayein (Item Group `Women`, price list `Standard Selling` 1900/whatever, stock + website image + slideshow) — phir wo bhi order hoga. Ya storefront se OxiDop hata dein jab tak ready na ho.
+**Fix:** Create the `OXI-DOP` item in ERPNext (Item Group `Women`, price list `Standard Selling` 1900/whatever, stock + website image + slideshow) — then it can be ordered too. Or remove OxiDop from the storefront until it is ready.
 
 ---
 
-## 5. Test data created (remove karne ke liye list)
+## 5. Test data created (list for removal)
 
 **Items (3):** `ZZ-FINAL-TEST-PRODUCT` · `ZZ-FINAL-GROUPED-ITEM` · `ZZ-FINAL-BAD-GROUP-ITEM`
 **Item Group (1):** `ZZ Final Group`
@@ -122,7 +122,7 @@ Every page returns **200**:
 **Stock Entries (2):** `MAT-STE-2026-00001` · `-00002`  *(incoming stock for NUTRI-CEPT)*
 **Junk file uploads (4):** `/files/_f1.png` (7 bytes, ×3) and one more 7-byte png
 
-**Deleting tip:** Accounts Settings me `delete_linked_ledger_entries = 1` already ON hai, to transactions + ledger entries apne aap clean ho jayenge. Items ko delete karne se pehle unka stock zero karna hoga (Stock Reconciliation `qty: 0`).
+**Deleting tip:** `delete_linked_ledger_entries = 1` is already ON in Accounts Settings, so transactions + ledger entries will be cleaned up automatically. Before deleting items, their stock must be set to zero (Stock Reconciliation `qty: 0`).
 
 ---
 

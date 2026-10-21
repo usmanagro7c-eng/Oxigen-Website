@@ -601,7 +601,7 @@ router.post("/user/orders", async (req, res) => {
     if (err instanceof QueueFullError) {
       res.status(503).json({
         error: err.message,
-        retryAfter: 300, // 5 min baad retry karo
+        retryAfter: 300, // retry after 5 minutes
       });
       return;
     }

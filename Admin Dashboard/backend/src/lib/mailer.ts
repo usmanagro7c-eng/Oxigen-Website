@@ -108,7 +108,7 @@ async function sendViaErpNext(opts: MailOptions): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// sendMail — public API (auth.ts aur contact.ts yahi call karte hain)
+// sendMail — public API (called by auth.ts and contact.ts)
 // ---------------------------------------------------------------------------
 export async function sendMail(opts: MailOptions): Promise<MailResult> {
   const messageId = await sendViaErpNext(opts);

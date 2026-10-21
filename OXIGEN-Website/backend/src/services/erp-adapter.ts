@@ -314,7 +314,7 @@ export class ErpAdapter {
         );
       }
 
-      // ── Item Price doctype se latest selling prices fetch ──────────────────
+      // ── Fetch latest selling prices from the Item Price doctype ─────────────
       // Fast path: batch fetch prices in chunks instead of one ERPNext request
       // per product. This removes the biggest catalog loading bottleneck.
       Object.assign(sellingPriceMap, await ErpAdapter.fetchSellingPricesForItems(itemCodes));
@@ -995,7 +995,7 @@ export class ErpAdapter {
     let itemImage: string | null = null;
 
     if (itemCode) {
-      // Item doctype se valuation_rate + image
+      // valuation_rate + image from the Item doctype
       const priceRes = await erpFetch(
         getErpUrl(`/api/resource/Item/${encodeURIComponent(itemCode)}`),
         { headers: getErpHeaders() },

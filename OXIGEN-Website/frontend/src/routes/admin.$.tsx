@@ -2151,9 +2151,9 @@ function RecordModal({
                         <span className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-500">
                           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                           <span>
-                            Ye asli price hai — yahan change karne se price <strong>permanently</strong> badal jata hai
-                            (original wapas nahi aayega). Discount dene ke liye <strong>Discounts</strong> page use karein —
-                            wahan se remove karne par price khud hi wapas ho jati hai.
+                            This is the real price — changing it here <strong>permanently</strong> changes the price
+                            (the original will not be restored). To offer a discount, use the <strong>Discounts</strong> page —
+                            removing it there automatically restores the original price.
                           </span>
                         </span>
                       </label>

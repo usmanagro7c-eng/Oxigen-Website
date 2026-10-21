@@ -1783,7 +1783,7 @@ router.get(
       const listJson: any = await erpRes.json();
       const rules = listJson.data ?? [];
 
-      // Child table "items" parent fields ke through nahi milta — har doc ko
+      // Child table "items" is not returned via parent fields — fetch each doc
       // individual fetch karke item_code list nikaalni hoti hai (v14 structure).
       const enriched = await Promise.all(
         rules.map(async (rule: any) => {

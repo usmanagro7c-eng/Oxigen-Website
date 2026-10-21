@@ -139,7 +139,7 @@ export const testimonials = [
     name: "Shaista",
     date: "01/02/2025",
     title: "Best Product for PCOS & Energy",
-    text: "Nutri-Cept ne meri cycle aur energy ko kaafi improve kiya hai. PCOS symptoms mein kaafi relief mila aur mood bhi balance feel ho raha hai. Highly recommended!",
+    text: "Nutri-Cept has greatly improved my cycle and energy levels. I got significant relief from PCOS symptoms and my mood feels balanced. Highly recommended!",
   },
   {
     name: "Farukh",
@@ -157,7 +157,7 @@ export const testimonials = [
     name: "Bilal",
     date: "27/03/2025",
     title: "Energy & Focus Boost",
-    text: "Din bhar thakan mehsoos hoti thi, lekin OxiDop lene ke baad focus aur motivation dono behtar ho gaye. Delivery bhi fast thi across Pakistan.",
+    text: "I used to feel tired all day, but after taking OxiDop both my focus and motivation improved. Delivery was also fast across Pakistan.",
   },
   {
     name: "Hina",
@@ -169,7 +169,7 @@ export const testimonials = [
     name: "Usman",
     date: "12/04/2025",
     title: "Genuine & Trustworthy",
-    text: "Original product mila aur results bhi real hain. Customer support ne har sawaal ka jawab diya. OxiGen par ab pura bharosa hai.",
+    text: "I received the original product and the results are real. Customer support answered every question. I now fully trust OxiGen.",
   },
 ];
 

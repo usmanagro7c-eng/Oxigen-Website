@@ -264,7 +264,7 @@ export class ErpAdapter {
         );
       }
 
-      // ── Item Price doctype se latest selling prices fetch ──────────────────
+      // ── Fetch latest selling prices from the Item Price doctype ─────────────
       // Fast path: batch fetch prices in chunks instead of one ERPNext request
       // per product. This removes the biggest catalog loading bottleneck.
       Object.assign(sellingPriceMap, await ErpAdapter.fetchSellingPricesForItems(itemCodes));
