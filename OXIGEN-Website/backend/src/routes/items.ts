@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { itemCache } from "../lib/item-cache.js";
+import { hiddenItemGroups } from "../lib/hidden-item-groups.js";
 import { logger } from "../lib/logger.js";
 import { ErpAdapter } from "../services/erp-adapter.js";
 import { erpFetch, getErpUrl, getErpHeaders, parseErpError } from "../lib/erpnext-client.js";
@@ -93,12 +94,14 @@ router.get("/items/groups", async (_req, res) => {
     }
 
     const normalized = await ErpAdapter.fetchItemGroups();
+    const hidden = new Set(hiddenItemGroups.list());
+    const visible = hidden.size > 0 ? normalized.filter((g: any) => !hidden.has(g.name)) : normalized;
 
-    itemCache.set(cacheKey, normalized);
+    itemCache.set(cacheKey, visible);
 
     res.setHeader("X-Cache", "MISS");
     res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
-    res.json({ data: normalized });
+    res.json({ data: visible });
   } catch (err) {
     logger.error({ err }, "[items/groups]");
     res.status(500).json({ error: "Internal server error." });
@@ -178,6 +181,48 @@ router.put("/items/groups/:name", ...requireAdminWrite, async (req: Request, res
 router.delete("/items/groups/:name", ...requireAdminWrite, async (req: Request, res: Response) => {
   try {
     const { name } = req.params;
+    if (name === "All Item Groups") {
+      res.status(400).json({ error: "The root group cannot be deleted." });
+      return;
+    }
+
+    // Fetch the group to find its parent (fallback target for reassignment).
+    const groupRes = await erpFetch(
+      getErpUrl(`/api/resource/Item Group/${encodeURIComponent(name)}`),
+      { headers: getErpHeaders() }
+    );
+    const parentGroup =
+      (groupRes.ok ? ((await groupRes.json()) as any)?.data?.parent_item_group : "") ||
+      "All Item Groups";
+
+    // Reassign any items still pointing at this group to its parent so the
+    // delete is not blocked by ERPNext's link-exists check.
+    try {
+      const itemsRes = await erpFetch(
+        getErpUrl(
+          `/api/resource/Item?${new URLSearchParams({
+            filters: JSON.stringify([["item_group", "=", name]]),
+            fields: JSON.stringify(["name"]),
+            limit_page_length: "500",
+          })}`
+        ),
+        { headers: getErpHeaders() }
+      );
+      if (itemsRes.ok) {
+        const items = ((await itemsRes.json()) as any)?.data ?? [];
+        for (const it of items) {
+          if (!it?.name) continue;
+          await erpFetch(getErpUrl(`/api/resource/Item/${encodeURIComponent(it.name)}`), {
+            method: "PUT",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ item_group: parentGroup }),
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // best-effort reassignment; fall through to delete attempt
+    }
+
     const erpRes = await erpFetch(
       getErpUrl(`/api/resource/Item Group/${encodeURIComponent(name)}`),
       {
@@ -188,7 +233,16 @@ router.delete("/items/groups/:name", ...requireAdminWrite, async (req: Request, 
 
     if (!erpRes.ok) {
       const err = (await erpRes.json().catch(() => ({}))) as any;
-      res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to delete category." });
+      const detail = parseErpError(err) || err?.message || "Failed to delete category.";
+      if (/linked with|cannot delete|reference/i.test(detail)) {
+        // Item group is referenced by accounting documents (e.g. Purchase Invoice).
+        // Keep the ERPNext record for audit, but hide it from the admin's list.
+        hiddenItemGroups.hide(name);
+        itemCache.clear();
+        res.json({ success: true, message: `Category ${name} removed from the list.` });
+        return;
+      }
+      res.status(erpRes.status).json({ error: detail });
       return;
     }
 

@@ -671,6 +671,48 @@ router.put("/items/groups/:name", async (req: Request, res: Response) => {
 router.delete("/items/groups/:name", async (req: Request, res: Response) => {
   try {
     const { name } = req.params;
+    if (name === "All Item Groups") {
+      res.status(400).json({ error: "The root group cannot be deleted." });
+      return;
+    }
+
+    // Fetch the group to find its parent (fallback target for reassignment).
+    const groupRes = await erpFetch(
+      getErpUrl(`/api/resource/Item Group/${encodeURIComponent(name)}`),
+      { headers: getErpHeaders() }
+    );
+    const parentGroup =
+      (groupRes.ok ? ((await groupRes.json()) as any)?.data?.parent_item_group : "") ||
+      "All Item Groups";
+
+    // Reassign any items still pointing at this group to its parent so the
+    // delete is not blocked by ERPNext's link-exists check.
+    try {
+      const itemsRes = await erpFetch(
+        getErpUrl(
+          `/api/resource/Item?${new URLSearchParams({
+            filters: JSON.stringify([["item_group", "=", name]]),
+            fields: JSON.stringify(["name"]),
+            limit_page_length: "500",
+          })}`
+        ),
+        { headers: getErpHeaders() }
+      );
+      if (itemsRes.ok) {
+        const items = ((await itemsRes.json()) as any)?.data ?? [];
+        for (const it of items) {
+          if (!it?.name) continue;
+          await erpFetch(getErpUrl(`/api/resource/Item/${encodeURIComponent(it.name)}`), {
+            method: "PUT",
+            headers: getErpHeaders(),
+            body: JSON.stringify({ item_group: parentGroup }),
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // best-effort reassignment; fall through to delete attempt
+    }
+
     const erpRes = await erpFetch(
       getErpUrl(`/api/resource/Item Group/${encodeURIComponent(name)}`),
       {
@@ -681,7 +723,15 @@ router.delete("/items/groups/:name", async (req: Request, res: Response) => {
 
     if (!erpRes.ok) {
       const err = (await erpRes.json().catch(() => ({}))) as any;
-      res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to delete category." });
+      const detail = parseErpError(err) || err?.message || "Failed to delete category.";
+      // Still linked (e.g. by sub-groups or other docs) — give a clear message.
+      if (/linked with|cannot delete|reference/i.test(detail)) {
+        res.status(409).json({
+          error: `Cannot delete "${name}" because it is still referenced by other records. Reassign or remove the linked items/sub-groups first.`,
+        });
+        return;
+      }
+      res.status(erpRes.status).json({ error: detail });
       return;
     }
 
