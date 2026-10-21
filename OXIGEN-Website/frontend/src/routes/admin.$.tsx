@@ -1682,6 +1682,15 @@ function RecordModal({
               <form onSubmit={handleSubmit} className="p-5 space-y-3.5 flex-1 overflow-y-auto min-h-0">
                 {slug === "discounts" ? (
                   <>
+                    {/* Make it obvious that this is the safe way to run a discount */}
+                    <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2.5 text-[11px] leading-relaxed text-foreground">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span>
+                        Discount yahan se banayein — product ki asli price safe rehti hai. Rule delete ya
+                        expire hone par website apne aap original price par wapas aa jati hai.
+                      </span>
+                    </div>
+
                     {/* Title */}
                     <label className="block">
                       <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Title</span>
@@ -2120,6 +2129,33 @@ function RecordModal({
                           onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
                           className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         />
+                      </label>
+                    );
+                  }
+
+                  // Products: price is the real, permanent selling price. Make
+                  // that explicit so nobody "applies a discount" by lowering it
+                  // here — that overwrites the original price for good.
+                  if (slug === "products" && c.key === "price") {
+                    return (
+                      <label key={c.key} className="block">
+                        <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                          {c.label} <span className="text-muted-foreground/70 normal-case">(real selling price · PKR)</span>
+                        </span>
+                        <input
+                          value={String(form[c.key] ?? "")}
+                          onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          placeholder="e.g. 2000"
+                        />
+                        <span className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-500">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>
+                            Ye asli price hai — yahan change karne se price <strong>permanently</strong> badal jata hai
+                            (original wapas nahi aayega). Discount dene ke liye <strong>Discounts</strong> page use karein —
+                            wahan se remove karne par price khud hi wapas ho jati hai.
+                          </span>
+                        </span>
                       </label>
                     );
                   }
