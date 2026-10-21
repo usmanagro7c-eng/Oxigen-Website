@@ -130,8 +130,8 @@ function TrackingPage() {
     );
   }
 
-  const displayStatus = orderData.display_status || orderData.status || "To Deliver";
-  const isPaid = String(orderData.invoice_status || "").toLowerCase() === "paid";
+  const displayStatus = orderData?.display_status || orderData?.status || "To Deliver";
+  const isPaid = String(orderData?.invoice_status || "").toLowerCase() === "paid";
 
   const order = orderData ? {
     id: orderData.name,

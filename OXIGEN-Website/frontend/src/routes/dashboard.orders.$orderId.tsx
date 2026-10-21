@@ -149,6 +149,18 @@ function OrderDetailsPage() {
   const [payOpen, setPayOpen] = useState(false);
   const navigate = useNavigate();
 
+  if (!orderData) {
+    return (
+      <div className="space-y-5">
+        <DashCard>
+          <p className="text-sm text-muted-foreground">Order not found or still loading…</p>
+          <Link to="/dashboard/orders" className="mt-3 inline-block text-sm font-semibold text-primary">
+            Back to My Orders
+          </Link>
+        </DashCard>
+      </div>
+    );
+  }
   const displayStatus = orderData.display_status || orderData.status || "To Deliver and Bill";
   const isUnpaid = displayStatus === "Unpaid";
 
