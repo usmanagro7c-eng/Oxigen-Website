@@ -81,7 +81,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
     }
     refresh();
 
-    const interval = window.setInterval(poll, 20_000);
+    const interval = window.setInterval(poll, 5_000);
     const onVisible = () => {
       if (document.visibilityState === "visible") poll();
     };
