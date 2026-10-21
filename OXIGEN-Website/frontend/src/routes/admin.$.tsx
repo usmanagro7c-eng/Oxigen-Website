@@ -1686,8 +1686,8 @@ function RecordModal({
                     <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2.5 text-[11px] leading-relaxed text-foreground">
                       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                       <span>
-                        Discount yahan se banayein — product ki asli price safe rehti hai. Rule delete ya
-                        expire hone par website apne aap original price par wapas aa jati hai.
+                        Create discounts here — the product's real price stays safe. When the rule is deleted
+                        or expires, the website automatically reverts to the original price.
                       </span>
                     </div>
 
