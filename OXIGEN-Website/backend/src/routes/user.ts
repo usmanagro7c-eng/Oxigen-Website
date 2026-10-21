@@ -906,13 +906,15 @@ router.post("/user/orders/:name/delete", requireAuth, async (req, res) => {
       return;
     }
 
-    // 3) Only Cancelled orders can be deleted
+    // 3) Cancelled orders (docstatus 2) can be physically deleted from ERPNext.
+    // Submitted/completed orders keep their accounting trail, so they cannot be
+    // deleted — but the shopper can still "Remove" them from their dashboard
+    // view (hidden-orders), which preserves the ERPNext records.
     const currentStatus = orderData.data?.status ?? "";
     const docstatus = orderData.data?.docstatus;
-    if (currentStatus !== "Cancelled" && docstatus !== 2) {
-      res.status(400).json({
-        error: `Only cancelled orders can be deleted. Current status: "${currentStatus}".`,
-      });
+    if (docstatus !== 2) {
+      hiddenOrders.hide(email, name as string);
+      res.json({ message: "Order removed from your orders." });
       return;
     }
 
