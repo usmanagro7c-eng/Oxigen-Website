@@ -9,6 +9,7 @@ import { createRateLimiter } from "../middlewares/rate-limit.js";
 import { validate, changePasswordSchema } from "../lib/validation.js";
 import { notifyAdminOfOrder } from "../lib/admin-notify.js";
 import { hiddenOrders } from "../lib/hidden-orders.js";
+import { hiddenAddresses } from "../lib/hidden-addresses.js";
 import { cancelSalesOrder } from "../lib/order-cancel.js";
 import { frappeService } from "../services/frappe.service.js";
 
@@ -119,8 +120,10 @@ router.get("/user/addresses", requireAuth, async (req, res) => {
       const err = (await erpRes.json().catch(() => ({}))) as { _server_messages?: string };
       res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to fetch addresses." }); return;
     }
-    const data = (await erpRes.json()) as { data: unknown };
-    res.json({ data: data.data });
+    const data = (await erpRes.json()) as { data: any[] };
+    const hidden = new Set(hiddenAddresses.listFor(email));
+    const visible = hidden.size > 0 ? (data.data || []).filter((a: any) => !hidden.has(a.name)) : (data.data || []);
+    res.json({ data: visible });
   } catch (err) {
     logger.error({ err: err }, "[user/addresses GET]");
     res.status(500).json({ error: "Internal server error." });
@@ -230,9 +233,18 @@ router.delete("/user/addresses/:name", requireAuth, async (req, res) => {
       method: "DELETE", headers: getErpHeaders(),
     });
     if (!erpRes.ok) {
-      const err = (await erpRes.json().catch(() => ({}))) as { _server_messages?: string };
-      res.status(erpRes.status).json({ error: parseErpError(err) || "Failed to delete address." }); return;
+      const err = (await erpRes.json().catch(() => ({}))) as { _server_messages?: string; message?: string };
+      const detail = parseErpError(err) || err.message || "Failed to delete address.";
+      // Address is referenced by an accounting document (Sales Invoice/Order) —
+      // keep the ERPNext record for audit, but hide it from the customer's view.
+      if (/linked with|cannot delete|reference/i.test(detail)) {
+        hiddenAddresses.hide(req.loggedInEmail!, name as string);
+        res.json({ message: "Address removed from your saved addresses." });
+        return;
+      }
+      res.status(erpRes.status).json({ error: detail }); return;
     }
+    hiddenAddresses.unhide(req.loggedInEmail!, name as string);
     res.json({ message: "Address deleted." });
   } catch (err) {
     logger.error({ err: err }, "[user/addresses DELETE]");
