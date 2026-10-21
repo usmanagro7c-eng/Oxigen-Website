@@ -246,6 +246,69 @@ router.delete("/user/addresses/:name", requireAuth, async (req, res) => {
 
 const ORDER_LIST_FIELDS = ["name","transaction_date","status","grand_total","currency","docstatus"];
 
+type NormalizedOrderItem = {
+  name: string;
+  slug: string;
+  qty: number;
+  price: number;
+  image: string;
+};
+
+/**
+ * Reads the `items` child table for a set of Sales Orders.
+ *
+ * ERPNext's REST resource API strips every field except `name` when you query a
+ * child doctype (e.g. `/api/resource/Sales Order Item?fields=[...]`), and it
+ * also omits child tables from `GET /api/resource/Sales Order?fields=["items"]`.
+ * The only reliable read is `frappe.client.get` on the parent document.
+ *
+ * Returns a map of order name → normalized items so the storefront always has
+ * item_name/qty/rate plus a proxied image URL.
+ */
+async function fetchOrderItemsMap(orderNames: string[]): Promise<Map<string, NormalizedOrderItem[]>> {
+  const out = new Map<string, NormalizedOrderItem[]>();
+  const uniqueNames = [...new Set(orderNames.filter(Boolean))];
+  if (!uniqueNames.length) return out;
+
+  await mapWithConcurrency(uniqueNames, 6, async (orderName) => {
+    try {
+      const res = await erpFetch(getErpUrl("/api/method/frappe.client.get"), {
+        method: "POST",
+        headers: getErpHeaders(),
+        body: JSON.stringify({
+          doctype: "Sales Order",
+          name: orderName,
+          fields: ["name", "items"],
+        }),
+      });
+      if (!res.ok) return;
+      const json = (await res.json()) as { message?: { items?: Array<Record<string, unknown>> } };
+      const rows = json.message?.items ?? [];
+      out.set(
+        orderName,
+        rows.map((it) => {
+          const code = String(it["item_code"] ?? "");
+          const rawImage = String(it["image"] ?? "").trim();
+          // ERPNext serves files under /files/… or /private/files/…. Route them
+          // through the streaming proxy so the browser uses our own origin and
+          // the API credentials never leave the server.
+          return {
+            name: String(it["item_name"] || code || "Item"),
+            slug: code,
+            qty: Number(it["qty"] ?? 0),
+            price: Number(it["rate"] ?? 0),
+           image: rawImage ? `/api/items/image/${rawImage.replace(/^\/+/, "")}` : "",
+          };
+        }),
+      );
+    } catch (err) {
+      logger.warn({ err, orderName }, "[fetchOrderItemsMap] failed for order");
+    }
+  });
+
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Invoice helpers — resolve the linked Sales Invoice so a customer order can be
 // presented as "Unpaid" (Payment / Return visible) or "Completed" (paid).
@@ -461,28 +524,11 @@ router.get("/user/orders", requireAuth, async (req, res) => {
     const invoiceMap = await resolveSalesInvoicesForOrders(orderData.map((o: any) => o.name), customerName);
 
     if (orderData.length > 0) {
-      const orderNames = orderData.map((o) => o.name);
-      const itemParams = new URLSearchParams({
-        fields: JSON.stringify(["parent", "item_name", "item_code", "qty", "rate"]),
-        filters: JSON.stringify([["parent", "in", orderNames]]),
-        limit_page_length: "500",
-      });
-      const itemRes = await erpFetch(getErpUrl(`/api/resource/Sales Order Item?${itemParams.toString()}`), { headers: getErpHeaders() });
-      if (itemRes.ok) {
-        const itemData = (await itemRes.json()) as { data: { parent: string; item_name: string; item_code: string; qty: number; rate: number }[] };
-        const itemsByOrder: Record<string, { name: string; code: string; qty: number; price: number }[]> = {};
-        for (const it of itemData.data) {
-          if (!itemsByOrder[it.parent]) itemsByOrder[it.parent] = [];
-          itemsByOrder[it.parent].push({ name: it.item_name, code: it.item_code, qty: it.qty || 0, price: it.rate || 0 });
-        }
-        for (const o of orderData) {
-          o.items = (itemsByOrder[o.name] || []).map(i => ({
-              name: i.name,
-              slug: i.code,
-              qty: i.qty,
-              price: i.price,
-              image: `/api/items/image/${i.code}.jpg`
-          }));
+      const itemsByOrder = await fetchOrderItemsMap(orderData.map((o) => o.name));
+      for (const o of orderData) {
+        o.items = itemsByOrder.get(o.name) ?? [];
+        if (o.items.length > 0) {
+          o.item_summary = o.items.map((i: NormalizedOrderItem) => `${i.name} × ${i.qty}`).join(", ");
         }
       }
     }
@@ -727,9 +773,23 @@ router.get("/user/orders/:name", requireAuth, async (req, res) => {
       }
     }
     const so = data.data;
+    // Normalize the child table to the same shape the list endpoint returns,
+    // and add the address display fields the order pages render.
+    const itemsMap = await fetchOrderItemsMap([name as string]);
+    const normalizedItems = itemsMap.get(name as string) ?? [];
+
     res.json({
       data: {
         ...so,
+        items: normalizedItems,
+        item_summary: normalizedItems.map((i) => `${i.name} × ${i.qty}`).join(", "),
+        address_display: so.address_display ?? so.shipping_address ?? null,
+        shipping_address_display: so.shipping_address ?? so.address_display ?? null,
+        billing_address_display: so.billing_address ?? so.address_display ?? null,
+        payment_method: so.payment_method ?? null,
+        courier: so.courier ?? null,
+        tracking_number: so.tracking_number ?? null,
+        customer_name: so.customer_name ?? so.customer ?? null,
         invoice_name: invoiceInfo?.invoice_name ?? null,
         invoice_status: invoiceInfo?.invoice_status ?? null,
         outstanding_amount: invoiceInfo?.outstanding_amount ?? (Number(so.grand_total) || 0),

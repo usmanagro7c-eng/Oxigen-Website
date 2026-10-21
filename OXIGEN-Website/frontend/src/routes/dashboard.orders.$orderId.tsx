@@ -120,15 +120,13 @@ export const Route = createFileRoute("/dashboard/orders/$orderId")({
     meta: [{ title: `Order ${params.orderId} — OxiGen` }, { name: "robots", content: "noindex" }],
   }),
   loader: async ({ params }) => {
-    try {
-      const res = await fetch(`${API_BASE}/user/orders/${encodeURIComponent(params.orderId)}`, {
-        credentials: "include",
-      }).then((r) => r.json());
-      if (!res.data) throw notFound();
-      return { orderData: res.data };
-    } catch {
-      throw notFound();
-    }
+    const res = await fetch(`${API_BASE}/user/orders/${encodeURIComponent(params.orderId)}`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+    if (!res?.data) throw notFound();
+    return { orderData: res.data };
   },
   component: OrderDetailsPage,
   notFoundComponent: () => (
@@ -154,8 +152,9 @@ function OrderDetailsPage() {
   const displayStatus = orderData.display_status || orderData.status || "To Deliver and Bill";
   const isUnpaid = displayStatus === "Unpaid";
 
-  const mappedItems = (orderData.items || []).map((it: OrderDetailItem) => {
+  const mappedItems = (orderData.items || []).map((it: OrderDetailItem, idx: number) => {
     return {
+      key: it.slug || it.item_name || it.name || `item-${idx}`,
       slug: it.slug ?? "",
       name: it.item_name || it.name || it.slug || "Item",
       img: it.image || "/products/fallback-image.jpg",
@@ -180,8 +179,8 @@ function OrderDetailsPage() {
     paymentStatus:
       String(orderData.invoice_status || "").toLowerCase() === "paid" ? "Paid" : "Pending",
     paymentMethod: orderData.payment_method || "Cash on Delivery",
-    courier: orderData.courier || "TCS Express",
-    tracking: orderData.tracking_number || "TCS-Pending",
+    courier: orderData.courier || null,
+    tracking: orderData.tracking_number || null,
     eta: orderData.delivery_date
       ? new Date(orderData.delivery_date).toLocaleDateString()
       : "2–4 days",
@@ -316,7 +315,7 @@ function OrderDetailsPage() {
             <SectionHeader title="Items" />
             <ul className="divide-y divide-border/60">
               {order.items.map((it) => (
-                <li key={it.slug} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                <li key={it.key} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
                   <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl bg-secondary">
                     <img
                       src={it.img}

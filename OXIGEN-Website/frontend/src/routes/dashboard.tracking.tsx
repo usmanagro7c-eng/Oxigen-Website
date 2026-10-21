@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Truck, Package, CheckCircle2, Circle, Copy, MapPin } from "lucide-react";
 import { DashCard, SectionHeader, StatusBadge, orderTone, EmptyState } from "@/components/dashboard/DashboardShell";
@@ -7,6 +7,9 @@ import { catalog } from "@/lib/site-data";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard/tracking")({
+  validateSearch: (search: Record<string, unknown>): { orderId?: string } => ({
+    orderId: typeof search.orderId === "string" ? search.orderId : undefined,
+  }),
   head: () => ({ meta: [{ title: "Order Tracking — OxiGen" }, { name: "robots", content: "noindex" }] }),
   component: TrackingPage,
 });
@@ -73,30 +76,43 @@ const buildTimeline = (status: string, date: string) => {
 
 function TrackingPage() {
   const { orders } = useStore();
-  const [selectedId, setSelectedId] = useState(orders[0]?.id || "");
+  const { orderId } = useSearch({ from: "/dashboard/tracking" });
+  const [selectedId, setSelectedId] = useState(orderId || orders[0]?.id || "");
   const [orderData, setOrderData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
+  // Prefer the order passed in the URL, then keep the current selection valid.
   useEffect(() => {
-    if (orders.length > 0 && !selectedId) {
-      setSelectedId(orders[0]?.id);
+    if (orderId) {
+      setSelectedId(orderId);
+      return;
     }
-  }, [orders, selectedId]);
+    if (orders.length > 0 && !orders.some((o) => o.id === selectedId)) {
+      setSelectedId(orders[0]?.id || "");
+    }
+  }, [orderId, orders, selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
+    let cancelled = false;
     setLoading(true);
+    setOrderData(null);
     fetch(`${API_BASE}/user/orders/${encodeURIComponent(selectedId)}`, {
       credentials: "include",
     })
       .then((r) => r.json())
       .then((res) => {
-        if (res.data) {
+        if (!cancelled && res.data) {
           setOrderData(res.data);
         }
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedId]);
 
   if (orders.length === 0) {
@@ -114,26 +130,32 @@ function TrackingPage() {
     );
   }
 
+  const displayStatus = orderData.display_status || orderData.status || "To Deliver";
+  const isPaid = String(orderData.invoice_status || "").toLowerCase() === "paid";
+
   const order = orderData ? {
     id: orderData.name,
     date: orderData.transaction_date,
-    status: orderData.status || "To Deliver",
-    paymentStatus: orderData.payment_status === "Paid" ? "Paid" : "Pending",
+    status: displayStatus,
+    paymentStatus: isPaid ? "Paid" : "Pending",
     paymentMethod: orderData.payment_method || "Cash on Delivery",
-    courier: orderData.courier || "TCS Express",
-    tracking: orderData.tracking_number || "TCS-Pending",
+    courier: orderData.courier || null,
+    tracking: orderData.tracking_number || null,
     eta: orderData.delivery_date ? new Date(orderData.delivery_date).toLocaleDateString() : "2–4 days",
     items: (orderData.items || []).map((it: any) => {
-      const product = catalog.find((c) => c.slug === it.item_code);
+      const code = it.slug || it.item_code || "";
+      const product = catalog.find(
+        (c) => c.slug === code || c.slug === String(code).toLowerCase(),
+      );
       return {
-        slug: it.item_code,
-        name: it.item_name || product?.name || it.item_code,
-        img: product?.img || "",
+        slug: code,
+        name: it.name || it.item_name || product?.name || code,
+        img: it.image || product?.img || "",
         qty: it.qty,
       };
     }) as Array<{ slug: string; name: string; img: string; qty: number }>,
     shipping_address: parseAddressDisplay(orderData.shipping_address_display || orderData.address_display || "", orderData.customer_name),
-    timeline: buildTimeline(orderData.status, orderData.transaction_date),
+    timeline: buildTimeline(displayStatus, orderData.transaction_date),
   } : null;
 
   const completed = order?.timeline.filter((t) => t.done).length || 0;
@@ -167,6 +189,14 @@ function TrackingPage() {
         <div className="py-20 text-center text-muted-foreground">
           <p className="text-sm font-semibold">Loading tracking progress...</p>
         </div>
+      )}
+
+      {!loading && !order && selectedId && (
+        <EmptyState
+          icon={Truck}
+          title="Tracking unavailable"
+          desc="We could not load this order's tracking details. Please pick another order or try again."
+        />
       )}
 
       {!loading && order && (
@@ -233,22 +263,26 @@ function TrackingPage() {
               <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <Truck className="h-3.5 w-3.5" /> Courier
               </p>
-              <p className="font-display text-lg font-bold text-ink">{order.courier}</p>
+              <p className="font-display text-lg font-bold text-ink">
+                {order.courier || "Not assigned yet"}
+              </p>
               <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tracking Number</p>
               <div className="mt-1 flex items-center gap-2">
                 <code className="flex-1 truncate rounded-lg bg-secondary px-3 py-2 text-sm font-semibold text-ink">
-                  {order.tracking}
+                  {order.tracking || "Available once shipped"}
                 </code>
-                <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(order.tracking);
-                    toast.success("Tracking number copied");
-                  }}
-                  className="touch-target grid h-10 w-10 place-items-center rounded-lg bg-white/70 text-ink ring-1 ring-inset ring-border hover:bg-white"
-                  aria-label="Copy tracking number"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
+                {order.tracking && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard?.writeText(order.tracking);
+                      toast.success("Tracking number copied");
+                    }}
+                    className="touch-target grid h-10 w-10 place-items-center rounded-lg bg-white/70 text-ink ring-1 ring-inset ring-border hover:bg-white"
+                    aria-label="Copy tracking number"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </DashCard>
 
