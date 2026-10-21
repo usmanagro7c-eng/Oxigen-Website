@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ChevronRight, Search, SlidersHorizontal, Download, Plus, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronDown, Sparkles, RefreshCw,
-  Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus, AlertTriangle,
+  Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus, AlertTriangle, Upload,
   CreditCard, RotateCcw, Banknote,
   PanelTop, MessageSquareQuote, HelpCircle, Link2, Megaphone, FileText,
   type LucideIcon,
@@ -1477,6 +1477,7 @@ function RecordModal({
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<any[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
 
   const columns = useMemo(() => {
     if (slug === "inventory") {
@@ -2242,9 +2243,41 @@ function RecordModal({
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Media Library</div>
                       <div className="font-display text-lg font-bold mt-0.5 text-foreground">Pick an image</div>
                     </div>
-                    <button onClick={() => setMediaOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
-                      <X className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-primary/10 px-3 text-xs font-semibold text-primary transition hover:bg-primary/20">
+                        <Upload className="h-3.5 w-3.5" />
+                        {uploadingMedia ? "Uploading..." : "Upload"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingMedia}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingMedia(true);
+                            try {
+                              const res = await uploadAdminFile(file);
+                              const url = res.data?.file_url || res.data?.url;
+                              if (url) {
+                                setForm((s) => ({ ...s, image: url }));
+                                setMediaOpen(false);
+                                pushToast("success", "Image uploaded");
+                                openMedia();
+                              }
+                            } catch (err: any) {
+                              pushToast("error", err?.message || "Upload failed");
+                            } finally {
+                              setUploadingMedia(false);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                      </label>
+                      <button onClick={() => setMediaOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="flex-1 p-5 overflow-y-auto min-h-0">
                     {mediaLoading ? (
