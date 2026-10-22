@@ -102,9 +102,10 @@ export function TopNav({ onMobileOpen }: { onMobileOpen: () => void }) {
     >
       <button
         onClick={onMobileOpen}
+        aria-label="Open navigation menu"
         className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground"
       >
-        <Menu className="h-4.5 w-4.5" />
+        <Menu className="h-4.5 w-4.5" aria-hidden="true" />
       </button>
 
       {/* Search */}
@@ -155,7 +156,7 @@ export function TopNav({ onMobileOpen }: { onMobileOpen: () => void }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.97 }}
                 transition={{ duration: 0.2 }}
-                className="absolute right-0 top-full mt-2 w-64 rounded-2xl glass-strong border border-border shadow-elegant p-2 z-50"
+                className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl glass-strong border border-border shadow-elegant p-2 z-50"
               >
                 <div className="p-3 border-b border-border mb-1">
                   <div className="text-sm font-bold text-foreground">{fullName}</div>

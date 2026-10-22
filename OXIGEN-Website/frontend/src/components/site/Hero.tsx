@@ -27,7 +27,7 @@ export function Hero() {
       id="top"
       ref={ref}
       onMouseMove={onMove}
-      className="relative flex min-h-screen items-center overflow-hidden pt-28 pb-12 sm:pt-36 sm:pb-16 lg:pt-44"
+      className="relative flex min-h-dvh items-center overflow-hidden pt-28 pb-12 sm:pt-36 sm:pb-16 lg:pt-44"
     >
       {/* animated background */}
       <div className="pointer-events-none absolute inset-0 -z-10">

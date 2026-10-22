@@ -83,7 +83,7 @@ export function Categories({ showHeading = true }: { showHeading?: boolean }) {
   return (
     <section
       id="categories"
-      className={`relative mx-auto max-w-6xl px-5 ${showHeading ? "py-24" : "pb-24 pt-4"}`}
+      className={`relative mx-auto max-w-6xl px-5 ${showHeading ? "py-12 sm:py-16" : "pb-16 pt-4"}`}
     >
       {showHeading && (
         <Reveal>
@@ -158,7 +158,7 @@ export function Products() {
   const displayProducts = data;
 
   return (
-    <section id="products" className="relative overflow-hidden py-24">
+    <section id="products" className="relative overflow-hidden py-12 sm:py-16">
       <div className="pointer-events-none absolute left-1/2 top-0 -z-10 h-96 w-[40rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
       <div className="mx-auto max-w-6xl px-5">
         <Reveal>
@@ -277,7 +277,7 @@ export function Mission() {
   }>("about");
   const { mission } = about;
   return (
-    <section id="about" className="mx-auto max-w-6xl px-5 py-24">
+    <section id="about" className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
       <div className="grid items-center gap-10 lg:grid-cols-2">
         <Reveal>
           <div className="relative overflow-hidden rounded-[2.5rem] glass p-3">
@@ -326,18 +326,18 @@ export function Why() {
   const renderPerk = (p: { title: string; desc?: string }, i: number) => {
     const Icon = perkIcons[i % perkIcons.length];
     return (
-      <div className="group h-full rounded-3xl glass p-8 transition-all duration-500 hover:-translate-y-2">
-        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg transition-transform duration-500 group-hover:scale-110">
-          <Icon className="h-7 w-7" />
+      <div className="group h-full rounded-2xl sm:rounded-3xl glass p-3 sm:p-8 transition-all duration-500 hover:-translate-y-2">
+        <span className="grid h-9 w-9 sm:h-14 sm:w-14 place-items-center rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg transition-transform duration-500 group-hover:scale-110">
+          <Icon className="h-4 w-4 sm:h-7 sm:w-7" />
         </span>
-        <h3 className="mt-6 font-display text-xl font-bold text-ink">{p.title}</h3>
-        {p.desc && <p className="mt-3 leading-relaxed text-muted-foreground">{p.desc}</p>}
+        <h3 className="mt-3 sm:mt-6 font-display text-xs sm:text-xl font-bold text-ink leading-tight">{p.title}</h3>
+        {p.desc && <p className="mt-1.5 sm:mt-3 text-[10px] sm:text-base leading-relaxed text-muted-foreground line-clamp-2 sm:line-clamp-none">{p.desc}</p>}
       </div>
     );
   };
 
   return (
-    <section id="why" className="relative overflow-hidden py-14 sm:py-24">
+    <section id="why" className="relative overflow-hidden py-12 sm:py-16">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-secondary/60 to-transparent" />
       <div className="mx-auto max-w-6xl px-5">
         <Reveal>
@@ -345,7 +345,7 @@ export function Why() {
         </Reveal>
         <div className="mt-8 sm:mt-14">
           {perks.length <= 3 ? (
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-6">
               {perks.map((p, i) => (
                 <Reveal key={p.title || i} delay={i * 0.1}>
                   {renderPerk(p, i)}
@@ -374,7 +374,7 @@ export function Results() {
   }>("reviews");
   const { results, resultsImages } = reviews;
   return (
-    <section id="results" className="mx-auto max-w-6xl px-5 py-14 sm:py-24">
+    <section id="results" className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
       <Reveal>
         <Heading
           eyebrow={results.eyebrow}
@@ -412,7 +412,7 @@ export function Testimonials({ showHeading = true }: { showHeading?: boolean }) 
     eyebrow: string; title: string; sub: string;
   }>("reviews");
   return (
-    <section id="reviews" className="relative overflow-hidden py-24">
+    <section id="reviews" className="relative overflow-hidden py-12 sm:py-16">
       <div className="pointer-events-none absolute right-0 top-1/4 -z-10 h-80 w-80 rounded-full bg-accent/15 blur-3xl" />
       <div className="mx-auto max-w-6xl px-5">
         {showHeading && (
@@ -459,7 +459,7 @@ export function FAQ({ showHeading = true }: { showHeading?: boolean }) {
   const faqs = useFaqs();
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <section id="faq" className="mx-auto max-w-3xl px-5 py-24">
+    <section id="faq" className="mx-auto max-w-3xl px-5 py-12 sm:py-16">
       {showHeading && (
         <Reveal>
           <Heading eyebrow="FAQ" title="Frequently Asked Questions" />
@@ -543,7 +543,7 @@ export function Contact() {
   };
 
   return (
-    <section id="contact" className="mx-auto max-w-6xl px-5 py-24">
+    <section id="contact" className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
       <Reveal>
         <div className="relative overflow-hidden rounded-[2.5rem] glass p-6 sm:p-14">
           <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
@@ -681,7 +681,7 @@ const trustItems = [
 
 export function TrustBadges() {
   return (
-    <section className="mx-auto max-w-6xl px-5 py-14">
+    <section className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
       <Reveal>
         <Heading
           eyebrow="Shop with confidence"

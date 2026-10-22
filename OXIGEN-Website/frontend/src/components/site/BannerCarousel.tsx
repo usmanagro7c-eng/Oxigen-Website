@@ -100,7 +100,7 @@ export function BannerCarousel() {
 
   return (
     <section
-      className="relative pt-16 sm:pt-28 lg:pt-32"
+      className="relative pt-28 sm:pt-28 lg:pt-32"
       aria-label="Featured offers"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}

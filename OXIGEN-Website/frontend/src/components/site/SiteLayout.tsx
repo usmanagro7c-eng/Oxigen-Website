@@ -6,7 +6,7 @@ import { Reveal } from "./Reveal";
 
 export function SiteLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-background">
+    <div className="relative min-h-dvh overflow-x-hidden bg-background">
       <AnnouncementBar />
       <Navbar />
       <main>{children}</main>

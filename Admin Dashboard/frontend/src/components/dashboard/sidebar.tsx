@@ -38,7 +38,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Prop
         animate={{ width: collapsed ? 76 : 272 }}
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
-          "fixed lg:sticky top-0 left-0 z-50 h-screen shrink-0",
+          "fixed lg:sticky top-0 left-0 z-50 h-dvh shrink-0",
           "glass-strong border-r border-border/80",
           "flex flex-col shadow-sm",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
@@ -66,9 +66,10 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Prop
           </Link>
           <button
             onClick={onMobileClose}
+            aria-label="Close navigation menu"
             className="lg:hidden inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -97,7 +98,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Prop
         <div className="border-t border-border/60 p-3 space-y-1.5">
           {!collapsed && (
             <a
-              href="http://localhost:5173"
+              href={import.meta.env.VITE_STOREFRONT_URL || (import.meta.env.DEV ? "http://localhost:5173" : "https://oxigen.usman-agro7c.workers.dev")}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(

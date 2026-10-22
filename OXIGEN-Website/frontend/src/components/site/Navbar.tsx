@@ -35,7 +35,7 @@ export function Navbar() {
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed inset-x-0 top-2 z-50 px-2 sm:top-8 sm:px-5 sm:pt-3"
+      className="fixed inset-x-0 top-8 z-50 px-2 sm:top-8 sm:px-5 sm:pt-3"
     >
       <nav
         className={`mx-auto flex max-w-6xl items-center justify-between rounded-2xl px-3 py-2.5 transition-all duration-500 sm:px-6 sm:py-3 ${
@@ -81,7 +81,7 @@ export function Navbar() {
             aria-label="Wishlist"
             className="touch-target relative grid h-11 w-11 shrink-0 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
           >
-            <Heart className="h-5 w-5" />
+            <Heart className="h-5 w-5" aria-hidden="true" />
             {wishlist.length > 0 && (
               <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-gradient-to-r from-primary to-accent px-1 text-[10px] font-bold text-white">
                 {wishlist.length}
@@ -94,7 +94,7 @@ export function Navbar() {
             aria-label={user ? "Account" : "Sign in"}
             className="touch-target grid h-11 w-11 shrink-0 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
           >
-            <UserIcon className="h-5 w-5" />
+            <UserIcon className="h-5 w-5" aria-hidden="true" />
           </Link>
 
           <button
@@ -102,7 +102,7 @@ export function Navbar() {
             onClick={() => setDrawerOpen(true)}
             className="touch-target relative grid h-11 w-11 shrink-0 place-items-center rounded-xl glass text-ink transition-colors hover:text-primary"
           >
-            <ShoppingCart className="h-5 w-5" />
+            <ShoppingCart className="h-5 w-5" aria-hidden="true" />
             {cartCount > 0 && (
               <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-gradient-to-r from-primary to-accent px-1 text-[10px] font-bold text-white">
                 {cartCount}
@@ -114,7 +114,7 @@ export function Navbar() {
             to="/shop"
             className="hidden items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-transform duration-300 hover:scale-105 md:inline-flex"
           >
-            Shop Now <ShoppingBag className="h-4 w-4" />
+            Shop Now <ShoppingBag className="h-4 w-4" aria-hidden="true" />
           </Link>
 
           <button
@@ -122,7 +122,7 @@ export function Navbar() {
             onClick={() => setOpen((v) => !v)}
             className="touch-target grid h-11 w-11 shrink-0 place-items-center rounded-xl glass md:hidden"
           >
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {open ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
           </button>
         </div>
       </nav>
@@ -155,7 +155,7 @@ export function Navbar() {
               onClick={() => setOpen(false)}
               className="mt-2 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-4 text-sm font-semibold text-white shadow-lg"
             >
-              Shop Now <ShoppingBag className="h-4 w-4" />
+              Shop Now <ShoppingBag className="h-4 w-4" aria-hidden="true" />
             </Link>
           </motion.div>
         )}

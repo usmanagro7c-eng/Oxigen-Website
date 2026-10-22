@@ -68,7 +68,7 @@ export function DashboardShell({ children }: { children?: ReactNode }) {
   const unread = mockNotifications.filter((n) => !n.read).length;
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-secondary via-background to-secondary">
+    <div className="relative min-h-dvh bg-gradient-to-br from-secondary via-background to-secondary">
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-primary/15 blur-3xl" />
         <div className="absolute right-0 top-1/3 h-96 w-96 rounded-full bg-accent/15 blur-3xl" />
@@ -76,7 +76,7 @@ export function DashboardShell({ children }: { children?: ReactNode }) {
 
       <div className="mx-auto flex max-w-[1440px] gap-6 px-4 py-6 lg:px-8">
         {/* Desktop sidebar */}
-        <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-64 shrink-0 lg:block">
+        <aside className="sticky top-6 hidden h-[calc(100dvh-3rem)] w-64 shrink-0 lg:block">
           <SidebarBody onNavigate={() => setMobileOpen(false)} isActive={isActive} onSignOut={signOut} user={user} />
         </aside>
 

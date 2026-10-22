@@ -141,7 +141,7 @@ export function TrendingGrid() {
           return (
             <div
               key={p.item_code || idx}
-              className="w-[280px] xs:w-[300px] sm:w-[320px] md:w-[340px] shrink-0 snap-start"
+              className="w-[calc(100vw-2rem)] sm:w-[320px] md:w-[340px] shrink-0 snap-start"
             >
               <Reveal delay={idx * 0.04} className="h-full">
                 <article className="group flex h-full flex-col overflow-hidden rounded-3xl glass border border-border/60 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary/10">
