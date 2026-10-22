@@ -4,7 +4,10 @@ import itemsRouter    from "./items.js";
 import authRouter     from "./auth.js";
 import userRouter     from "./user.js";
 import customerRouter from "./customer.js";
+import recoveryCodesRouter from "./recovery-codes.js";
+import sessionsRouter from "./sessions.js";
 import adminRouter    from "./admin.js";
+import membersRouter  from "./members.js";
 import erpRouter      from "./erp.js";
 import contactRouter  from "./contact.js";
 import settingsRouter from "./settings.js";
@@ -23,12 +26,15 @@ router.use(itemsRouter);
 router.use(authRouter);
 router.use(userRouter);
 router.use(customerRouter);
+router.use(recoveryCodesRouter);
+router.use(sessionsRouter);
 router.use(bannersRouter);
 router.use(siteContentRouter);
 router.use(contactRouter);
 
 // Admin-guarded routers last
 router.use(adminRouter);
+router.use(membersRouter);
 router.use(erpRouter);
 router.use(settingsRouter);
 router.use(contentRouter);

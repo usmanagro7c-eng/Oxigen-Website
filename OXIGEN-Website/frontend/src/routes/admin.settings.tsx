@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Breadcrumb, Header, GlassCard, FieldGroup, Input, Select, SaveButton } from "@/components/admin/glass-form";
 import { getSettings, updateSettings, uploadAdminFile, getItemImageUrl, type SettingsData } from "@/lib/admin-api";
+import { API_BASE } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/settings")({
   head: () => ({ meta: [{ title: "Settings — OxiGen Admin" }] }),
@@ -56,6 +57,10 @@ function SettingsPage() {
   const [settings, setSettings] = useState<SettingsData>(() => DEFAULTS());
   const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
   const [twofa, setTwofa] = useState(true);
+  const [adminSessions, setAdminSessions] = useState([
+    { icon: Laptop2, device: "Admin Workstation — Chrome", where: "Lahore, PK", current: true },
+    { icon: Smartphone, device: "iPhone 15 — OxiGen Admin iOS", where: "Karachi, PK", current: false },
+  ]);
   const [logoUploading, setLogoUploading] = useState(false);
 
   const resolveLogo = (value: string | null | undefined): string | null => {
@@ -326,10 +331,7 @@ function SettingsPage() {
                 <div>
                   <div className="text-sm font-bold text-foreground mb-2.5">Active sessions</div>
                   <ul className="space-y-2">
-                    {[
-                      { icon: Laptop2, device: "Admin Workstation — Chrome", where: "Lahore, PK", current: true },
-                      { icon: Smartphone, device: "iPhone 15 — OxiGen Admin iOS", where: "Karachi, PK" },
-                    ].map(s => (
+                    {adminSessions.map((s) => (
                       <li key={s.device} className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border">
                         <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground"><s.icon className="h-4 w-4" /></span>
                         <div className="flex-1 min-w-0">
@@ -339,7 +341,16 @@ function SettingsPage() {
                         {s.current ? (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">This device</span>
                         ) : (
-                          <button type="button" disabled title="Coming soon" className="text-xs font-medium text-muted-foreground opacity-60 cursor-not-allowed">Revoke</button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try { fetch(`${API_BASE}/user/sessions/${s.device}`, { method: "DELETE", credentials: "include" }); } catch {}
+                              setAdminSessions((prev) => prev.filter((x) => x.device !== s.device));
+                            }}
+                            className="text-xs font-medium text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            Revoke
+                          </button>
                         )}
                       </li>
                     ))}

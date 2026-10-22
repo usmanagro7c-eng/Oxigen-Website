@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { Briefcase, Plus, Check, Users, Store, Shield, Crown, ArrowRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Briefcase, Plus, Check, Users, Store, Shield, Crown, ArrowRight, Trash2, X } from "lucide-react";
 import { Breadcrumb, Header, GlassCard } from "@/components/admin/glass-form";
+import { API_BASE } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/workspace")({
   head: () => ({ meta: [{ title: "Workspace — OxiGen Admin" }] }),
@@ -28,6 +30,48 @@ const PERMISSIONS = [
 ];
 
 function WorkspacePage() {
+  const [members, setMembers] = useState<any[]>([]);
+  const [showMembers, setShowMembers] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("Member");
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  const loadMembers = async () => {
+    setLoadingMembers(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/members`, { credentials: "include" });
+      const data = await res.json();
+      setMembers(data.members ?? []);
+    } catch { /* ignore */ }
+    finally { setLoadingMembers(false); }
+  };
+
+  const inviteMember = async () => {
+    if (!inviteName.trim() || !inviteEmail.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/members`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: inviteName, email: inviteEmail, role: inviteRole }),
+      });
+      if (res.ok) {
+        setInviteName(""); setInviteEmail(""); setInviteRole("Member");
+        loadMembers();
+      }
+    } catch { /* ignore */ }
+  };
+
+  const removeMember = async (id: string) => {
+    try {
+      await fetch(`${API_BASE}/admin/members/${id}`, { method: "DELETE", credentials: "include" });
+      loadMembers();
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { if (showMembers) loadMembers(); }, [showMembers]);
+
   return (
     <div className="space-y-6">
       <Breadcrumb label="Workspace" />
@@ -107,9 +151,48 @@ function WorkspacePage() {
             </div>
           ))}
         </div>
-        <button type="button" disabled title="Coming soon" className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass text-xs opacity-60 cursor-not-allowed">
-          <Users className="h-3.5 w-3.5" /> Manage members
+        <button
+          type="button"
+          onClick={() => setShowMembers((v) => !v)}
+          className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass hover:bg-white/10 text-xs transition"
+        >
+          <Users className="h-3.5 w-3.5" /> {showMembers ? "Hide members" : "Manage members"}
         </button>
+
+        {showMembers && (
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <input value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Name" className="h-9 px-3 rounded-lg bg-card border border-border text-xs text-foreground outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20" />
+              <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="Email" className="h-9 px-3 rounded-lg bg-card border border-border text-xs text-foreground outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20" />
+              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="h-9 px-3 rounded-lg bg-card border border-border text-xs text-foreground outline-none">
+                <option>Owner</option><option>Admin</option><option>Editor</option><option>Viewer</option><option>Member</option>
+              </select>
+              <button type="button" onClick={inviteMember} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-primary-gradient text-primary-foreground text-xs font-medium">
+                <Plus className="h-3.5 w-3.5" /> Invite
+              </button>
+            </div>
+            {loadingMembers ? (
+              <div className="text-xs text-muted-foreground">Loading…</div>
+            ) : members.length === 0 ? (
+              <div className="text-xs text-muted-foreground">No members yet.</div>
+            ) : (
+              <ul className="divide-y divide-white/[0.06]">
+                {members.map((m) => (
+                  <li key={m.id} className="flex items-center gap-3 py-2.5">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg glass border border-white/10 text-xs font-semibold">{m.name?.slice(0,2).toUpperCase()}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium truncate">{m.name}</div>
+                      <div className="text-[11px] text-muted-foreground truncate">{m.email} · {m.role}</div>
+                    </div>
+                    <button type="button" onClick={() => removeMember(m.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </GlassCard>
     </div>
   );

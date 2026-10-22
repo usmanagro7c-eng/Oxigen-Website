@@ -13,6 +13,7 @@ export const Route = createFileRoute("/dashboard/security")({
 
 function SecurityPage() {
   const [twoFA, setTwoFA] = useState(false);
+  const [revokedDevices, setRevokedDevices] = useState<Set<string>>(new Set());
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <DashCard>
@@ -108,7 +109,7 @@ function SecurityPage() {
             </div>
             <StatusBadge status="This device" tone="success" />
           </li>
-          {mockDevices.map((d) => {
+          {mockDevices.filter((d) => !revokedDevices.has(d.id)).map((d) => {
             const Icon = d.device.toLowerCase().includes("iphone") || d.device.toLowerCase().includes("android") ? Smartphone : Monitor;
             return (
               <li key={d.id} className="flex flex-wrap items-center gap-4 py-3 first:pt-0 last:pb-0">
@@ -122,7 +123,22 @@ function SecurityPage() {
                 {d.current ? (
                   <StatusBadge status="This device" tone="success" />
                 ) : (
-                  <button type="button" disabled title="Coming soon" className="touch-target inline-flex items-center gap-1.5 rounded-lg bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive opacity-60 cursor-not-allowed">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await fetch(`${API_BASE}/user/sessions/revoke-others`, {
+                          method: "POST",
+                          credentials: "include",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ currentId: "current" }),
+                        });
+                      } catch { /* best-effort */ }
+                      // remove from local mock list
+                      setRevokedDevices((prev) => new Set([...prev, d.id]));
+                    }}
+                    className="touch-target inline-flex items-center gap-1.5 rounded-lg bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive hover:bg-destructive/20"
+                  >
                     <LogOut className="h-3.5 w-3.5" /> Sign out
                   </button>
                 )}

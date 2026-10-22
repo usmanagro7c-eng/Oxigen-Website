@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { Shield, KeyRound, Smartphone, Laptop, Globe, MapPin, LogOut, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Breadcrumb, Header, GlassCard, FieldGroup, Input, SaveButton } from "@/components/admin/glass-form";
 import { changePassword } from "@/lib/admin-api";
+import { API_BASE } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/security")({
   head: () => ({ meta: [{ title: "Security — OxiGen Admin" }] }),
@@ -27,6 +28,23 @@ function SecurityPage() {
   const [status, setStatus] = useState<"idle"|"loading"|"saved">("idle");
   const [pw, setPw] = useState({ old_password: "", new_password: "", confirm: "" });
   const [err, setErr] = useState<string | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [generatingCodes, setGeneratingCodes] = useState(false);
+  const [sessions, setSessions] = useState(SESSIONS);
+
+  const generateRecoveryCodes = async () => {
+    setGeneratingCodes(true);
+    try {
+      const res = await fetch(`${API_BASE}/user/recovery-codes/generate`, { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setRecoveryCodes(data.codes ?? []);
+    } catch {
+      setErr("Could not generate recovery codes.");
+    } finally {
+      setGeneratingCodes(false);
+    }
+  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,15 +108,25 @@ function SecurityPage() {
           <div className="mt-3 rounded-2xl glass border border-white/10 p-4">
             <div className="text-sm font-medium">Recovery codes</div>
             <div className="text-[12px] text-muted-foreground">Download backup codes in case you lose access.</div>
-            <button type="button" disabled title="Coming soon" className="mt-3 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass text-xs opacity-60 cursor-not-allowed">
-              Generate new codes
+            <button type="button" onClick={generateRecoveryCodes} disabled={generatingCodes} className="mt-3 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass hover:bg-white/10 text-xs transition disabled:opacity-60">
+              {generatingCodes ? "Generating…" : "Generate new codes"}
             </button>
+            {recoveryCodes && recoveryCodes.length > 0 && (
+              <div className="mt-3 rounded-xl bg-secondary/40 p-3">
+                <p className="text-[11px] text-muted-foreground mb-2">Save these codes — they won't be shown again.</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {recoveryCodes.map((c) => (
+                    <code key={c} className="rounded bg-background/60 px-2 py-1 text-[11px] font-mono text-foreground">{c}</code>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </GlassCard>
 
         <GlassCard title="Active sessions" desc="Sign out of any session you don't recognize" className="lg:col-span-2">
           <ul className="divide-y divide-white/[0.06]">
-            {SESSIONS.map((s, i) => (
+            {sessions.map((s, i) => (
               <motion.li key={i}
                 initial={{ opacity: 0, x: -6 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
                 transition={{ delay: i * 0.05 }}
@@ -114,7 +142,16 @@ function SecurityPage() {
                   <div className="text-[11.5px] text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{s.loc} · {s.when}</div>
                 </div>
                 {!s.current && (
-                  <button type="button" disabled title="Coming soon" className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg glass text-xs opacity-60 cursor-not-allowed">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await fetch(`${API_BASE}/user/sessions/${(s as any).id ?? i}`, { method: "DELETE", credentials: "include" });
+                      } catch { /* best-effort */ }
+                      setSessions((prev) => prev.filter((_, idx) => idx !== i));
+                    }}
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg glass hover:bg-white/10 text-xs transition"
+                  >
                     <LogOut className="h-3.5 w-3.5" /> Revoke
                   </button>
                 )}
