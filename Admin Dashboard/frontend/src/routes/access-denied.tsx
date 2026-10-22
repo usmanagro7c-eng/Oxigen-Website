@@ -7,7 +7,7 @@ export const Route = createFileRoute("/access-denied")({
 
 function AccessDeniedPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="min-h-dvh flex items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <AlertCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-foreground mb-2">

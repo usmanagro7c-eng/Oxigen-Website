@@ -71,7 +71,7 @@ function InboxPage() {
           <div className="p-3 border-b border-white/[0.06] relative">
             <Search className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input placeholder="Search messages…"
-              className="w-full h-9 pl-9 pr-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-sm outline-none focus:border-primary/40 focus:shadow-glow transition" />
+              className="w-full h-9 pl-9 pr-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20/40 focus:shadow-glow transition" />
           </div>
           <ul className="max-h-[560px] overflow-y-auto scrollbar-none">
             {THREADS[tab].map((t, i) => (
@@ -149,9 +149,9 @@ function InboxPage() {
             >
               <div className="font-display text-xl font-semibold">New message</div>
               <div className="mt-4 space-y-3">
-                <input placeholder="To" className="w-full h-10 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-sm outline-none focus:border-primary/40 transition" />
-                <input placeholder="Subject" className="w-full h-10 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-sm outline-none focus:border-primary/40 transition" />
-                <textarea rows={6} placeholder="Write your message…" className="w-full p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-sm outline-none focus:border-primary/40 transition resize-none" />
+                <input placeholder="To" className="w-full h-10 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20/40 transition" />
+                <input placeholder="Subject" className="w-full h-10 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20/40 transition" />
+                <textarea rows={6} placeholder="Write your message…" className="w-full p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20/40 transition resize-none" />
               </div>
               <div className="mt-5 flex items-center justify-end gap-2">
                 <button onClick={() => setCompose(false)} className="h-9 px-4 rounded-xl glass hover:bg-white/10 text-sm">Cancel</button>

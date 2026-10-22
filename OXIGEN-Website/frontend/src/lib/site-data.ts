@@ -246,6 +246,7 @@ export type CatalogItem = {
   highlights: string[];
   ingredients: string;
   available: boolean;
+  stockQty?: number | null;
 };
 
 export const catalog: CatalogItem[] = products.map((p) => {

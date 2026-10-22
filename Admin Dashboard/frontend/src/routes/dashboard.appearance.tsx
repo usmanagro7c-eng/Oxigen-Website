@@ -89,7 +89,7 @@ function AppearancePage() {
 
       <form onSubmit={save} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <GlassCard title="Theme" desc="Base color mode">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {THEMES.map((t, i) => (
               <motion.button
                 key={t.key} type="button"
@@ -113,7 +113,7 @@ function AppearancePage() {
         </GlassCard>
 
         <GlassCard title="Accent color" desc="Used across CTAs, focus rings & AI glow">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {ACCENTS.map((a, i) => (
               <motion.button
                 key={a.key} type="button"
@@ -144,7 +144,7 @@ function AppearancePage() {
             <div className="rounded-xl glass border border-white/10 p-3.5">
               <div className="text-sm font-medium">Density</div>
               <div className="text-[11.5px] text-muted-foreground mb-3">Spacing between elements</div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {(["comfortable","compact"] as const).map(d => (
                   <button key={d} type="button" onClick={() => setPref("density", d)}
                     className={`h-9 rounded-lg text-xs font-medium transition capitalize ${

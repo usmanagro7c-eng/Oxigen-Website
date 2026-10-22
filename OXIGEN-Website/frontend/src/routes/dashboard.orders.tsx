@@ -313,9 +313,10 @@ function PaymentModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="grid h-9 w-9 place-items-center rounded-xl bg-secondary text-muted-foreground hover:text-ink"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 

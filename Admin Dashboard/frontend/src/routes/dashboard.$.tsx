@@ -714,7 +714,7 @@ function FilterField({
             onChange({ field: config.field, operator: config.operator, value: e.target.value });
           }}
           placeholder={config.placeholder || `Filter by ${config.label.toLowerCase()}...`}
-          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition"
         />
       </div>
     );
@@ -730,7 +730,7 @@ function FilterField({
             if (!e.target.value) { onChange(undefined); return; }
             onChange({ field: config.field, operator: config.operator, value: e.target.value });
           }}
-          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition cursor-pointer"
+          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition cursor-pointer"
         >
           <option value="" className="bg-card text-foreground">All</option>
           {options.map((o) => (
@@ -753,7 +753,7 @@ function FilterField({
             onChange({ field: config.field, operator: config.operator, value: e.target.value });
           }}
           placeholder={config.placeholder || "Enter number..."}
-          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+          className="w-full h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition"
         />
       </div>
     );
@@ -772,7 +772,7 @@ function FilterField({
               onChange({ field: config.field, operator: "between", value: e.target.value, value2: currentValue2 });
             }}
             placeholder="Min"
-            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition"
           />
           <span className="text-xs text-muted-foreground">–</span>
           <input
@@ -783,7 +783,7 @@ function FilterField({
               onChange({ field: config.field, operator: "between", value: currentValue, value2: e.target.value });
             }}
             placeholder="Max"
-            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition"
           />
         </div>
       </div>
@@ -802,7 +802,7 @@ function FilterField({
               if (!e.target.value && !currentValue2) { onChange(undefined); return; }
               onChange({ field: config.field, operator: "between", value: e.target.value, value2: currentValue2 });
             }}
-            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition"
           />
           <span className="text-xs text-muted-foreground">–</span>
           <input
@@ -812,7 +812,7 @@ function FilterField({
               if (!currentValue && !e.target.value) { onChange(undefined); return; }
               onChange({ field: config.field, operator: "between", value: currentValue, value2: e.target.value });
             }}
-            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+            className="flex-1 h-9 px-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition"
           />
         </div>
       </div>
@@ -890,7 +890,7 @@ function AdvancedFilterPanel({
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-foreground">Advanced Filters</h3>
-            <button onClick={onClose} className="inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition">
+            <button onClick={onClose} aria-label="Close" className="inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -957,7 +957,7 @@ function Toolbar({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <input
           value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search records…"
-          className="w-full h-10 sm:h-9 pl-9 pr-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+          className="w-full h-10 sm:h-9 pl-9 pr-3 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition"
         />
       </div>
       <div className="flex items-center justify-between sm:justify-start gap-2">
@@ -1136,9 +1136,10 @@ function RowMenu({ onAction, row, slug }: { onAction: (a: RowAction) => void; ro
         <DropdownMenuTrigger asChild>
           <button
             type="button"
+            aria-label="More actions"
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition focus:outline-none focus:ring-1 focus:ring-primary/40"
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -1262,13 +1263,13 @@ function DetailDrawer({
           <motion.aside
             initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 240, damping: 28 }}
-            className="fixed top-0 right-0 z-50 h-screen w-full max-w-md glass-strong border-l border-border flex flex-col shadow-elegant">
+            className="fixed top-0 right-0 z-50 h-dvh w-full max-w-md glass-strong border-l border-border flex flex-col shadow-elegant">
             <div className="flex items-center justify-between p-5 border-b border-border">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">{title} details</div>
                 <div className="font-display text-lg font-bold mt-0.5 truncate text-foreground">{String(row[columns[0]?.key] || row.name || row.id)}</div>
               </div>
-              <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+              <button onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1660,7 +1661,7 @@ function RecordModal({
                   </div>
                   <div className="font-display text-lg font-bold mt-0.5 text-foreground">{title}</div>
                 </div>
-                <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+                <button onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -1673,7 +1674,7 @@ function RecordModal({
                       <input
                         value={String(form.title ?? "")}
                         onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         placeholder={`Discount ${String(form.item_code ?? "")}`}
                       />
                     </label>
@@ -1685,7 +1686,7 @@ function RecordModal({
                         <select
                           value={String(form.item_code ?? "")}
                           onChange={(e) => setForm((f) => ({ ...f, item_code: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                         >
                           <option value="" className="bg-card text-foreground py-1.5">— Select product —</option>
                           {itemCodes.map((opt) => (
@@ -1698,7 +1699,7 @@ function RecordModal({
                         <input
                           value={String(form.item_code ?? "")}
                           onChange={(e) => setForm((f) => ({ ...f, item_code: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm font-mono text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm font-mono text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                           placeholder="e.g. Nutri-Cept"
                         />
                       )}
@@ -1710,7 +1711,7 @@ function RecordModal({
                       <select
                         value={String(form.rate_or_discount || "Discount Percentage")}
                         onChange={(e) => setForm((f) => ({ ...f, rate_or_discount: e.target.value }))}
-                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                       >
                         <option value="Discount Percentage">Discount Percentage (%)</option>
                         <option value="Rate">Fixed Rate (new price)</option>
@@ -1726,7 +1727,7 @@ function RecordModal({
                           type="number"
                           value={String(form.rate ?? "")}
                           onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                           placeholder="New selling price"
                         />
                       </label>
@@ -1737,7 +1738,7 @@ function RecordModal({
                           type="number"
                           value={String(form.discount_amount ?? "")}
                           onChange={(e) => setForm((f) => ({ ...f, discount_amount: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                           placeholder="Amount to subtract"
                         />
                       </label>
@@ -1748,21 +1749,21 @@ function RecordModal({
                           type="number"
                           value={String(form.discount_percentage ?? "")}
                           onChange={(e) => setForm((f) => ({ ...f, discount_percentage: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                           placeholder="e.g. 10"
                         />
                       </label>
                     )}
 
                     {/* Date range */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="block">
                         <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Valid From</span>
                         <input
                           type="date"
                           value={String(form.valid_from ?? "")}
                           onChange={(e) => setForm((f) => ({ ...f, valid_from: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         />
                       </label>
                       <label className="block">
@@ -1771,20 +1772,20 @@ function RecordModal({
                           type="date"
                           value={String(form.valid_upto ?? "")}
                           onChange={(e) => setForm((f) => ({ ...f, valid_upto: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         />
                       </label>
                     </div>
 
                     {/* Priority + Disabled */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="block">
                         <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Priority</span>
                         <input
                           type="number"
                           value={String(form.priority ?? "0")}
                           onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         />
                       </label>
                       <label className="block">
@@ -1792,7 +1793,7 @@ function RecordModal({
                         <select
                           value={String(form.disable || "0")}
                           onChange={(e) => setForm((f) => ({ ...f, disable: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                         >
                           <option value="0" className="bg-card text-foreground py-1.5">No (Active)</option>
                           <option value="1" className="bg-card text-foreground py-1.5">Yes (Disabled)</option>
@@ -1935,7 +1936,7 @@ function RecordModal({
                             setManualSku(true);
                             setForm((f) => ({ ...f, sku: e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "-") }));
                           }}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm font-mono text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm font-mono text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                           placeholder="Auto-generated from Product Name"
                         />
                       </label>
@@ -1950,7 +1951,7 @@ function RecordModal({
                         <select
                           value={String(form[c.key] || itemGroups[0]?.name || "General")}
                           onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                         >
                           {itemGroups.map((g) => (
                             <option key={g.name} value={g.item_group_name || g.name} className="bg-card text-foreground py-1.5">
@@ -1970,7 +1971,7 @@ function RecordModal({
                         <select
                           value={String(form[c.key] || "All Item Groups")}
                           onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                         >
                           <option value="All Item Groups" className="bg-card text-foreground py-1.5">All Item Groups</option>
                           {itemGroups.map((g) => (
@@ -1991,7 +1992,7 @@ function RecordModal({
                         <select
                           value={String(form.status || "Enable")}
                           onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                         >
                           {PRODUCT_STATUS_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value} className="bg-card text-foreground py-1.5">
@@ -2011,7 +2012,7 @@ function RecordModal({
                         <select
                           value={String(form.status || "In stock")}
                           onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                         >
                           {INVENTORY_STATUS_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value} className="bg-card text-foreground py-1.5">
@@ -2052,7 +2053,7 @@ function RecordModal({
                         <select
                           value={String(form[c.key] || predefined[0]?.value || "")}
                           onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                         >
                           {predefined.map((opt) => (
                             <option key={opt.value} value={opt.value} className="bg-card text-foreground py-1.5">
@@ -2073,7 +2074,7 @@ function RecordModal({
                           onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
                           rows={4}
                           placeholder={`Enter ${c.label.toLowerCase()}`}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm resize-y"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm resize-y"
                         />
                       </label>
                     );
@@ -2087,7 +2088,7 @@ function RecordModal({
                           type="date"
                           value={String(form[c.key] ?? "")}
                           onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
-                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                          className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         />
                       </label>
                     );
@@ -2105,7 +2106,7 @@ function RecordModal({
                             setForm((f) => ({ ...f, [c.key]: e.target.value }));
                           }
                         }}
-                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         placeholder={`Enter ${c.label.toLowerCase()}`}
                       />
                     </label>
@@ -2151,7 +2152,7 @@ function RecordModal({
                     ) : mediaFiles.length === 0 ? (
                       <div className="py-16 text-center text-xs text-muted-foreground">No media available. Upload images first.</div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                         {mediaFiles.map((f) => {
                           const isImage = /\.(jpg|jpeg|png|webp)$/i.test(f.file_url);
                           return (
@@ -2287,7 +2288,7 @@ function OrderActionModal({
                     {mode === "payment" ? "Record Payment" : "Return / Cancel Order"}
                   </div>
                 </div>
-                <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+                <button onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -2316,7 +2317,7 @@ function OrderActionModal({
                     <select
                       value={form.mode_of_payment}
                       onChange={(e) => setForm((f) => ({ ...f, mode_of_payment: e.target.value }))}
-                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
                     >
                       {modes.map((m) => (
                         <option key={m.name} value={m.name} className="bg-card text-foreground py-1.5">{m.name}</option>
@@ -2326,14 +2327,14 @@ function OrderActionModal({
                       )}
                     </select>
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label className="block">
                       <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Amount (PKR)</span>
                       <input
                         type="number" min="0" step="0.01"
                         value={form.amount}
                         onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                         placeholder="Outstanding amount"
                       />
                     </label>
@@ -2343,7 +2344,7 @@ function OrderActionModal({
                         type="date"
                         value={form.posting_date}
                         onChange={(e) => setForm((f) => ({ ...f, posting_date: e.target.value }))}
-                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                       />
                     </label>
                   </div>
@@ -2352,7 +2353,7 @@ function OrderActionModal({
                     <input
                       value={form.reference_no}
                       onChange={(e) => setForm((f) => ({ ...f, reference_no: e.target.value }))}
-                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                      className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
                       placeholder="Transaction ID / Cheque / Voucher No"
                     />
                   </label>
@@ -3287,7 +3288,7 @@ function AnalyticsPage() {
               />
             ))}
           </div>
-          <div className="grid grid-cols-12 mt-2 text-[10px] text-muted-foreground text-center">
+          <div className="hidden sm:grid grid-cols-12 mt-2 text-[10px] text-muted-foreground text-center">
             {(stats?.monthLabels || ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]).map((m) => (
               <div key={m}>{m}</div>
             ))}
@@ -3711,7 +3712,7 @@ function BannerModal({
       >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">{banner ? "Edit Banner" : "Create Banner"}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-white transition"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-white transition"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="space-y-2">

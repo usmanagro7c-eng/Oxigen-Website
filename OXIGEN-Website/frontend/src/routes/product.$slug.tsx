@@ -384,7 +384,7 @@ function ProductPage() {
                 )}
               </div>
               {gallery.length > 1 && (
-                <div className="mt-4 grid grid-cols-4 gap-3">
+                <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 gap-3">
                   {gallery.map((src: string, i: number) => (
                     <button
                       key={src}

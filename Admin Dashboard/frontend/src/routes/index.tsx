@@ -96,7 +96,7 @@ function AdminLoginPage() {
   // Demo and Forgot Password functions removed - users must login manually
 
   return (
-    <div className="relative min-h-screen w-full bg-gradient-to-br from-secondary/70 via-background to-secondary/50 text-foreground flex flex-col justify-between overflow-hidden selection:bg-primary/20">
+    <div className="relative min-h-dvh w-full bg-gradient-to-br from-secondary/70 via-background to-secondary/50 text-foreground flex flex-col justify-between overflow-hidden selection:bg-primary/20">
       {/* Background Ambient Glows & Grids */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <motion.div
@@ -202,7 +202,7 @@ function AdminLoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="user@company.com"
-                    className="w-full rounded-xl bg-background border border-border pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full rounded-xl bg-background border border-border pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -226,7 +226,7 @@ function AdminLoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-xl bg-background border border-border pl-10 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full rounded-xl bg-background border border-border pl-10 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                   <button
                     type="button"

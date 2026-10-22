@@ -55,7 +55,7 @@ function SignUpPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full rounded-xl border border-border bg-white/60 py-3 pl-10 pr-4 text-sm text-ink outline-none focus:border-primary"
+                  className="w-full rounded-xl border border-border bg-white/60 py-3 pl-10 pr-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   placeholder="Your name"
                 />
               </div>
@@ -69,7 +69,7 @@ function SignUpPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full rounded-xl border border-border bg-white/60 py-3 pl-10 pr-4 text-sm text-ink outline-none focus:border-primary"
+                  className="w-full rounded-xl border border-border bg-white/60 py-3 pl-10 pr-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   placeholder="you@example.com"
                 />
               </div>

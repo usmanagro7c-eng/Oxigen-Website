@@ -57,7 +57,7 @@ function OnboardingPage() {
   const progressIndex = step; // 0..4
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground overflow-hidden">
+    <div className="relative min-h-dvh bg-background text-foreground overflow-hidden">
       <BackgroundFx />
 
       {/* Top bar */}

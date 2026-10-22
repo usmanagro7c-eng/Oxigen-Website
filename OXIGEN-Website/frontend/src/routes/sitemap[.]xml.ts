@@ -2,8 +2,8 @@ import React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { catalog } from "@/lib/site-data";
 
-// TODO: replace with your project URL once a project name or custom domain is set.
-const BASE_URL = "https://www.oxigen.pk";
+// Canonical frontend origin (must match the deployed URL / index.html canonical).
+const BASE_URL = "https://oxigen.usman-agro7c.workers.dev";
 
 const paths = [
   "/",

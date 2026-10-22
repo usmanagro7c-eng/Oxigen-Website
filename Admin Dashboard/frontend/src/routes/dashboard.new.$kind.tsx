@@ -232,7 +232,7 @@ function StepContent({
               <select
                 value={form.category || itemGroups[0]?.name || "General"}
                 onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
-                className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                className="w-full h-10 px-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
               >
                 {itemGroups.map((g) => (
                   <option key={g.name} value={g.item_group_name || g.name} className="bg-card text-foreground py-1.5">
@@ -261,7 +261,7 @@ function StepContent({
               value={form.description || ""}
               onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
               placeholder="Enter product or project description…"
-              className="w-full p-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none shadow-sm placeholder:text-muted-foreground/60"
+              className="w-full p-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition-all resize-none shadow-sm placeholder:text-muted-foreground/60"
             />
           </FieldGroup>
         </div>
@@ -373,7 +373,7 @@ if (step === "media") {
         <div className="h-3" />
         <FieldGroup label="Short Description">
           <textarea rows={3} defaultValue={form.description || "Premium OxiGen supplement formulation."}
-            className="w-full p-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition resize-none" />
+            className="w-full p-3.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-2 focus:ring-primary/20 transition resize-none" />
         </FieldGroup>
       </GlassCard>
     );

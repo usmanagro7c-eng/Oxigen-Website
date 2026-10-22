@@ -899,7 +899,7 @@ function AdvancedFilterPanel({
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-foreground">Advanced Filters</h3>
-            <button onClick={onClose} className="inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition">
+            <button onClick={onClose} aria-label="Close" className="inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -1145,9 +1145,10 @@ function RowMenu({ onAction, row, slug }: { onAction: (a: RowAction) => void; ro
         <DropdownMenuTrigger asChild>
           <button
             type="button"
+            aria-label="More actions"
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition focus:outline-none focus:ring-1 focus:ring-primary/40"
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -1271,13 +1272,13 @@ function DetailDrawer({
           <motion.aside
             initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 240, damping: 28 }}
-            className="fixed top-0 right-0 z-50 h-screen w-full max-w-md glass-strong border-l border-border flex flex-col shadow-elegant">
+            className="fixed top-0 right-0 z-50 h-dvh w-full max-w-md glass-strong border-l border-border flex flex-col shadow-elegant">
             <div className="flex items-center justify-between p-5 border-b border-border">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">{title} details</div>
                 <div className="font-display text-lg font-bold mt-0.5 truncate text-foreground">{String(row[columns[0]?.key] || row.name || row.id)}</div>
               </div>
-              <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+              <button onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1682,7 +1683,7 @@ function RecordModal({
                   </div>
                   <div className="font-display text-lg font-bold mt-0.5 text-foreground">{title}</div>
                 </div>
-                <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+                <button onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -1786,7 +1787,7 @@ function RecordModal({
                     )}
 
                     {/* Date range */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="block">
                         <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Valid From</span>
                         <input
@@ -1808,7 +1809,7 @@ function RecordModal({
                     </div>
 
                     {/* Priority + Disabled */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="block">
                         <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Priority</span>
                         <input
@@ -2288,7 +2289,7 @@ function RecordModal({
                     ) : mediaFiles.length === 0 ? (
                       <div className="py-16 text-center text-xs text-muted-foreground">No media available. Upload images first.</div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                         {mediaFiles.map((f) => {
                           const isImage = /\.(jpg|jpeg|png|webp)$/i.test(f.file_url);
                           return (
@@ -2424,7 +2425,7 @@ function OrderActionModal({
                     {mode === "payment" ? "Record Payment" : "Return / Cancel Order"}
                   </div>
                 </div>
-                <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
+                <button onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -2463,7 +2464,7 @@ function OrderActionModal({
                       )}
                     </select>
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label className="block">
                       <span className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Amount (PKR)</span>
                       <input
@@ -3479,7 +3480,7 @@ function AnalyticsPage() {
               />
             ))}
           </div>
-          <div className="grid grid-cols-12 mt-2 text-[10px] text-muted-foreground text-center">
+          <div className="hidden sm:grid grid-cols-12 mt-2 text-[10px] text-muted-foreground text-center">
             {(stats?.monthLabels || ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]).map((m) => (
               <div key={m}>{m}</div>
             ))}
@@ -3904,7 +3905,7 @@ function BannerModal({
       >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">{banner ? "Edit Banner" : "Create Banner"}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-white transition"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-white transition"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="space-y-2">

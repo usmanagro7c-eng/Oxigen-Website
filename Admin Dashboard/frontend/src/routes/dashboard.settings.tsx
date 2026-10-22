@@ -261,7 +261,7 @@ function SettingsPage() {
           {/* Appearance */}
           <section id="appearance">
             <GlassCard title="Appearance" desc="Choose how OxiGen Admin looks on your devices.">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {([
                   { id: "light", label: "Light", icon: Sun },
                   { id: "dark", label: "Dark", icon: Moon },

@@ -127,7 +127,7 @@ function CheckoutPage() {
         type={type}
         value={form[name]}
         onChange={(e) => set(name, e.target.value)}
-        className="w-full rounded-xl border border-border bg-white/60 px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-primary"
+        className="w-full rounded-xl border border-border bg-white/60 px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
       />
       {errors[name] && <p className="mt-1 text-xs text-destructive">{errors[name]}</p>}
     </div>

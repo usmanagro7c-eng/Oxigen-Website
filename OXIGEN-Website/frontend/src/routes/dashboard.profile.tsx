@@ -49,8 +49,8 @@ function ProfilePage() {
             <div className="grid h-28 w-28 place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-accent text-3xl font-black text-white shadow-lg shadow-primary/25">
               {form.name ? form.name.split(" ").map((n) => n[0]).slice(0, 2).join("") : "U"}
             </div>
-            <button className="touch-target absolute -bottom-2 -right-2 grid h-10 w-10 place-items-center rounded-full bg-white text-primary shadow-md ring-1 ring-border">
-              <Camera className="h-4 w-4" />
+            <button aria-label="Upload profile photo" className="touch-target absolute -bottom-2 -right-2 grid h-10 w-10 place-items-center rounded-full bg-white text-primary shadow-md ring-1 ring-border">
+              <Camera className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
           <p className="mt-4 font-display text-lg font-extrabold text-ink">{form.name}</p>

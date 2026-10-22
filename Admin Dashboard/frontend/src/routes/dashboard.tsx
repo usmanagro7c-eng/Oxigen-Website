@@ -81,7 +81,7 @@ function DashboardLayout() {
   return (
     <>
       <Toaster />
-      <div className="relative min-h-screen bg-gradient-to-br from-secondary/60 via-background to-secondary/40 text-foreground">
+      <div className="relative min-h-dvh bg-gradient-to-br from-secondary/60 via-background to-secondary/40 text-foreground">
         {/* Ambient background matching Oxigen website */}
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
           <div className="absolute -left-32 top-0 h-[480px] w-[480px] rounded-full bg-primary/12 blur-3xl" />
@@ -97,7 +97,7 @@ function DashboardLayout() {
             mobileOpen={mobileOpen}
             onMobileClose={() => setMobileOpen(false)}
           />
-          <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+          <div className="flex-1 min-w-0 flex flex-col min-h-dvh">
             <TopNav onMobileOpen={() => setMobileOpen(true)} />
             <main className="flex-1 p-4 md:p-6 lg:p-8">
               <Outlet />

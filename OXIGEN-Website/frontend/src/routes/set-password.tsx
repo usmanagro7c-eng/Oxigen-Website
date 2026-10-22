@@ -142,7 +142,7 @@ function SetPasswordPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="w-full rounded-xl border border-border bg-white/60 py-3 pl-10 pr-10 text-sm text-ink outline-none focus:border-primary"
+                  className="w-full rounded-xl border border-border bg-white/60 py-3 pl-10 pr-10 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   placeholder="At least 8 characters"
                 />
                 <button
@@ -166,7 +166,7 @@ function SetPasswordPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="w-full rounded-xl border border-border bg-white/60 py-3 pl-10 pr-4 text-sm text-ink outline-none focus:border-primary"
+                  className="w-full rounded-xl border border-border bg-white/60 py-3 pl-10 pr-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   placeholder="Re-enter your password"
                 />
               </div>

@@ -169,7 +169,7 @@ function AddressModal({
           <Field name="name" label="Full Name" defaultValue={address?.name} required />
           <Field name="phone" label="Phone Number" defaultValue={address?.phone} required />
           <Field name="line1" label="Street Address" defaultValue={address?.line1} required />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field name="city" label="City" defaultValue={address?.city} required />
             <Field name="province" label="Province" defaultValue={address?.province} required />
           </div>
