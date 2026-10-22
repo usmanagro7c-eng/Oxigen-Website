@@ -74,7 +74,7 @@ function AIAssistant() {
             <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Online
             </span>
-            <button className="ml-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-card border border-border text-xs font-semibold hover:bg-secondary transition">
+            <button type="button" disabled title="Coming soon" className="ml-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-card border border-border text-xs font-semibold opacity-60 cursor-not-allowed">
               <Plus className="h-3.5 w-3.5" /> New chat
             </button>
           </div>
@@ -127,7 +127,7 @@ function AIAssistant() {
           {/* Composer */}
           <div className="p-3 border-t border-white/[0.06]">
             <div className="flex items-end gap-2 rounded-2xl glass border border-white/10 p-2 focus-within:border-primary/40 focus-within:shadow-glow transition">
-              <button className="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white/5" aria-label="Attach">
+              <button type="button" disabled title="Coming soon" className="inline-flex h-9 w-9 items-center justify-center rounded-lg opacity-60 cursor-not-allowed" aria-label="Attach (coming soon)">
                 <Paperclip className="h-4 w-4 text-muted-foreground" />
               </button>
               <textarea
@@ -138,7 +138,7 @@ function AIAssistant() {
                 placeholder="Ask AI to generate, edit, translate, analyze…"
                 className="flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-muted-foreground/60 max-h-40"
               />
-              <button className="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white/5" aria-label="Voice">
+              <button type="button" disabled title="Coming soon" className="inline-flex h-9 w-9 items-center justify-center rounded-lg opacity-60 cursor-not-allowed" aria-label="Voice (coming soon)">
                 <Mic className="h-4 w-4 text-muted-foreground" />
               </button>
               <motion.button
@@ -165,7 +165,7 @@ function AIAssistant() {
                   initial={{ opacity: 0, x: 6 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
                   transition={{ delay: i * 0.05 }}
                 >
-                  <button className="group w-full flex items-center gap-3 rounded-xl p-2.5 hover:bg-white/5 transition text-left">
+                  <button type="button" disabled title="Coming soon" className="group w-full flex items-center gap-3 rounded-xl p-2.5 opacity-60 cursor-not-allowed text-left">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg glass shrink-0">
                       <History className="h-3.5 w-3.5 text-muted-foreground" />
                     </span>

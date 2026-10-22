@@ -228,7 +228,7 @@ function OrdersPage() {
                     <XCircle className="h-4 w-4" /> Remove Order
                   </button>
                 )}
-                <button className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-white">
+                <button type="button" disabled title="Coming soon" className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border opacity-60 cursor-not-allowed">
                   <RotateCcw className="h-4 w-4" /> Buy Again
                 </button>
               </div>

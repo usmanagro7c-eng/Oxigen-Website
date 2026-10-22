@@ -457,7 +457,15 @@ function SignInForm() {
           <Checkbox checked={remember} onChange={setRemember} />
           <span className="text-muted-foreground">Remember me</span>
         </label>
-        <a href="#" className="text-primary hover:text-secondary transition-colors">Forgot password?</a>
+        <button type="button" onClick={async () => {
+          const email = window.prompt("Enter your admin email to reset password:");
+          if (!email) return;
+          try {
+            const res = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+            if (res.ok) alert("If an account exists, a reset link has been sent to " + email);
+            else alert("Could not send reset link. Please try again.");
+          } catch { alert("Network error. Please try again."); }
+        }} className="text-primary hover:text-secondary transition-colors">Forgot password?</button>
       </div>
 
       {errors.form && (
@@ -538,7 +546,7 @@ function SignUpForm() {
       <label className="flex items-start gap-2.5 cursor-pointer select-none text-xs">
         <Checkbox checked={agree} onChange={setAgree} />
         <span className="text-muted-foreground leading-relaxed">
-          I agree to the <a href="#" className="text-foreground hover:text-primary transition-colors">Terms & Conditions</a> and <a href="#" className="text-foreground hover:text-primary transition-colors">Privacy Policy</a>.
+          I agree to the <a href="https://oxigen.usman-agro7c.workers.dev/terms" target="_blank" rel="noopener noreferrer" className="text-foreground hover:text-primary transition-colors">Terms & Conditions</a> and <a href="https://oxigen.usman-agro7c.workers.dev/privacy" target="_blank" rel="noopener noreferrer" className="text-foreground hover:text-primary transition-colors">Privacy Policy</a>.
         </span>
       </label>
       <AnimatePresence>
@@ -764,10 +772,10 @@ function FooterLinks() {
   return (
     <div className="mt-8 flex flex-wrap items-center justify-between gap-3 text-[11px] text-muted-foreground">
       <div className="flex items-center gap-4">
-        <a href="#" className="hover:text-foreground transition-colors">Terms of Service</a>
-        <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
+        <a href="https://oxigen.usman-agro7c.workers.dev/terms" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Terms of Service</a>
+        <a href="https://oxigen.usman-agro7c.workers.dev/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Privacy Policy</a>
       </div>
-      <a href="#" className="hover:text-foreground transition-colors">Need help? Contact support</a>
+      <a href="https://oxigen.usman-agro7c.workers.dev/contact" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Need help? Contact support</a>
     </div>
   );
 }

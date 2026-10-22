@@ -339,7 +339,7 @@ function SettingsPage() {
                         {s.current ? (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">This device</span>
                         ) : (
-                          <button type="button" className="text-xs font-medium text-muted-foreground hover:text-destructive transition-colors">Revoke</button>
+                          <button type="button" disabled title="Coming soon" className="text-xs font-medium text-muted-foreground opacity-60 cursor-not-allowed">Revoke</button>
                         )}
                       </li>
                     ))}
@@ -350,7 +350,7 @@ function SettingsPage() {
           </section>
 
           <div className="flex items-center justify-end gap-2">
-            <button type="button" className="h-10 px-4 rounded-xl glass hover:bg-white/10 text-sm font-medium transition-colors">Cancel</button>
+            <button type="button" onClick={() => window.location.reload()} className="h-10 px-4 rounded-xl glass hover:bg-white/10 text-sm font-medium transition-colors">Cancel</button>
             <SaveButton status={status} />
           </div>
         </form>

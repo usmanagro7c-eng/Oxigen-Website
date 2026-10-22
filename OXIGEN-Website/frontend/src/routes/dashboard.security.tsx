@@ -122,7 +122,7 @@ function SecurityPage() {
                 {d.current ? (
                   <StatusBadge status="This device" tone="success" />
                 ) : (
-                  <button className="touch-target inline-flex items-center gap-1.5 rounded-lg bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive hover:bg-destructive/20">
+                  <button type="button" disabled title="Coming soon" className="touch-target inline-flex items-center gap-1.5 rounded-lg bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive opacity-60 cursor-not-allowed">
                     <LogOut className="h-3.5 w-3.5" /> Sign out
                   </button>
                 )}

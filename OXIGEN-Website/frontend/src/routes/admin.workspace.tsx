@@ -107,7 +107,7 @@ function WorkspacePage() {
             </div>
           ))}
         </div>
-        <button className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass hover:bg-white/10 text-xs transition">
+        <button type="button" disabled title="Coming soon" className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass text-xs opacity-60 cursor-not-allowed">
           <Users className="h-3.5 w-3.5" /> Manage members
         </button>
       </GlassCard>

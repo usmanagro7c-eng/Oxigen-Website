@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Camera, KeyRound, Save } from "lucide-react";
 import { DashCard, SectionHeader } from "@/components/dashboard/DashboardShell";
 import { useStore } from "@/lib/store";
+import { API_BASE } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard/profile")({
@@ -12,6 +13,8 @@ export const Route = createFileRoute("/dashboard/profile")({
 
 function ProfilePage() {
   const { profile, updateProfile } = useStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -49,9 +52,38 @@ function ProfilePage() {
             <div className="grid h-28 w-28 place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-accent text-3xl font-black text-white shadow-lg shadow-primary/25">
               {form.name ? form.name.split(" ").map((n) => n[0]).slice(0, 2).join("") : "U"}
             </div>
-            <button aria-label="Upload profile photo" className="touch-target absolute -bottom-2 -right-2 grid h-10 w-10 place-items-center rounded-full bg-white text-primary shadow-md ring-1 ring-border">
+            <button
+              type="button"
+              aria-label="Upload profile photo"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="touch-target absolute -bottom-2 -right-2 grid h-10 w-10 place-items-center rounded-full bg-white text-primary shadow-md ring-1 ring-border disabled:opacity-60"
+            >
               <Camera className="h-4 w-4" aria-hidden="true" />
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploading(true);
+                try {
+                  const fd = new FormData();
+                  fd.append("image", file);
+                  const res = await fetch(`${API_BASE}/customer/profile-image`, { method: "POST", credentials: "include", body: fd });
+                  if (!res.ok) throw new Error("Upload failed");
+                  toast.success("Profile photo updated");
+                } catch {
+                  toast.error("Could not upload photo.");
+                } finally {
+                  setUploading(false);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }
+              }}
+            />
           </div>
           <p className="mt-4 font-display text-lg font-extrabold text-ink">{form.name}</p>
           <p className="text-sm text-muted-foreground">{form.email}</p>

@@ -90,7 +90,7 @@ function SecurityPage() {
           <div className="mt-3 rounded-2xl glass border border-white/10 p-4">
             <div className="text-sm font-medium">Recovery codes</div>
             <div className="text-[12px] text-muted-foreground">Download backup codes in case you lose access.</div>
-            <button type="button" className="mt-3 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass hover:bg-white/10 text-xs transition">
+            <button type="button" disabled title="Coming soon" className="mt-3 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl glass text-xs opacity-60 cursor-not-allowed">
               Generate new codes
             </button>
           </div>
@@ -114,7 +114,7 @@ function SecurityPage() {
                   <div className="text-[11.5px] text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{s.loc} · {s.when}</div>
                 </div>
                 {!s.current && (
-                  <button className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg glass hover:bg-white/10 text-xs">
+                  <button type="button" disabled title="Coming soon" className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg glass text-xs opacity-60 cursor-not-allowed">
                     <LogOut className="h-3.5 w-3.5" /> Revoke
                   </button>
                 )}
