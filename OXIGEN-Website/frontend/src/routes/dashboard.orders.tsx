@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Package,
@@ -19,6 +19,7 @@ import {
 } from "@/components/dashboard/DashboardShell";
 import { formatPKR } from "@/lib/site-data";
 import { useStore, type Order } from "@/lib/store";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard/orders")({
   head: () => ({ meta: [{ title: "My Orders — OxiGen" }, { name: "robots", content: "noindex" }] }),
@@ -47,8 +48,25 @@ function matchesFilter(o: Order, f: (typeof FILTERS)[number]): boolean {
 }
 
 function OrdersPage() {
-  const { orders: storeOrders, cancelOrder, removeOrder, paymentOrder, returnOrder } = useStore();
+  const { orders: storeOrders, cancelOrder, removeOrder, paymentOrder, returnOrder, addToCart } = useStore();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
+
+  const buyAgain = (o: Order) => {
+    let added = 0;
+    (o.items ?? []).forEach((it) => {
+      if (it.slug) {
+        addToCart(it.slug, it.qty ?? 1);
+        added++;
+      }
+    });
+    if (added > 0) {
+      toast.success(`Added ${added} item(s) to cart`);
+      navigate({ to: "/cart" });
+    } else {
+      toast.info("No items available to reorder.");
+    }
+  };
   const [q, setQ] = useState("");
   const [payingOrder, setPayingOrder] = useState<Order | null>(null);
 
@@ -228,7 +246,11 @@ function OrdersPage() {
                     <XCircle className="h-4 w-4" /> Remove Order
                   </button>
                 )}
-                <button type="button" disabled title="Coming soon" className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border opacity-60 cursor-not-allowed">
+                <button
+                  type="button"
+                  onClick={() => buyAgain(o)}
+                  className="touch-target inline-flex items-center gap-1.5 rounded-xl bg-white/70 px-4 py-2 text-sm font-semibold text-ink ring-1 ring-inset ring-border hover:bg-white"
+                >
                   <RotateCcw className="h-4 w-4" /> Buy Again
                 </button>
               </div>
