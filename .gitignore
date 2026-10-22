@@ -72,6 +72,7 @@ desktop.ini
 .superpowers/
 .gemini/
 .playwright-mcp/
+.opencode/
 opencode.json
 OxigenDeploy.md
 DEFLOY-STEPS.md
