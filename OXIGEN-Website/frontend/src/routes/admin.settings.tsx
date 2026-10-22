@@ -59,7 +59,6 @@ function SettingsPage() {
   const [twofa, setTwofa] = useState(true);
   const [adminSessions, setAdminSessions] = useState([
     { icon: Laptop2, device: "Admin Workstation — Chrome", where: "Lahore, PK", current: true },
-    { icon: Smartphone, device: "iPhone 15 — OxiGen Admin iOS", where: "Karachi, PK", current: false },
   ]);
   const [logoUploading, setLogoUploading] = useState(false);
 
