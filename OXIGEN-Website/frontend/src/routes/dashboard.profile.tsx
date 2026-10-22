@@ -71,9 +71,10 @@ function ProfilePage() {
                 if (!file) return;
                 setUploading(true);
                 try {
+                  const csrf = await fetch(`${API_BASE}/csrf-token`, { credentials: "include" }).then((r) => r.json()).then((d) => d.csrfToken);
                   const fd = new FormData();
                   fd.append("image", file);
-                  const res = await fetch(`${API_BASE}/customer/profile-image`, { method: "POST", credentials: "include", body: fd });
+                  const res = await fetch(`${API_BASE}/customer/profile-image`, { method: "POST", credentials: "include", headers: { "X-CSRF-Token": csrf }, body: fd });
                   if (!res.ok) throw new Error("Upload failed");
                   toast.success("Profile photo updated");
                 } catch {

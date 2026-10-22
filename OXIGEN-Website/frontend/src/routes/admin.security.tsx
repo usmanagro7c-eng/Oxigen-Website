@@ -35,7 +35,8 @@ function SecurityPage() {
   const generateRecoveryCodes = async () => {
     setGeneratingCodes(true);
     try {
-      const res = await fetch(`${API_BASE}/user/recovery-codes/generate`, { method: "POST", credentials: "include" });
+      const csrf = await fetch(`${API_BASE}/csrf-token`, { credentials: "include" }).then((r) => r.json()).then((d) => d.csrfToken);
+      const res = await fetch(`${API_BASE}/user/recovery-codes/generate`, { method: "POST", credentials: "include", headers: { "X-CSRF-Token": csrf } });
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       setRecoveryCodes(data.codes ?? []);
@@ -146,7 +147,8 @@ function SecurityPage() {
                     type="button"
                     onClick={async () => {
                       try {
-                        await fetch(`${API_BASE}/user/sessions/${(s as any).id ?? i}`, { method: "DELETE", credentials: "include" });
+                        const csrf = await fetch(`${API_BASE}/csrf-token`, { credentials: "include" }).then((r) => r.json()).then((d) => d.csrfToken);
+                        await fetch(`${API_BASE}/user/sessions/${(s as any).id ?? i}`, { method: "DELETE", credentials: "include", headers: { "X-CSRF-Token": csrf } });
                       } catch { /* best-effort */ }
                       setSessions((prev) => prev.filter((_, idx) => idx !== i));
                     }}

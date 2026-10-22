@@ -127,10 +127,11 @@ function SecurityPage() {
                     type="button"
                     onClick={async () => {
                       try {
+                        const csrf = await fetch(`${API_BASE}/csrf-token`, { credentials: "include" }).then((r) => r.json()).then((d) => d.csrfToken);
                         await fetch(`${API_BASE}/user/sessions/revoke-others`, {
                           method: "POST",
                           credentials: "include",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
                           body: JSON.stringify({ currentId: "current" }),
                         });
                       } catch { /* best-effort */ }

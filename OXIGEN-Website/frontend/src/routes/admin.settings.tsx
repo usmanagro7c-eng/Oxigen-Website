@@ -343,8 +343,11 @@ function SettingsPage() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => {
-                              try { fetch(`${API_BASE}/user/sessions/${s.device}`, { method: "DELETE", credentials: "include" }); } catch {}
+                            onClick={async () => {
+                              try {
+                                const csrf = await fetch(`${API_BASE}/csrf-token`, { credentials: "include" }).then((r) => r.json()).then((d) => d.csrfToken);
+                                await fetch(`${API_BASE}/user/sessions/${encodeURIComponent(s.device)}`, { method: "DELETE", credentials: "include", headers: { "X-CSRF-Token": csrf } });
+                              } catch { /* best-effort */ }
                               setAdminSessions((prev) => prev.filter((x) => x.device !== s.device));
                             }}
                             className="text-xs font-medium text-muted-foreground hover:text-destructive transition-colors"

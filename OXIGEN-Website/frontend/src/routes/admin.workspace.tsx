@@ -50,10 +50,11 @@ function WorkspacePage() {
   const inviteMember = async () => {
     if (!inviteName.trim() || !inviteEmail.trim()) return;
     try {
+      const csrf = await fetch(`${API_BASE}/csrf-token`, { credentials: "include" }).then((r) => r.json()).then((d) => d.csrfToken);
       const res = await fetch(`${API_BASE}/admin/members`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
         body: JSON.stringify({ name: inviteName, email: inviteEmail, role: inviteRole }),
       });
       if (res.ok) {
@@ -65,7 +66,8 @@ function WorkspacePage() {
 
   const removeMember = async (id: string) => {
     try {
-      await fetch(`${API_BASE}/admin/members/${id}`, { method: "DELETE", credentials: "include" });
+      const csrf = await fetch(`${API_BASE}/csrf-token`, { credentials: "include" }).then((r) => r.json()).then((d) => d.csrfToken);
+      await fetch(`${API_BASE}/admin/members/${id}`, { method: "DELETE", credentials: "include", headers: { "X-CSRF-Token": csrf } });
       loadMembers();
     } catch { /* ignore */ }
   };
