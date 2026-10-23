@@ -183,7 +183,6 @@
 
   html {
     scroll-behavior: smooth;
-    overflow-x: hidden;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -210,9 +209,9 @@
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
+    overflow-x: clip;
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior-y: contain;
+    overscroll-behavior-y: auto;
   }
 
   h1, h2, h3, h4, h5, h6 {

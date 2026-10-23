@@ -182,7 +182,7 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior-y: contain;
+    overscroll-behavior-y: auto;
   }
 
   select {
@@ -201,7 +201,6 @@
 @layer base {
   html {
     scroll-behavior: smooth;
-    overflow-x: hidden;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -216,7 +215,7 @@
   }
 
   body {
-    overflow-x: hidden;
+    overflow-x: clip;
     -webkit-tap-highlight-color: transparent;
   }
 
