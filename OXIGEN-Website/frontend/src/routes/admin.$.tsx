@@ -2951,7 +2951,7 @@ function LiveTablePage({
       const recordName = r.rawKey || r.name || r.id || r.rawId;
       const itemCode = r.sku || r.item_code || r.name || recordName;
       try {
-        await updateItem(itemCode, { disabled: a === "disable" ? 1 : 0 });
+        await updateItem(itemCode, { status: a === "disable" ? "Disabled" : "Active" });
         pushToast("success", `Item ${a === "disable" ? "disabled" : "enabled"}`);
         loadData();
       } catch (err: any) {
