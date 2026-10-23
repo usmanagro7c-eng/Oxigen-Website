@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ChevronRight, Search, SlidersHorizontal, Download, Plus, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronDown, Sparkles, RefreshCw,
-  Eye, Pencil, Trash2, X, Check, AlertCircle, ImagePlus, AlertTriangle, Upload,
+  Eye, EyeOff, Pencil, Trash2, X, Check, AlertCircle, ImagePlus, AlertTriangle, Upload,
   CreditCard, RotateCcw, Banknote,
   PanelTop, MessageSquareQuote, HelpCircle, Link2, Megaphone, FileText,
   type LucideIcon,
@@ -998,7 +998,7 @@ function Toolbar({
   );
 }
 
-type RowAction = "view" | "edit" | "delete" | "payment" | "return";
+type RowAction = "view" | "edit" | "delete" | "payment" | "return" | "disable" | "enable";
 function renderCellValue(c: Column, r: Row, onToggle?: (key: string, row: Row, checked: boolean) => void, slug?: string) {
   if (c.type === "toggle") {
     if (slug === "inventory" && c.key === "nonActive") {
@@ -1134,6 +1134,13 @@ function RowMenu({ onAction, row, slug }: { onAction: (a: RowAction) => void; ro
       ? [
           { key: "payment" as RowAction, label: "Payment", icon: CreditCard },
           { key: "return" as RowAction, label: "Return / Cancel", icon: RotateCcw, danger: true },
+        ]
+      : []),
+    ...(slug === "products" || slug === "inventory"
+      ? [
+          r?.disabled
+            ? { key: "enable" as RowAction, label: "Enable", icon: Eye, danger: false }
+            : { key: "disable" as RowAction, label: "Disable", icon: EyeOff, danger: false },
         ]
       : []),
     { key: "delete", label: "Delete", icon: Trash2, danger: true },
@@ -2940,13 +2947,25 @@ function LiveTablePage({
       setModal({ open: true, mode: "return", row: r, index: idx });
       return;
     }
+    if (a === "disable" || a === "enable") {
+      const recordName = r.rawKey || r.name || r.id || r.rawId;
+      const itemCode = r.sku || r.item_code || r.name || recordName;
+      try {
+        await updateItem(itemCode, { disabled: a === "disable" ? 1 : 0 });
+        pushToast("success", `Item ${a === "disable" ? "disabled" : "enabled"}`);
+        loadData();
+      } catch (err: any) {
+        pushToast("error", err.message || `Failed to ${a} item`);
+      }
+      return;
+    }
     if (a === "delete") {
       const recordName = r.rawKey || r.name || r.id || r.rawId;
       try {
         if (slug === "products") {
           const result = await deleteItem(recordName);
           if (result.action === "disabled") {
-            pushToast("warning", result.message || `${singular} archived (linked to orders)`);
+            pushToast("info", `${singular} removed from website (kept for order history)`);
             loadData();
             return;
           }
@@ -2993,7 +3012,7 @@ function LiveTablePage({
           const itemCode = r.sku || r.item_code || r.name || recordName;
           const result = await deleteItem(itemCode);
           if (result.action === "disabled") {
-            pushToast("warning", result.message || `${singular} archived (linked to orders)`);
+            pushToast("info", `${singular} removed from website (kept for order history)`);
             loadData();
             return;
           }
