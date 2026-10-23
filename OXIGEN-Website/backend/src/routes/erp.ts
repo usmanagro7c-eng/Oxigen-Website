@@ -52,7 +52,7 @@ router.get("/erp/stats", async (_req: Request, res: Response) => {
 
     // 3. Fetch Items
     const itemParams = new URLSearchParams({
-      fields: JSON.stringify(["name", "item_code", "item_name", "item_group", "standard_rate", "image"]),
+      fields: JSON.stringify(["name", "item_code", "item_name", "item_group", "standard_rate", "image", "disabled"]),
       limit_page_length: "500",
     });
     const itemRes = await erpFetch(
@@ -60,7 +60,11 @@ router.get("/erp/stats", async (_req: Request, res: Response) => {
       { headers: getErpHeaders() }
     ).catch(() => null);
     const itemJson = itemRes?.ok ? ((await itemRes.json()) as any) : null;
-    const itemsData: any[] = itemJson?.data ?? [];
+    const { hiddenItems } = await import("../lib/hidden-items.js");
+    const hidden = new Set(hiddenItems.list());
+    const itemsData: any[] = (itemJson?.data ?? []).filter((it: any) =>
+      !(it.disabled === 1 || it.disabled === true) && !hidden.has(it.item_code || it.name)
+    );
 
     // 4. Fetch Bin Inventory
     const binParams = new URLSearchParams({
