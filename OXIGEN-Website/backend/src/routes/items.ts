@@ -3,6 +3,7 @@ import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { itemCache } from "../lib/item-cache.js";
 import { hiddenItemGroups } from "../lib/hidden-item-groups.js";
+import { hiddenItems } from "../lib/hidden-items.js";
 import { logger } from "../lib/logger.js";
 import { ErpAdapter } from "../services/erp-adapter.js";
 import { erpFetch, getErpUrl, getErpHeaders, parseErpError } from "../lib/erpnext-client.js";
@@ -66,7 +67,9 @@ router.get("/items", async (req, res) => {
       return;
     }
 
-    const normalized = await ErpAdapter.fetchWebsiteItems({ search, limit, itemGroup: item_group });
+    const fetched = await ErpAdapter.fetchWebsiteItems({ search, limit, itemGroup: item_group });
+    const hidden = new Set(hiddenItems.list());
+    const normalized = hidden.size > 0 ? fetched.filter((it: any) => !hidden.has(it.item_code || it.name)) : fetched;
 
     itemCache.set(cacheKey, normalized);
 
@@ -432,6 +435,12 @@ router.put("/items/:name", ...requireAdminWrite, async (req: Request, res: Respo
       });
     }
 
+    // Keep the public website in sync with disabled state
+    try {
+      if (isDisable) hiddenItems.hide(name);
+      else if (isEnable) hiddenItems.unhide(name);
+    } catch { /* non-fatal */ }
+
     itemCache.clear();
 
     const data: any = await erpRes.json();
@@ -694,6 +703,7 @@ router.delete("/items/:name", ...requireAdminWrite, async (req: Request, res: Re
       // so it disappears from the site while keeping its history intact.
       const archiveResult = await disableItemForArchive(itemCode);
       if (archiveResult.ok) {
+        hiddenItems.hide(itemCode);
         itemCache.clear();
         res.status(200).json({
           success: true,
