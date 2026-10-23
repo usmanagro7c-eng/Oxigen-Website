@@ -1138,7 +1138,7 @@ function RowMenu({ onAction, row, slug }: { onAction: (a: RowAction) => void; ro
       : []),
     ...(slug === "products" || slug === "inventory"
       ? [
-          r?.disabled
+          row?.disabled
             ? { key: "enable" as RowAction, label: "Enable", icon: Eye, danger: false }
             : { key: "disable" as RowAction, label: "Disable", icon: EyeOff, danger: false },
         ]
