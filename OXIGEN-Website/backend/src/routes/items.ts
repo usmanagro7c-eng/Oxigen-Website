@@ -435,12 +435,9 @@ router.put("/items/:name", ...requireAdminWrite, async (req: Request, res: Respo
       });
     }
 
-    // Keep the public website in sync with disabled state
-    try {
-      if (isDisable) hiddenItems.hide(name);
-      else if (isEnable) hiddenItems.unhide(name);
-    } catch { /* non-fatal */ }
-
+    // Disabled items stay visible in the admin "Disabled" section (restorable),
+    // but are hidden from the customer-facing website via published=0.
+    // Fully-hidden (deleted-but-archived) items are tracked separately in hidden-items.
     itemCache.clear();
 
     const data: any = await erpRes.json();

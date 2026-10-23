@@ -9,6 +9,7 @@ import { fileURLToPath } from "url";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
 import { optimizeImageUpload } from "../lib/image-optimizer.js";
+import { hiddenItems } from "../lib/hidden-items.js";
 
 import {
   getQueueStats,
@@ -259,7 +260,8 @@ router.get(
         data: { item_code?: string; name: string; item_name?: string; item_group?: string; stock_uom?: string; image?: string | null; disabled?: number | boolean }[];
       };
 
-      const items = itemJson.data || [];
+      const hidden = new Set(hiddenItems.list());
+      const items = (itemJson.data || []).filter((it: any) => !hidden.has(it.item_code || it.name));
       const mainWarehouse = getMainWarehouse();
       const onlineWarehouse = getOnlineWarehouse();
 
